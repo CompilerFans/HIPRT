@@ -24,7 +24,10 @@
 
 #pragma once
 
-#include <Orochi/Orochi.h>
+#include <cuda_runtime_api.h>
+#include <cuda.h>
+#include <cuda_profiler_api.h>
+#include <nvrtc.h>
 #include <hiprt/impl/Error.h>
 #include <functional>
 #include <unordered_map>
@@ -61,13 +64,13 @@ class Timer final
 	decltype( auto ) measure( const TokenType token, CallableType&& callable, Args&&... args ) noexcept
 	{
 		TimeUnit time{};
-		oroEvent start{};
-		oroEvent stop{};
+		cudaEvent_t start{};
+		cudaEvent_t stop{};
 		if constexpr ( EnableTimer )
 		{
-			checkOro( oroEventCreateWithFlags( &start, 0 ) );
-			checkOro( oroEventCreateWithFlags( &stop, 0 ) );
-			checkOro( oroEventRecord( start, 0 ) );
+			checkOro( cudaEventCreateWithFlags( &start, 0 ) );
+			checkOro( cudaEventCreateWithFlags( &stop, 0 ) );
+			checkOro( cudaEventRecord( start, 0 ) );
 		}
 
 		using return_type = std::invoke_result_t<CallableType, Args...>;
@@ -76,11 +79,11 @@ class Timer final
 			std::invoke( std::forward<CallableType>( callable ), std::forward<Args>( args )... );
 			if constexpr ( EnableTimer )
 			{
-				checkOro( oroEventRecord( stop, 0 ) );
-				checkOro( oroEventSynchronize( stop ) );
-				checkOro( oroEventElapsedTime( &time, start, stop ) );
-				checkOro( oroEventDestroy( start ) );
-				checkOro( oroEventDestroy( stop ) );
+				checkOro( cudaEventRecord( stop, 0 ) );
+				checkOro( cudaEventSynchronize( stop ) );
+				checkOro( cudaEventElapsedTime( &time, start, stop ) );
+				checkOro( cudaEventDestroy( start ) );
+				checkOro( cudaEventDestroy( stop ) );
 				timeRecord[token] += time;
 			}
 			return;
@@ -90,11 +93,11 @@ class Timer final
 			decltype( auto ) result{ std::invoke( std::forward<CallableType>( callable ), std::forward<Args>( args )... ) };
 			if constexpr ( EnableTimer )
 			{
-				checkOro( oroEventRecord( stop, 0 ) );
-				checkOro( oroEventSynchronize( stop ) );
-				checkOro( oroEventElapsedTime( &time, start, stop ) );
-				checkOro( oroEventDestroy( start ) );
-				checkOro( oroEventDestroy( stop ) );
+				checkOro( cudaEventRecord( stop, 0 ) );
+				checkOro( cudaEventSynchronize( stop ) );
+				checkOro( cudaEventElapsedTime( &time, start, stop ) );
+				checkOro( cudaEventDestroy( start ) );
+				checkOro( cudaEventDestroy( stop ) );
 				timeRecord[token] += time;
 			}
 			return result;

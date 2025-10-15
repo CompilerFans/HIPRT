@@ -23,12 +23,16 @@
 //////////////////////////////////////////////////////////////////////////////////////////
 
 #pragma once
-#include <Orochi/Orochi.h>
+#include <cuda_runtime_api.h>
+#include <cuda.h>
+#include <cuda_profiler_api.h>
+#include <nvrtc.h>
 #include <hiprt/hiprt_common.h>
 #include <contrib/cpp20/source_location.h>
 
 namespace hiprt
 {
-void checkOro( oroError res, const source_location& location = source_location::current() );
-void checkOrortc( orortcResult res, const source_location& location = source_location::current() );
+void checkOro( cudaError res, const source_location& location = source_location::current() );
+void checkOro( CUresult res, const source_location& location = source_location::current() );
+void checkOrortc( nvrtcResult res, const source_location& location = source_location::current() );
 } // namespace hiprt

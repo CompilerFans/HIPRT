@@ -34,7 +34,7 @@
 
 // this namespace will be for encapsulating all the files related to CUDA
 // we need to make that into a workspace espacially because of the files from HIP SDK:  nvidia_hip_runtime_api.h  /  nvidia_hiprtc.h.  that creates new definitions of hip**** functions
-namespace CU4ORO 
+namespace CU4ORO
 {
 #include <contrib/cuew/include/cuew.h>
 #ifdef OROCHI_ENABLE_CUEW
@@ -815,8 +815,8 @@ public:
 	void setDevice( int d ) { m_deviceIdx = d; }
 };
 
-inline 
-oroApi getRawDeviceIndex( int& deviceId ) 
+inline
+oroApi getRawDeviceIndex( int& deviceId )
 {
 	int n[2] = { 0, 0 };
 	oroGetDeviceCount( &n[0], ORO_API_HIP );
@@ -832,7 +832,7 @@ oroApi getRawDeviceIndex( int& deviceId )
 }
 
 // description in the header
-int oroInitialize( oroApi api, oroU32 flags, 
+int oroInitialize( oroApi api, oroU32 flags,
 	const char** customPaths_Hip,
 	const char** customPaths_Hiprtc,
 	const char** customPaths_Cuda,
@@ -856,7 +856,7 @@ int oroInitialize( oroApi api, oroU32 flags,
 		{
 			flag |= CU4ORO::CUEW_INIT_NVRTC;
 		}
-		
+
 		int resultDriver, resultRtc;
 		CU4ORO::cuewInit( &resultDriver, &resultRtc, flag, customPaths_Cuda, customPaths_CudaRT, customPaths_NvRTC);
 
@@ -898,7 +898,7 @@ int oroInitialize( oroApi api, oroU32 flags,
 		return ORO_ERROR_OPEN_FAILED;
 	return ORO_SUCCESS;
 }
-oroApi oroLoadedAPI() 
+oroApi oroLoadedAPI()
 {
 	return (oroApi)s_loadedApis;
 }
@@ -907,15 +907,15 @@ oroApi oroGetCurAPI(oroU32 flags)
 	return s_api;
 }
 
-void* oroGetRawCtx( oroCtx ctx ) 
-{ 
+void* oroGetRawCtx( oroCtx ctx )
+{
 	ioroCtx_t* c = (ioroCtx_t*)ctx;
 	return c->m_ptr;
 }
 
 //oroCtx setRawCtx( oroApi api, void* ctx )
 oroError oroCtxCreateFromRaw( oroCtx* ctxOut, oroApi api, void* ctxIn )
-{ 
+{
 	ioroCtx_t* c = new ioroCtx_t;
 	c->m_ptr = ctxIn;
 	c->setApi( api );
@@ -923,7 +923,7 @@ oroError oroCtxCreateFromRaw( oroCtx* ctxOut, oroApi api, void* ctxIn )
 	return oroSuccess;
 }
 
-oroError oroCtxCreateFromRawDestroy( oroCtx ctx ) 
+oroError oroCtxCreateFromRawDestroy( oroCtx ctx )
 {
 	ioroCtx_t* c = (ioroCtx_t*)ctx;
 	delete c;
@@ -936,7 +936,7 @@ oroDevice oroGetRawDevice( oroDevice dev )
 	return d.getDevice();
 }
 
-oroDevice oroSetRawDevice( oroApi api, oroDevice dev ) 
+oroDevice oroSetRawDevice( oroApi api, oroDevice dev )
 {
 	ioroDevice d( dev );
 	d.setApi( api );
@@ -961,7 +961,7 @@ inline const char * cu2oro( const char * a ) { return a; }
 inline oroError cu2oro( CU4ORO::cudaError_t a ) { return cu2oro(CU4ORO::hipCUDAErrorTohipError(a)); }
 
 // not a natural cast, but may be needed sometimes
-CU4ORO::nvrtcResult cu2nvrtc(CU4ORO::CUresult a) 
+CU4ORO::nvrtcResult cu2nvrtc(CU4ORO::CUresult a)
 {
 	switch (a) {
 	case CU4ORO::CUDA_SUCCESS:
@@ -973,8 +973,8 @@ CU4ORO::nvrtcResult cu2nvrtc(CU4ORO::CUresult a)
 	default:
 		return CU4ORO::NVRTC_ERROR_INTERNAL_ERROR;
 	}
-} 
-  
+}
+
 inline CU4ORO::CUcontext* oroCtx2cu( oroCtx* a )
 {
 	ioroCtx_t* b = *a;
@@ -1012,7 +1012,7 @@ inline hipCtx_t* oroCtx2hip( oroCtx* a )
 
 oroError OROAPI oroGetErrorString( oroError error, const char** pStr )
 {
-	if( s_api & ORO_API_CUDADRIVER ) 
+	if( s_api & ORO_API_CUDADRIVER )
 	{
 		#ifdef OROCHI_ENABLE_CUEW
 		return cu2oro(CU4ORO::cuGetErrorString( (CU4ORO::CUresult)error, pStr ));
@@ -1063,7 +1063,7 @@ oroError OROAPI oroGetDeviceCount(int* count, oroApi iapi)
 	}
 	if( (api & s_loadedApis) & (ORO_API_CUDADRIVER) )
 	{
-		
+
 		#ifdef OROCHI_ENABLE_CUEW
 		int c = 0;
 		e = cu2oro(CU4ORO::cuDeviceGetCount(&c));
@@ -1125,9 +1125,9 @@ oroError OROAPI oroDeviceGet(oroDevice* device, int ordinal )
 oroError OROAPI oroDeviceGetName(char* name, int len, oroDevice dev)
 {
 	ioroDevice d( dev );
-	__ORO_FUNCX( d.getApi(), 
+	__ORO_FUNCX( d.getApi(),
 		CU4ORO::cuDeviceGetName(name, len, d.getDevice() ),
-		hipDeviceGetName(name, len, d.getDevice() ) 
+		hipDeviceGetName(name, len, d.getDevice() )
 		);
 	return oroErrorUnknown;
 }
@@ -1137,8 +1137,8 @@ oroError OROAPI oroDeviceGetName(char* name, int len, oroDevice dev)
 oroError OROAPI oroDeviceGetAttribute(int* pi, oroDeviceAttribute_t attrib, oroDevice dev)
 {
 	ioroDevice d( dev );
-	__ORO_FUNCX( d.getApi(), 
-		CU4ORO::cuDeviceGetAttribute( pi, (CU4ORO::CUdevice_attribute)attrib, d.getDevice() ), 
+	__ORO_FUNCX( d.getApi(),
+		CU4ORO::cuDeviceGetAttribute( pi, (CU4ORO::CUdevice_attribute)attrib, d.getDevice() ),
 		        hipDeviceGetAttribute( pi, (hipDeviceAttribute_t)attrib, d.getDevice() ) );
 	return oroErrorUnknown;
 }
@@ -1150,7 +1150,7 @@ oroError OROAPI oroCtxCreate(oroCtx* pctx, unsigned int flags, oroDevice dev)
 	ctxt->setApi( d.getApi() );
 	(*pctx) = ctxt;
 	s_api = ctxt->getApi();
-	if( s_api & ORO_API_CUDADRIVER ) 
+	if( s_api & ORO_API_CUDADRIVER )
 	{
 		#ifdef OROCHI_ENABLE_CUEW
 		CU4ORO::CUresult e = CU4ORO::cuCtxCreate( oroCtx2cu( pctx ), flags, d.getDevice() );
@@ -1158,7 +1158,7 @@ oroError OROAPI oroCtxCreate(oroCtx* pctx, unsigned int flags, oroDevice dev)
 			return cu2oro(e);
 		#endif
 	}
-	if( s_api == ORO_API_HIP ) 
+	if( s_api == ORO_API_HIP )
 	{
 		hipError_t e = hipCtxCreate( oroCtx2hip( pctx ), flags, d.getDevice() );
 		if ( e != hipSuccess )
@@ -1205,7 +1205,7 @@ oroError OROAPI oroCtxGetCurrent(oroCtx* pctx)
 {
 	ioroCtx_t* ctxt = new ioroCtx_t;
 
-	if( s_api & ORO_API_CUDADRIVER ) 
+	if( s_api & ORO_API_CUDADRIVER )
 	{
 		#ifdef OROCHI_ENABLE_CUEW
 		CU4ORO::CUresult e = CU4ORO::cuCtxGetCurrent( oroCtx2cu( &ctxt ) );
@@ -1213,14 +1213,14 @@ oroError OROAPI oroCtxGetCurrent(oroCtx* pctx)
 			return cu2oro(e);
 		#endif
 	}
-	if( s_api == ORO_API_HIP ) 
+	if( s_api == ORO_API_HIP )
 	{
 		hipError_t e = hipCtxGetCurrent( oroCtx2hip( &ctxt ) );
 		if ( e != hipSuccess )
 			return hip2oro(e);
 	}
 
-	// externally initialized context 
+	// externally initialized context
 	if( s_oroCtxs.count( ctxt->m_ptr ) == 0 && ctxt->m_ptr )
 	{
 		ioroCtx_t* c = new ioroCtx_t;
@@ -1259,7 +1259,7 @@ oroChannelFormatDesc OROAPI oroCreateChannelDesc(int x, int y, int z, int w,  or
 		return __ORO_FORCE_CAST(oroChannelFormatDesc, ret);
 		#endif
 	 }
-	 if( s_api == ORO_API_HIP ) 
+	 if( s_api == ORO_API_HIP )
 		 return hipCreateChannelDesc(x, y, z, w, f);
 
 	return oroChannelFormatDesc();
@@ -1267,7 +1267,7 @@ oroChannelFormatDesc OROAPI oroCreateChannelDesc(int x, int y, int z, int w,  or
 
 orortcResult OROAPI orortcGetBitcode(orortcProgram prog, char* bitcode)
 {
-	__ORO_FUNC( CU4ORO::nvrtcGetCUBIN( (CU4ORO::nvrtcProgram)prog, bitcode ), 
+	__ORO_FUNC( CU4ORO::nvrtcGetCUBIN( (CU4ORO::nvrtcProgram)prog, bitcode ),
 				  hiprtcGetBitcode( prog, bitcode ) );
 	return ORORTC_ERROR_INTERNAL_ERROR;
 }
@@ -1275,7 +1275,7 @@ orortcResult OROAPI orortcGetBitcode(orortcProgram prog, char* bitcode)
 orortcResult OROAPI orortcGetBitcodeSize(orortcProgram prog, size_t* bitcodeSizeRet)
 {
 	__ORO_FUNC(
-		CU4ORO::nvrtcGetCUBINSize( (CU4ORO::nvrtcProgram)prog, bitcodeSizeRet ), 
+		CU4ORO::nvrtcGetCUBINSize( (CU4ORO::nvrtcProgram)prog, bitcodeSizeRet ),
 		hiprtcGetBitcodeSize( (hiprtcProgram)prog, bitcodeSizeRet ) );
 	return ORORTC_ERROR_INTERNAL_ERROR;
 }
@@ -1977,10 +1977,10 @@ oroError_t OROAPI oroIpcOpenMemHandle(void ** devPtr, oroIpcMemHandle_t handle, 
 		hipIpcOpenMemHandle(devPtr, handle, flags)     );
 	return oroErrorUnknown;
 }
-oroError_t OROAPI oroLaunchCooperativeKernel(const void * f, dim3 gridDim, dim3 blockDimX, void ** kernelParams, unsigned int sharedMemBytes, oroStream_t stream)
+oroError_t OROAPI oroLaunchCooperativeKernel(const void * f, _3dim gridDim, _3dim blockDimX, void ** kernelParams, unsigned int sharedMemBytes, oroStream_t stream)
 {
 	__ORO_FUNC(
-		CU4ORO::hipLaunchCooperativeKernel_cu4oro(__ORO_FORCE_CAST(const void *,f), __ORO_FORCE_CAST(CU4ORO::dim3,gridDim), __ORO_FORCE_CAST(CU4ORO::dim3,blockDimX), __ORO_FORCE_CAST(void **,kernelParams), __ORO_FORCE_CAST(unsigned int,sharedMemBytes), __ORO_FORCE_CAST(CU4ORO::hipStream_t,stream)),
+		CU4ORO::hipLaunchCooperativeKernel_cu4oro(__ORO_FORCE_CAST(const void *,f), __ORO_FORCE_CAST(CU4ORO::_3dim,gridDim), __ORO_FORCE_CAST(CU4ORO::_3dim,blockDimX), __ORO_FORCE_CAST(void **,kernelParams), __ORO_FORCE_CAST(unsigned int,sharedMemBytes), __ORO_FORCE_CAST(CU4ORO::hipStream_t,stream)),
 		hipLaunchCooperativeKernel(f, gridDim, blockDimX, kernelParams, sharedMemBytes, stream)     );
 	return oroErrorUnknown;
 }
@@ -1991,10 +1991,10 @@ oroError_t OROAPI oroLaunchCooperativeKernelMultiDevice(oroLaunchParams * launch
 		hipLaunchCooperativeKernelMultiDevice(launchParamsList, numDevices, flags)     );
 	return oroErrorUnknown;
 }
-oroError_t OROAPI oroLaunchKernel(const void * function_address, dim3 numBlocks, dim3 dimBlocks, void ** args, size_t sharedMemBytes, oroStream_t stream)
+oroError_t OROAPI oroLaunchKernel(const void * function_address, _3dim numBlocks, _3dim dimBlocks, void ** args, size_t sharedMemBytes, oroStream_t stream)
 {
 	__ORO_FUNC(
-		CU4ORO::hipLaunchKernel_cu4oro(__ORO_FORCE_CAST(const void *,function_address), __ORO_FORCE_CAST(CU4ORO::dim3,numBlocks), __ORO_FORCE_CAST(CU4ORO::dim3,dimBlocks), __ORO_FORCE_CAST(void **,args), __ORO_FORCE_CAST(size_t,sharedMemBytes), __ORO_FORCE_CAST(CU4ORO::hipStream_t,stream)),
+		CU4ORO::hipLaunchKernel_cu4oro(__ORO_FORCE_CAST(const void *,function_address), __ORO_FORCE_CAST(CU4ORO::_3dim,numBlocks), __ORO_FORCE_CAST(CU4ORO::_3dim,dimBlocks), __ORO_FORCE_CAST(void **,args), __ORO_FORCE_CAST(size_t,sharedMemBytes), __ORO_FORCE_CAST(CU4ORO::hipStream_t,stream)),
 		hipLaunchKernel(function_address, numBlocks, dimBlocks, args, sharedMemBytes, stream)     );
 	return oroErrorUnknown;
 }
@@ -3065,14 +3065,14 @@ oroError_t OROAPI oroGraphAddEmptyNode(oroGraphNode_t * pGraphNode, oroGraph_t g
 oroError_t OROAPI oroGraphAddEventRecordNode(oroGraphNode_t * pGraphNode, oroGraph_t graph, const oroGraphNode_t * pDependencies, size_t numDependencies, oroEvent_t event)
 {
 	__ORO_FUNC(
-		CU4ORO::cudaGraphAddEventRecordNode((CU4ORO::cudaGraphNode_t *)pGraphNode, (CU4ORO::cudaGraph_t)graph, (const CU4ORO::cudaGraphNode_t *)pDependencies, (size_t)numDependencies, (CU4ORO::cudaEvent_t)event),
+		CU4ORO::cudaGraphAddEventRecordNode((CU4ORO::cudaGraphNode_t *)pGraphNode, (CU4ORO::cudaGraph_t)graph, (const CU4ORO::cudaGraphNode_t *)pDependencies, (size_t)numDependencies, (CU4ORO::cudaEvent_t )event),
 		hipGraphAddEventRecordNode(pGraphNode, graph, pDependencies, numDependencies, event)     );
 	return oroErrorUnknown;
 }
 oroError_t OROAPI oroGraphAddEventWaitNode(oroGraphNode_t * pGraphNode, oroGraph_t graph, const oroGraphNode_t * pDependencies, size_t numDependencies, oroEvent_t event)
 {
 	__ORO_FUNC(
-		CU4ORO::cudaGraphAddEventWaitNode((CU4ORO::cudaGraphNode_t *)pGraphNode, (CU4ORO::cudaGraph_t)graph, (const CU4ORO::cudaGraphNode_t *)pDependencies, (size_t)numDependencies, (CU4ORO::cudaEvent_t)event),
+		CU4ORO::cudaGraphAddEventWaitNode((CU4ORO::cudaGraphNode_t *)pGraphNode, (CU4ORO::cudaGraph_t)graph, (const CU4ORO::cudaGraphNode_t *)pDependencies, (size_t)numDependencies, (CU4ORO::cudaEvent_t )event),
 		hipGraphAddEventWaitNode(pGraphNode, graph, pDependencies, numDependencies, event)     );
 	return oroErrorUnknown;
 }
@@ -3184,28 +3184,28 @@ oroError_t OROAPI oroGraphDestroyNode(oroGraphNode_t node)
 oroError_t OROAPI oroGraphEventRecordNodeGetEvent(oroGraphNode_t node, oroEvent_t * event_out)
 {
 	__ORO_FUNC(
-		CU4ORO::cudaGraphEventRecordNodeGetEvent((CU4ORO::cudaGraphNode_t)node, (CU4ORO::cudaEvent_t *)event_out),
+		CU4ORO::cudaGraphEventRecordNodeGetEvent((CU4ORO::cudaGraphNode_t)node, (CU4ORO::cudaEvent_t  *)event_out),
 		hipGraphEventRecordNodeGetEvent(node, event_out)     );
 	return oroErrorUnknown;
 }
 oroError_t OROAPI oroGraphEventRecordNodeSetEvent(oroGraphNode_t node, oroEvent_t event)
 {
 	__ORO_FUNC(
-		CU4ORO::cudaGraphEventRecordNodeSetEvent((CU4ORO::cudaGraphNode_t)node, (CU4ORO::cudaEvent_t)event),
+		CU4ORO::cudaGraphEventRecordNodeSetEvent((CU4ORO::cudaGraphNode_t)node, (CU4ORO::cudaEvent_t )event),
 		hipGraphEventRecordNodeSetEvent(node, event)     );
 	return oroErrorUnknown;
 }
 oroError_t OROAPI oroGraphEventWaitNodeGetEvent(oroGraphNode_t node, oroEvent_t * event_out)
 {
 	__ORO_FUNC(
-		CU4ORO::cudaGraphEventWaitNodeGetEvent((CU4ORO::cudaGraphNode_t)node, (CU4ORO::cudaEvent_t *)event_out),
+		CU4ORO::cudaGraphEventWaitNodeGetEvent((CU4ORO::cudaGraphNode_t)node, (CU4ORO::cudaEvent_t  *)event_out),
 		hipGraphEventWaitNodeGetEvent(node, event_out)     );
 	return oroErrorUnknown;
 }
 oroError_t OROAPI oroGraphEventWaitNodeSetEvent(oroGraphNode_t node, oroEvent_t event)
 {
 	__ORO_FUNC(
-		CU4ORO::cudaGraphEventWaitNodeSetEvent((CU4ORO::cudaGraphNode_t)node, (CU4ORO::cudaEvent_t)event),
+		CU4ORO::cudaGraphEventWaitNodeSetEvent((CU4ORO::cudaGraphNode_t)node, (CU4ORO::cudaEvent_t )event),
 		hipGraphEventWaitNodeSetEvent(node, event)     );
 	return oroErrorUnknown;
 }
@@ -3226,14 +3226,14 @@ oroError_t OROAPI oroGraphExecDestroy(oroGraphExec_t graphExec)
 oroError_t OROAPI oroGraphExecEventRecordNodeSetEvent(oroGraphExec_t hGraphExec, oroGraphNode_t hNode, oroEvent_t event)
 {
 	__ORO_FUNC(
-		CU4ORO::cudaGraphExecEventRecordNodeSetEvent((CU4ORO::cudaGraphExec_t)hGraphExec, (CU4ORO::cudaGraphNode_t)hNode, (CU4ORO::cudaEvent_t)event),
+		CU4ORO::cudaGraphExecEventRecordNodeSetEvent((CU4ORO::cudaGraphExec_t)hGraphExec, (CU4ORO::cudaGraphNode_t)hNode, (CU4ORO::cudaEvent_t )event),
 		hipGraphExecEventRecordNodeSetEvent(hGraphExec, hNode, event)     );
 	return oroErrorUnknown;
 }
 oroError_t OROAPI oroGraphExecEventWaitNodeSetEvent(oroGraphExec_t hGraphExec, oroGraphNode_t hNode, oroEvent_t event)
 {
 	__ORO_FUNC(
-		CU4ORO::cudaGraphExecEventWaitNodeSetEvent((CU4ORO::cudaGraphExec_t)hGraphExec, (CU4ORO::cudaGraphNode_t)hNode, (CU4ORO::cudaEvent_t)event),
+		CU4ORO::cudaGraphExecEventWaitNodeSetEvent((CU4ORO::cudaGraphExec_t)hGraphExec, (CU4ORO::cudaGraphNode_t)hNode, (CU4ORO::cudaEvent_t )event),
 		hipGraphExecEventWaitNodeSetEvent(hGraphExec, hNode, event)     );
 	return oroErrorUnknown;
 }

@@ -88,7 +88,7 @@ void LbvhBuilder::build(
 	const hiprtGeometryBuildInput& buildInput,
 	const hiprtBuildOptions		   buildOptions,
 	hiprtDevicePtr				   temporaryBuffer,
-	oroStream					   stream,
+	cudaStream_t					   stream,
 	hiprtDevicePtr				   buffer )
 {
 	const size_t storageSize = getStorageBufferSize( context, buildInput, buildOptions );
@@ -128,7 +128,7 @@ void LbvhBuilder::build(
 	const hiprtSceneBuildInput& buildInput,
 	const hiprtBuildOptions		buildOptions,
 	hiprtDevicePtr				temporaryBuffer,
-	oroStream					stream,
+	cudaStream_t					stream,
 	hiprtDevicePtr				buffer )
 {
 	const size_t storageSize = getStorageBufferSize( context, buildInput, buildOptions );
@@ -168,7 +168,7 @@ void LbvhBuilder::update(
 	const hiprtGeometryBuildInput&	buildInput,
 	const hiprtBuildOptions			buildOptions,
 	[[maybe_unused]] hiprtDevicePtr temporaryBuffer,
-	oroStream						stream,
+	cudaStream_t						stream,
 	hiprtDevicePtr					buffer )
 {
 	const size_t storageSize = getStorageBufferSize( context, buildInput, buildOptions );
@@ -202,7 +202,7 @@ void LbvhBuilder::update(
 	const hiprtSceneBuildInput&		buildInput,
 	const hiprtBuildOptions			buildOptions,
 	[[maybe_unused]] hiprtDevicePtr temporaryBuffer,
-	oroStream						stream,
+	cudaStream_t						stream,
 	hiprtDevicePtr					buffer )
 {
 	const size_t storageSize = getStorageBufferSize( context, buildInput, buildOptions );

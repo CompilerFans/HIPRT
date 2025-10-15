@@ -74,7 +74,7 @@ class BatchBuilder
 		const std::vector<BuildInput>& buildInputs,
 		const hiprtBuildOptions		   buildOptions,
 		hiprtDevicePtr				   temporaryBuffer,
-		oroStream					   stream,
+		cudaStream_t					   stream,
 		std::vector<hiprtDevicePtr>&   buffers );
 };
 
@@ -84,7 +84,7 @@ void BatchBuilder::build(
 	const std::vector<BuildInput>& buildInputs,
 	const hiprtBuildOptions		   buildOptions,
 	hiprtDevicePtr				   temporaryBuffer,
-	oroStream					   stream,
+	cudaStream_t					   stream,
 	std::vector<hiprtDevicePtr>&   buffers )
 {
 	const auto	tempSize = getTemporaryBufferSize( context, buildInputs, buildOptions );
@@ -93,14 +93,14 @@ void BatchBuilder::build(
 	BuildInput*		buildInputsDev = temporaryMemoryArena.allocate<BuildInput>( buildInputs.size() );
 	hiprtDevicePtr* buffersDev	   = temporaryMemoryArena.allocate<hiprtDevicePtr>( buildInputs.size() );
 
-	checkOro( oroMemcpyHtoDAsync(
-		(oroDeviceptr)buildInputsDev,
+	checkOro( cuMemcpyHtoDAsync(
+		reinterpret_cast<size_t>(buildInputsDev),
 		const_cast<BuildInput*>( buildInputs.data() ),
 		buildInputs.size() * sizeof( BuildInput ),
 		stream ) );
 
 	checkOro(
-		oroMemcpyHtoDAsync( (oroDeviceptr)buffersDev, buffers.data(), buffers.size() * sizeof( hiprtDevicePtr ), stream ) );
+		cuMemcpyHtoDAsync( reinterpret_cast<size_t>(buffersDev), buffers.data(), buffers.size() * sizeof( hiprtDevicePtr ), stream ) );
 
 	Timer timer;
 

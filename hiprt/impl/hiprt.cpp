@@ -33,7 +33,7 @@ using namespace hiprt;
 
 hiprtError hiprtCreateContext( uint32_t hiprtApiVersion, const hiprtContextCreationInput& input, hiprtContext& contextOut )
 {
-	oroInitialize( ( input.deviceType == hiprtDeviceAMD ) ? ORO_API_HIP : ORO_API_CUDA, 0, g_hip_paths, g_hiprtc_paths );
+	// cudaInitialize( ( input.deviceType == hiprtDeviceAMD ) ? ORO_API_HIP : ORO_API_CUDA, 0, g_hip_paths, g_hiprtc_paths );
 	if ( hiprtApiVersion != HIPRT_API_VERSION ) return hiprtErrorInvalidApiVersion;
 
 	try
@@ -170,12 +170,12 @@ hiprtError hiprtBuildGeometries(
 		{
 		case hiprtBuildOperationBuild: {
 			reinterpret_cast<Context*>( context )->buildGeometries(
-				buildInputs, buildOptions, temporaryBuffer, reinterpret_cast<oroStream>( stream ), buffers );
+				buildInputs, buildOptions, temporaryBuffer, reinterpret_cast<cudaStream_t>( stream ), buffers );
 			break;
 		}
 		case hiprtBuildOperationUpdate: {
 			reinterpret_cast<Context*>( context )->updateGeometries(
-				buildInputs, buildOptions, temporaryBuffer, reinterpret_cast<oroStream>( stream ), buffers );
+				buildInputs, buildOptions, temporaryBuffer, reinterpret_cast<cudaStream_t>( stream ), buffers );
 			break;
 		}
 		}
@@ -250,7 +250,7 @@ hiprtError hiprtCompactGeometries(
 	try
 	{
 		std::vector<hiprtGeometry> compactedGeometries =
-			reinterpret_cast<Context*>( context )->compactGeometries( geometries, reinterpret_cast<oroStream>( stream ) );
+			reinterpret_cast<Context*>( context )->compactGeometries( geometries, reinterpret_cast<cudaStream_t>( stream ) );
 		for ( uint32_t i = 0; i < numGeometries; ++i )
 			*geometriesOut[i] = compactedGeometries[i];
 	}
@@ -366,12 +366,12 @@ hiprtError hiprtBuildScenes(
 		{
 		case hiprtBuildOperationBuild: {
 			reinterpret_cast<Context*>( context )->buildScenes(
-				buildInputs, buildOptions, temporaryBuffer, reinterpret_cast<oroStream>( stream ), buffers );
+				buildInputs, buildOptions, temporaryBuffer, reinterpret_cast<cudaStream_t>( stream ), buffers );
 			break;
 		}
 		case hiprtBuildOperationUpdate: {
 			reinterpret_cast<Context*>( context )->updateScenes(
-				buildInputs, buildOptions, temporaryBuffer, reinterpret_cast<oroStream>( stream ), buffers );
+				buildInputs, buildOptions, temporaryBuffer, reinterpret_cast<cudaStream_t>( stream ), buffers );
 			break;
 		}
 		}
@@ -440,7 +440,7 @@ hiprtError hiprtCompactScenes(
 	try
 	{
 		std::vector<hiprtScene> compactedScenes =
-			reinterpret_cast<Context*>( context )->compactScenes( scenes, reinterpret_cast<oroStream>( stream ) );
+			reinterpret_cast<Context*>( context )->compactScenes( scenes, reinterpret_cast<cudaStream_t>( stream ) );
 		for ( uint32_t i = 0; i < numScenes; ++i )
 			*scenesOut[i] = compactedScenes[i];
 	}
@@ -668,8 +668,8 @@ hiprtError hiprtBuildTraceKernels(
 				funcNameSets.push_back( funcNameSetsIn[i] );
 		}
 
-		std::vector<oroFunction> functions;
-		oroModule				 module = nullptr;
+		std::vector<CUfunction> functions;
+		CUmodule				 module = nullptr;
 		reinterpret_cast<Context*>( context )->buildKernels(
 			funcNames,
 			src,
@@ -729,7 +729,7 @@ hiprtError hiprtBuildTraceKernelsFromBitcode(
 				funcNameSets.push_back( functionNameSets[i] );
 		}
 		std::string_view		 binary( bitcodeBinary, bitcodeBinarySize );
-		std::vector<oroFunction> functions;
+		std::vector<CUfunction> functions;
 		reinterpret_cast<Context*>( context )->buildKernelsFromBitcode(
 			funcNames, moduleName, binary, numGeomTypes, numRayTypes, funcNameSets, functions, cache );
 

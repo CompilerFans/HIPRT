@@ -74,7 +74,7 @@ void BvhImporter::build(
 	const hiprtGeometryBuildInput& buildInput,
 	const hiprtBuildOptions		   buildOptions,
 	hiprtDevicePtr				   temporaryBuffer,
-	oroStream					   stream,
+	cudaStream_t					   stream,
 	hiprtDevicePtr				   buffer )
 {
 	const size_t storageSize = getStorageBufferSize( context, buildInput, buildOptions );
@@ -116,7 +116,7 @@ void BvhImporter::build(
 	const hiprtSceneBuildInput& buildInput,
 	const hiprtBuildOptions		buildOptions,
 	hiprtDevicePtr				temporaryBuffer,
-	oroStream					stream,
+	cudaStream_t					stream,
 	hiprtDevicePtr				buffer )
 {
 	const size_t storageSize = getStorageBufferSize( context, buildInput, buildOptions );
@@ -158,7 +158,7 @@ void BvhImporter::update(
 	const hiprtGeometryBuildInput&	buildInput,
 	const hiprtBuildOptions			buildOptions,
 	[[maybe_unused]] hiprtDevicePtr temporaryBuffer,
-	oroStream						stream,
+	cudaStream_t						stream,
 	hiprtDevicePtr					buffer )
 {
 	const size_t storageSize = getStorageBufferSize( context, buildInput, buildOptions );
@@ -193,7 +193,7 @@ void BvhImporter::update(
 	const hiprtSceneBuildInput&		buildInput,
 	const hiprtBuildOptions			buildOptions,
 	[[maybe_unused]] hiprtDevicePtr temporaryBuffer,
-	oroStream						stream,
+	cudaStream_t						stream,
 	hiprtDevicePtr					buffer )
 {
 	const size_t storageSize = getStorageBufferSize( context, buildInput, buildOptions );

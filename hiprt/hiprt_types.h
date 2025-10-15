@@ -40,9 +40,9 @@ typedef uint32_t		 hiprtLogLevel;
 typedef uint32_t		 hiprtBuildFlags;
 typedef uint32_t		 hiprtRayMask;
 
-typedef int	  hiprtApiDevice;	// hipDevice, cuDevice
-typedef void* hiprtApiCtx;		// hipCtx, cuCtx
-typedef void* hiprtApiStream;	// hipStream, cuStream
+typedef int	  hiprtApiDevice;	// hipDevice, int
+typedef void* hiprtApiCtx;		// hipCtx, CUcontext
+typedef void* hiprtApiStream;	// hipStream, cudaStream_t
 typedef void* hiprtApiFunction; // hipFunction, cuFunction
 typedef void* hiprtApiModule;	// hipModule, cuModule
 

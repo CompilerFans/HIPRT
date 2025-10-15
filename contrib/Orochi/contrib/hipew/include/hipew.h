@@ -62,7 +62,7 @@ extern "C" {
 #define DEPRECATED(msg) __declspec(deprecated(msg))
 #define DEPRECATED_MSG "This API is marked as deprecated and may not be supported in future releases. For more details please refer https://github.com/ROCm-Developer-Tools/HIP/blob/master/docs/markdown/hip_deprecated_api_list.md"
 #define GENERIC_GRID_LAUNCH 1
-#define HIP_INCLUDE_HIP_HIP_RUNTIME_API_H 
+#define HIP_INCLUDE_HIP_HIP_RUNTIME_API_H
 #define HIP_IPC_HANDLE_SIZE 64
 #define HIP_LAUNCH_PARAM_BUFFER_POINTER ((void*)0x01)
 #define HIP_LAUNCH_PARAM_BUFFER_SIZE ((void*)0x02)
@@ -71,14 +71,14 @@ extern "C" {
 #define HIP_VERSION_BUILD_ID 0
 #define HIP_VERSION_BUILD_NAME ""
 #define HIP_VERSION_GITHASH "326dd5fe4"
-#define HIP_VERSION_H 
+#define HIP_VERSION_H
 #define HIP_VERSION_MAJOR 6
 #define HIP_VERSION_MINOR 0
 #define HIP_VERSION_PATCH 33231
 #define USE_PEER_NON_UNIFIED 1
 #define __HIP_HAS_GET_PCH 0
-#define __HIP_NODISCARD 
-#define __dparm(x) 
+#define __HIP_NODISCARD
+#define __dparm(x)
 #define hipArrayCubemap 0x04
 #define hipArrayDefault 0x00
 #define hipArrayLayered 0x01
@@ -139,7 +139,7 @@ extern "C" {
 #define hipStreamWaitValueNor 0x3
 
 
-enum 
+enum
 {
 	HIP_SUCCESS = 0,
 	HIP_ERROR_INVALID_VALUE = 1,
@@ -736,23 +736,23 @@ typedef enum HIPresourceViewFormat_enum HIPresourceViewFormat;
 struct hipResourceDesc
 {
 	enum hipResourceType resType;
-	union 
+	union
 	{
-		struct 
+		struct
 		{
 			hipArray_t array;
 		}array;
-		struct 
+		struct
 		{
 			hipMipmappedArray_t mipmap;
 		}mipmap;
-		struct 
+		struct
 		{
 			void * devPtr;
 			struct hipChannelFormatDesc desc;
 			size_t sizeInBytes;
 		}linear;
-		struct 
+		struct
 		{
 			void * devPtr;
 			struct hipChannelFormatDesc desc;
@@ -766,24 +766,24 @@ typedef struct hipResourceDesc hipResourceDesc;
 struct HIP_RESOURCE_DESC_st
 {
 	HIPresourcetype resType;
-	union 
+	union
 	{
-		struct 
+		struct
 		{
 			hipArray_t hArray;
 		}array;
-		struct 
+		struct
 		{
 			hipMipmappedArray_t hMipmappedArray;
 		}mipmap;
-		struct 
+		struct
 		{
 			hipDeviceptr_t devPtr;
 			hipArray_Format format;
 			unsigned int numChannels;
 			size_t sizeInBytes;
 		}linear;
-		struct 
+		struct
 		{
 			hipDeviceptr_t devPtr;
 			hipArray_Format format;
@@ -792,7 +792,7 @@ struct HIP_RESOURCE_DESC_st
 			size_t height;
 			size_t pitchInBytes;
 		}pitch2D;
-		struct 
+		struct
 		{
 			int reserved[32];
 		}reserved;
@@ -1184,18 +1184,18 @@ enum hipSharedMemConfig
 	hipSharedMemBankSizeEightByte = 2,
 };
 typedef enum hipSharedMemConfig hipSharedMemConfig;
-struct dim3
+struct _3dim
 {
 	uint32_t x;
 	uint32_t y;
 	uint32_t z;
 };
-typedef struct dim3 dim3;
+typedef struct _3dim _3dim;
 struct hipLaunchParams_t
 {
 	void * func;
-	dim3 gridDim;
-	dim3 blockDim;
+	_3dim gridDim;
+	_3dim blockDim;
 	void ** args;
 	size_t sharedMem;
 	hipStream_t stream;
@@ -1230,10 +1230,10 @@ typedef enum hipExternalMemoryHandleType_enum hipExternalMemoryHandleType;
 struct hipExternalMemoryHandleDesc_st
 {
 	hipExternalMemoryHandleType type;
-	union 
+	union
 	{
 		int fd;
-		struct 
+		struct
 		{
 			void * handle;
 			const void * name;
@@ -1280,10 +1280,10 @@ typedef enum hipExternalSemaphoreHandleType_enum hipExternalSemaphoreHandleType;
 struct hipExternalSemaphoreHandleDesc_st
 {
 	hipExternalSemaphoreHandleType type;
-	union 
+	union
 	{
 		int fd;
-		struct 
+		struct
 		{
 			void * handle;
 			const void * name;
@@ -1297,18 +1297,18 @@ typedef struct hipExternalSemaphoreHandleDesc_st hipExternalSemaphoreHandleDesc;
 typedef void * hipExternalSemaphore_t;
 struct hipExternalSemaphoreSignalParams_st
 {
-	struct 
+	struct
 	{
-		struct 
+		struct
 		{
 			unsigned long long value;
 		}fence;
-		union 
+		union
 		{
 			void * fence;
 			unsigned long long reserved;
 		}nvSciSync;
-		struct 
+		struct
 		{
 			unsigned long long key;
 		}keyedMutex;
@@ -1320,18 +1320,18 @@ struct hipExternalSemaphoreSignalParams_st
 typedef struct hipExternalSemaphoreSignalParams_st hipExternalSemaphoreSignalParams;
 struct hipExternalSemaphoreWaitParams_st
 {
-	struct 
+	struct
 	{
-		struct 
+		struct
 		{
 			unsigned long long value;
 		}fence;
-		union 
+		union
 		{
 			void * fence;
 			unsigned long long reserved;
 		}nvSciSync;
-		struct 
+		struct
 		{
 			unsigned long long key;
 			unsigned int timeoutMs;
@@ -1390,10 +1390,10 @@ struct hipHostNodeParams
 typedef struct hipHostNodeParams hipHostNodeParams;
 struct hipKernelNodeParams
 {
-	dim3 blockDim;
+	_3dim blockDim;
 	void ** extra;
 	void * func;
-	dim3 gridDim;
+	_3dim gridDim;
 	void ** kernelParams;
 	unsigned int sharedMemBytes;
 };
@@ -1532,7 +1532,7 @@ struct hipMemAllocationProp
 	hipMemAllocationHandleType requestedHandleType;
 	hipMemLocation location;
 	void * win32HandleMetaData;
-	struct 
+	struct
 	{
 		unsigned char compressionType;
 		unsigned char gpuDirectRDMACapable;
@@ -1582,15 +1582,15 @@ typedef enum hipArraySparseSubresourceType hipArraySparseSubresourceType;
 struct hipArrayMapInfo
 {
 	hipResourceType resourceType;
-	union 
+	union
 	{
 		hipMipmappedArray mipmap;
 		hipArray_t array;
 	}resource;
 	hipArraySparseSubresourceType subresourceType;
-	union 
+	union
 	{
-		struct 
+		struct
 		{
 			unsigned int level;
 			unsigned int layer;
@@ -1601,7 +1601,7 @@ struct hipArrayMapInfo
 			unsigned int extentHeight;
 			unsigned int extentDepth;
 		}sparseLevel;
-		struct 
+		struct
 		{
 			unsigned int layer;
 			unsigned long long offset;
@@ -1610,7 +1610,7 @@ struct hipArrayMapInfo
 	}subresource;
 	hipMemOperationType memOperationType;
 	hipMemHandleType memHandleType;
-	union 
+	union
 	{
 		hipMemGenericAllocationHandle_t memHandle;
 	}memHandle;
@@ -1690,8 +1690,8 @@ typedef struct ihiprtcLinkState * hiprtcLinkState;
 struct _hiprtcProgram;
 typedef struct _hiprtcProgram * hiprtcProgram;
 
-typedef hipError_t HIPAPI t__hipPopCallConfiguration(dim3 * gridDim, dim3 * blockDim, size_t * sharedMem, hipStream_t * stream);
-typedef hipError_t HIPAPI t__hipPushCallConfiguration(dim3 gridDim, dim3 blockDim, size_t sharedMem, hipStream_t stream);
+typedef hipError_t HIPAPI t__hipPopCallConfiguration(_3dim * gridDim, _3dim * blockDim, size_t * sharedMem, hipStream_t * stream);
+typedef hipError_t HIPAPI t__hipPushCallConfiguration(_3dim gridDim, _3dim blockDim, size_t sharedMem, hipStream_t stream);
 typedef const char * HIPAPI thipApiName(uint32_t id);
 typedef hipError_t HIPAPI thipArray3DCreate(hipArray_t * array, const HIP_ARRAY3D_DESCRIPTOR * pAllocateArray);
 typedef hipError_t HIPAPI thipArray3DGetDescriptor(HIP_ARRAY3D_DESCRIPTOR * pArrayDescriptor, hipArray_t array);
@@ -1704,7 +1704,7 @@ typedef hipError_t HIPAPI thipBindTexture2D(size_t * offset, const textureRefere
 typedef hipError_t HIPAPI thipBindTextureToArray(const textureReference * tex, hipArray_const_t array, const hipChannelFormatDesc * desc);
 typedef hipError_t HIPAPI thipBindTextureToMipmappedArray(const textureReference * tex, hipMipmappedArray_const_t mipmappedArray, const hipChannelFormatDesc * desc);
 typedef hipError_t HIPAPI thipChooseDeviceR0600(int * device, const hipDeviceProp_tR0600 * prop);
-typedef hipError_t HIPAPI thipConfigureCall(dim3 gridDim, dim3 blockDim, size_t sharedMem, hipStream_t stream);
+typedef hipError_t HIPAPI thipConfigureCall(_3dim gridDim, _3dim blockDim, size_t sharedMem, hipStream_t stream);
 typedef struct hipChannelFormatDesc HIPAPI thipCreateChannelDesc(int x, int y, int z, int w, enum hipChannelFormatKind f);
 typedef hipError_t HIPAPI thipCreateSurfaceObject(hipSurfaceObject_t * pSurfObject, const hipResourceDesc * pResDesc);
 typedef hipError_t HIPAPI thipCreateTextureObject(hipTextureObject_t * pTexObject, const hipResourceDesc * pResDesc, const hipTextureDesc * pTexDesc, const struct hipResourceViewDesc * pResViewDesc);
@@ -1778,7 +1778,7 @@ typedef hipError_t HIPAPI thipEventRecord_spt(hipEvent_t event, hipStream_t stre
 typedef hipError_t HIPAPI thipEventSynchronize(hipEvent_t event);
 typedef hipError_t HIPAPI thipExtGetLastError();
 typedef hipError_t HIPAPI thipExtGetLinkTypeAndHopCount(int device1, int device2, uint32_t * linktype, uint32_t * hopcount);
-typedef hipError_t HIPAPI thipExtLaunchKernel(const void * function_address, dim3 numBlocks, dim3 dimBlocks, void ** args, size_t sharedMemBytes, hipStream_t stream, hipEvent_t startEvent, hipEvent_t stopEvent, int flags);
+typedef hipError_t HIPAPI thipExtLaunchKernel(const void * function_address, _3dim numBlocks, _3dim dimBlocks, void ** args, size_t sharedMemBytes, hipStream_t stream, hipEvent_t startEvent, hipEvent_t stopEvent, int flags);
 typedef hipError_t HIPAPI thipExtLaunchMultiKernelMultiDevice(hipLaunchParams * launchParamsList, int numDevices, unsigned int flags);
 typedef hipError_t HIPAPI thipExtMallocWithFlags(void ** ptr, size_t sizeBytes, unsigned int flags);
 typedef hipError_t HIPAPI thipExtStreamCreateWithCUMask(hipStream_t * stream, uint32_t cuMaskSize, const uint32_t * cuMask);
@@ -1904,13 +1904,13 @@ typedef hipError_t HIPAPI thipIpcOpenMemHandle(void ** devPtr, hipIpcMemHandle_t
 typedef const char * HIPAPI thipKernelNameRef(const hipFunction_t f);
 typedef const char * HIPAPI thipKernelNameRefByPtr(const void * hostFunction, hipStream_t stream);
 typedef hipError_t HIPAPI thipLaunchByPtr(const void * func);
-typedef hipError_t HIPAPI thipLaunchCooperativeKernel(const void * f, dim3 gridDim, dim3 blockDimX, void ** kernelParams, unsigned int sharedMemBytes, hipStream_t stream);
+typedef hipError_t HIPAPI thipLaunchCooperativeKernel(const void * f, _3dim gridDim, _3dim blockDimX, void ** kernelParams, unsigned int sharedMemBytes, hipStream_t stream);
 typedef hipError_t HIPAPI thipLaunchCooperativeKernelMultiDevice(hipLaunchParams * launchParamsList, int numDevices, unsigned int flags);
-typedef hipError_t HIPAPI thipLaunchCooperativeKernel_spt(const void * f, dim3 gridDim, dim3 blockDim, void ** kernelParams, uint32_t sharedMemBytes, hipStream_t hStream);
+typedef hipError_t HIPAPI thipLaunchCooperativeKernel_spt(const void * f, _3dim gridDim, _3dim blockDim, void ** kernelParams, uint32_t sharedMemBytes, hipStream_t hStream);
 typedef hipError_t HIPAPI thipLaunchHostFunc(hipStream_t stream, hipHostFn_t fn, void * userData);
 typedef hipError_t HIPAPI thipLaunchHostFunc_spt(hipStream_t stream, hipHostFn_t fn, void * userData);
-typedef hipError_t HIPAPI thipLaunchKernel(const void * function_address, dim3 numBlocks, dim3 dimBlocks, void ** args, size_t sharedMemBytes, hipStream_t stream);
-typedef hipError_t HIPAPI thipLaunchKernel_spt(const void * function_address, dim3 numBlocks, dim3 dimBlocks, void ** args, size_t sharedMemBytes, hipStream_t stream);
+typedef hipError_t HIPAPI thipLaunchKernel(const void * function_address, _3dim numBlocks, _3dim dimBlocks, void ** args, size_t sharedMemBytes, hipStream_t stream);
+typedef hipError_t HIPAPI thipLaunchKernel_spt(const void * function_address, _3dim numBlocks, _3dim dimBlocks, void ** args, size_t sharedMemBytes, hipStream_t stream);
 typedef hipError_t HIPAPI thipMalloc(void ** ptr, size_t size);
 typedef hipError_t HIPAPI thipMalloc3D(hipPitchedPtr * pitchedDevPtr, hipExtent extent);
 typedef hipError_t HIPAPI thipMalloc3DArray(hipArray_t * array, const struct hipChannelFormatDesc * desc, struct hipExtent extent, unsigned int flags);

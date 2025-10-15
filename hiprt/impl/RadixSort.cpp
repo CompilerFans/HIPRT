@@ -37,10 +37,10 @@ constexpr auto hiprtIncludeDir{ "contrib/Orochi/" };
 namespace hiprt
 {
 
-RadixSort::RadixSort( oroDevice device, oroStream stream, OrochiUtils& oroutils )
+RadixSort::RadixSort( int device, cudaStream_t stream, OrochiUtils& cudautils )
 	: m_sort(
 		  device,
-		  oroutils,
+		  cudautils,
 		  stream,
 		  ( Utility::getRootDir() / hiprtKernelPath ).string(),
 		  ( Utility::getRootDir() / hiprtIncludeDir ).string() )
@@ -53,7 +53,7 @@ void RadixSort::sort(
 	uint32_t* outputKeys,
 	uint32_t* outputValues,
 	size_t	  size,
-	oroStream stream ) noexcept
+	cudaStream_t stream ) noexcept
 {
 	Oro::RadixSort::KeyValueSoA srcGpu{};
 	Oro::RadixSort::KeyValueSoA dstGpu{};

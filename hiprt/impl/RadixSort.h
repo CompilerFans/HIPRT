@@ -32,7 +32,7 @@ namespace hiprt
 class RadixSort final
 {
   public:
-	RadixSort( oroDevice device, oroStream stream, OrochiUtils& oroutils );
+	RadixSort( int device, cudaStream_t stream, OrochiUtils& cudautils );
 
 	void sort(
 		uint32_t* inputKeys,
@@ -40,7 +40,7 @@ class RadixSort final
 		uint32_t* outputKeys,
 		uint32_t* outputValues,
 		size_t	  size,
-		oroStream stream ) noexcept;
+		cudaStream_t stream ) noexcept;
 
   private:
 	Oro::RadixSort m_sort;

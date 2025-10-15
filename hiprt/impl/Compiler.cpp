@@ -89,15 +89,15 @@ Compiler::Compiler()
 			"__global__ void rtcTest() { __builtin_amdgcn_image_bvh8_intersect_ray(0, 0.0f, 0xff, { 0.0f, 0.0f, 0.0f "
 			"}, { 1.0f, 0.0f, 0.0f }, 0, { 0, 0, 0, 0 }, nullptr, nullptr ); }";
 
-		orortcProgram prog;
-		checkOrortc( orortcCreateProgram( &prog, src.c_str(), "", 0, nullptr, nullptr ) );
+		nvrtcProgram prog;
+		checkOrortc( nvrtcCreateProgram( &prog, src.c_str(), "", 0, nullptr, nullptr ) );
 
 		m_rtip31Support = false;
 
-		if ( orortcCompileProgram( prog, 0, nullptr ) == ORORTC_SUCCESS )
+		if ( nvrtcCompileProgram( prog, 0, nullptr ) == NVRTC_SUCCESS )
 		{
 			m_rtip31Support = true;
-			checkOrortc( orortcDestroyProgram( &prog ) );
+			checkOrortc( nvrtcDestroyProgram( &prog ) );
 		}
 	}
 }
@@ -105,7 +105,7 @@ Compiler::Compiler()
 Compiler::~Compiler()
 {
 	for ( auto& module : m_moduleCache )
-		checkOro( oroModuleUnload( module.second ) );
+		checkOro( cuModuleUnload( module.second ) );
 }
 
 Kernel Compiler::getKernel(
@@ -123,7 +123,7 @@ Kernel Compiler::getKernel(
 	auto		cacheEntry = m_kernelCache.find( cacheName );
 	if ( cacheEntry != m_kernelCache.end() ) return cacheEntry->second;
 
-	oroFunction function;
+	CUfunction function;
 
 	// if we use the precompiled bitcode as file or baked as binary, we use 'getFunctionFromPrecompiledBinary'
 	if constexpr ( UseBitcode || UseBakedCompiledKernel )
@@ -136,8 +136,8 @@ Kernel Compiler::getKernel(
 		std::vector<const char*>	  headers;
 		std::vector<const char*>	  includeNames;
 		std::vector<hiprtFuncNameSet> funcNameSets;
-		std::vector<oroFunction>	  functions;
-		oroModule					  module;
+		std::vector<CUfunction>	  functions;
+		CUmodule					  module;
 
 		if ( numHeaders == 0 )
 		{
@@ -200,9 +200,9 @@ void Compiler::buildProgram(
 	std::vector<const char*>&		headers,
 	std::vector<const char*>&		includeNames,
 	std::vector<const char*>&		options,
-	orortcProgram&					progOut )
+	nvrtcProgram&					progOut )
 {
-	checkOrortc( orortcCreateProgram(
+	checkOrortc( nvrtcCreateProgram(
 		&progOut,
 		src.c_str(),
 		moduleName.string().c_str(),
@@ -211,18 +211,18 @@ void Compiler::buildProgram(
 		includeNames.data() ) );
 
 	for ( size_t i = 0; i < funcNames.size(); ++i )
-		checkOrortc( orortcAddNameExpression( progOut, funcNames[i] ) );
+		checkOrortc( nvrtcAddNameExpression( progOut, funcNames[i] ) );
 
-	orortcResult e = orortcCompileProgram( progOut, static_cast<int>( options.size() ), options.data() );
-	if ( e != ORORTC_SUCCESS )
+	nvrtcResult e = nvrtcCompileProgram( progOut, static_cast<int>( options.size() ), options.data() );
+	if ( e != NVRTC_SUCCESS )
 	{
 		size_t logSize;
-		checkOrortc( orortcGetProgramLogSize( progOut, &logSize ) );
+		checkOrortc( nvrtcGetProgramLogSize( progOut, &logSize ) );
 
 		if ( logSize )
 		{
 			std::string log( logSize, '\0' );
-			checkOrortc( orortcGetProgramLog( progOut, &log[0] ) );
+			checkOrortc( nvrtcGetProgramLog( progOut, &log[0] ) );
 			throw std::runtime_error( "Runtime compilation failed:\n" + log );
 		}
 	}
@@ -239,8 +239,8 @@ void Compiler::buildKernels(
 	uint32_t							 numGeomTypes,
 	uint32_t							 numRayTypes,
 	const std::vector<hiprtFuncNameSet>& funcNameSets,
-	std::vector<oroFunction>&			 functions,
-	oroModule&							 module,
+	std::vector<CUfunction>&			 functions,
+	CUmodule&							 module,
 	bool								 extended,
 	bool								 cache )
 {
@@ -258,7 +258,7 @@ void Compiler::buildKernels(
 		std::string cacheName = getCacheFilename( context, src, moduleName, options, funcNameSets, numGeomTypes, numRayTypes );
 		bool		upToDate  = isCachedFileUpToDate( m_cacheDirectory / cacheName, moduleName );
 
-		orortcProgram prog;
+		nvrtcProgram prog;
 		std::string	  binary;
 		if ( upToDate && cache )
 		{
@@ -313,22 +313,22 @@ void Compiler::buildKernels(
 			buildProgram( funcNames, extSrc, moduleName, headers, includeNames, opts, prog );
 
 			size_t binarySize = 0;
-			checkOrortc( orortcGetCodeSize( prog, &binarySize ) );
+			checkOrortc( nvrtcGetPTXSize( prog, &binarySize ) );
 			binary.resize( binarySize );
-			checkOrortc( orortcGetCode( prog, binary.data() ) );
+			checkOrortc( nvrtcGetPTX( prog, binary.data() ) );
 
 			if ( cache ) cacheBinaryToFile( binary, cacheName, context.getDeviceName() );
-			checkOrortc( orortcDestroyProgram( &prog ) );
+			checkOrortc( nvrtcDestroyProgram( &prog ) );
 		}
 
-		checkOro( oroModuleLoadData( &module, binary.data() ) );
+		checkOro( cuModuleLoadData( &module, binary.data() ) );
 		m_moduleCache[moduleName.string()] = module;
 	}
 
 	for ( size_t i = 0; i < funcNames.size(); ++i )
 	{
-		oroFunction func;
-		checkOro( oroModuleGetFunction( &func, module, funcNames[i] ) );
+		CUfunction func;
+		checkOro( cuModuleGetFunction( &func, module, funcNames[i] ) );
 		functions.push_back( func );
 	}
 }
@@ -341,7 +341,7 @@ void Compiler::buildKernelsFromBitcode(
 	uint32_t							 numGeomTypes,
 	uint32_t							 numRayTypes,
 	const std::vector<hiprtFuncNameSet>& funcNameSets,
-	std::vector<oroFunction>&			 functions,
+	std::vector<CUfunction>&			 functions,
 	bool								 cache )
 {
 	if constexpr ( UseBitcode )
@@ -351,7 +351,7 @@ void Compiler::buildKernelsFromBitcode(
 
 		std::lock_guard<std::mutex> lock( m_moduleMutex );
 		auto						cacheEntry = m_moduleCache.find( moduleName.string() );
-		oroModule					module;
+		CUmodule					module;
 		if ( cacheEntry != m_moduleCache.end() )
 		{
 			module = cacheEntry->second;
@@ -379,8 +379,8 @@ void Compiler::buildKernelsFromBitcode(
 					buildFunctionTableBitcode( context, numGeomTypes, numRayTypes, funcNameSets );
 
 				const uint32_t	 JITOptCount = 6u;
-				orortcLinkState	 rtcLinkState;
-				orortcJIT_option options[JITOptCount];
+				// nvrtcLinkState	 rtcLinkState;
+				CUjit_option options[JITOptCount];
 				void*			 optionVals[JITOptCount];
 				float			 wallTime;
 
@@ -388,66 +388,66 @@ void Compiler::buildKernelsFromBitcode(
 				char			   errorLog[LogSize];
 				char			   infoLog[LogSize];
 
-				options[0]	  = ORORTC_JIT_WALL_TIME;
+				options[0]	  = CU_JIT_WALL_TIME;
 				optionVals[0] = reinterpret_cast<void*>( &wallTime );
 
-				options[1]	  = ORORTC_JIT_INFO_LOG_BUFFER;
+				options[1]	  = CU_JIT_INFO_LOG_BUFFER;
 				optionVals[1] = infoLog;
 
-				options[2]	  = ORORTC_JIT_INFO_LOG_BUFFER_SIZE_BYTES;
+				options[2]	  = CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES;
 				optionVals[2] = reinterpret_cast<void*>( static_cast<uintptr_t>( LogSize ) );
 
-				options[3]	  = ORORTC_JIT_ERROR_LOG_BUFFER;
+				options[3]	  = CU_JIT_ERROR_LOG_BUFFER;
 				optionVals[3] = errorLog;
 
-				options[4]	  = ORORTC_JIT_ERROR_LOG_BUFFER_SIZE_BYTES;
+				options[4]	  = CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES;
 				optionVals[4] = reinterpret_cast<void*>( static_cast<uintptr_t>( LogSize ) );
 
-				options[5]	  = ORORTC_JIT_LOG_VERBOSE;
+				options[5]	  = CU_JIT_LOG_VERBOSE;
 				optionVals[5] = reinterpret_cast<void*>( static_cast<uintptr_t>( 1 ) );
 
-				bool					 amd		= oroGetCurAPI( 0 ) == ORO_API_HIP;
+				bool					 amd		= false;
 				std::filesystem::path	 bcPath		= getBitcodePath( amd );
-				const orortcJITInputType typeBc		= amd ? ORORTC_JIT_INPUT_LLVM_BUNDLED_BITCODE : ORORTC_JIT_INPUT_FATBINARY;
-				const orortcJITInputType typeUserBc = amd ? ORORTC_JIT_INPUT_LLVM_BITCODE : ORORTC_JIT_INPUT_PTX;
+				const CUjitInputType typeBc		= CU_JIT_INPUT_FATBINARY;
+				const CUjitInputType typeUserBc = CU_JIT_INPUT_PTX;
 
 				void* binaryPtr;
-				checkOrortc( orortcLinkCreate( JITOptCount, options, optionVals, &rtcLinkState ) );
+				// checkOrortc( nvrtcLinkCreate( JITOptCount, options, optionVals, &rtcLinkState ) );
 
-				orortcResult res = orortcLinkAddFile( rtcLinkState, typeBc, bcPath.string().c_str(), 0, 0, 0 );
-				if ( res != ORORTC_SUCCESS )
+				nvrtcResult res = NVRTC_SUCCESS; // nvrtcLinkAddFile( rtcLinkState, typeBc, bcPath.string().c_str(), 0, 0, 0 );
+				if ( res != NVRTC_SUCCESS )
 				{
 					std::string msg = Utility::format(
 						"Orortc error: '%s' [ %d ] linking file '%s'\n",
-						orortcGetErrorString( res ),
+						nvrtcGetErrorString( res ),
 						static_cast<uint32_t>( res ),
 						bcPath.string().c_str() );
 					throw std::runtime_error( msg );
 				}
 				checkOrortc( res );
 
-				checkOrortc( orortcLinkAddData(
-					rtcLinkState, typeUserBc, const_cast<char*>( bitcodeBinary.data() ), bitcodeBinary.size(), 0, 0, 0, 0 ) );
-				checkOrortc( orortcLinkAddData(
-					rtcLinkState, typeUserBc, customFuncBitcodeBinary.data(), customFuncBitcodeBinary.size(), 0, 0, 0, 0 ) );
+				// checkOrortc( nvrtcLinkAddData(
+				// 	rtcLinkState, typeUserBc, const_cast<char*>( bitcodeBinary.data() ), bitcodeBinary.size(), 0, 0, 0, 0 ) );
+				// checkOrortc( nvrtcLinkAddData(
+				// 	rtcLinkState, typeUserBc, customFuncBitcodeBinary.data(), customFuncBitcodeBinary.size(), 0, 0, 0, 0 ) );
 
 				size_t binarySize = 0;
-				checkOrortc( orortcLinkComplete( rtcLinkState, &binaryPtr, &binarySize ) );
+				// checkOrortc( nvrtcLinkComplete( rtcLinkState, &binaryPtr, &binarySize ) );
 				binary = std::string( reinterpret_cast<char*>( binaryPtr ), binarySize );
 
 				if ( cache ) cacheBinaryToFile( binary, cacheName, context.getDeviceName() );
 
-				checkOrortc( orortcLinkDestroy( rtcLinkState ) );
+				// checkOrortc( nvrtcLinkDestroy( rtcLinkState ) );
 			}
 
-			checkOro( oroModuleLoadData( &module, binary.data() ) );
+			checkOro( cuModuleLoadData( &module, binary.data() ) );
 			m_moduleCache[moduleName.string()] = module;
 		}
 
 		for ( size_t i = 0; i < funcNames.size(); ++i )
 		{
-			oroFunction func;
-			checkOro( oroModuleGetFunction( &func, module, funcNames[i] ) );
+			CUfunction func;
+			checkOro( cuModuleGetFunction( &func, module, funcNames[i] ) );
 			functions.push_back( func );
 		}
 	}
@@ -750,14 +750,14 @@ void Compiler::cacheBinaryToFile( const std::string& binaryIn, const std::string
 	}
 }
 
-oroFunction Compiler::getFunctionFromPrecompiledBinary( const std::string& funcName )
+CUfunction Compiler::getFunctionFromPrecompiledBinary( const std::string& funcName )
 {
-	bool						amd	 = oroGetCurAPI( 0 ) == ORO_API_HIP;
+	bool						amd	 = false;
 	const std::filesystem::path path = getFatbinPath( amd );
 
 	std::lock_guard<std::mutex> lock( m_moduleMutex );
 	auto						cacheEntry = m_moduleCache.find( path.string() );
-	oroModule					module	   = nullptr;
+	CUmodule					module	   = nullptr;
 	if ( cacheEntry != m_moduleCache.end() )
 	{
 		module = cacheEntry->second;
@@ -778,7 +778,7 @@ oroFunction Compiler::getFunctionFromPrecompiledBinary( const std::string& funcN
 					bvh_build_array_h_size,
 					bvh_build_array_h_isCompressed ? std::optional<size_t>{ bvh_build_array_h_size_uncompressed }
 												   : std::nullopt );
-				checkOro( oroModuleLoadData( &module, binary.data() ) );
+				checkOro( cuModuleLoadData( &module, binary.data() ) );
 			}
 			else
 			{
@@ -798,14 +798,14 @@ oroFunction Compiler::getFunctionFromPrecompiledBinary( const std::string& funcN
 			file.seekg( 0, std::fstream::beg );
 			file.read( binary.data(), size );
 
-			checkOro( oroModuleLoadData( &module, binary.data() ) );
+			checkOro( cuModuleLoadData( &module, binary.data() ) );
 		}
 
 		m_moduleCache[path.string()] = module;
 	}
 
-	oroFunction function;
-	checkOro( oroModuleGetFunction( &function, module, funcName.c_str() ) );
+	CUfunction function;
+	checkOro( cuModuleGetFunction( &function, module, funcName.c_str() ) );
 
 	return function;
 }
@@ -815,7 +815,7 @@ std::string Compiler::buildFunctionTableBitcode(
 {
 	if constexpr ( BakedCodeIsGenerated )
 	{
-		bool amd = oroGetCurAPI( 0 ) == ORO_API_HIP;
+		bool amd = false;
 
 		std::vector<const char*> options;
 		std::string				 includePath = "-I" + Utility::getRootDir().string();
@@ -851,23 +851,19 @@ std::string Compiler::buildFunctionTableBitcode(
 		addCustomFuncsSwitchCase( src, funcNameSets, numGeomTypes, numRayTypes );
 
 		std::vector<const char*> funcNames;
-		orortcProgram			 prog;
+		nvrtcProgram			 prog;
 
 		buildProgram( funcNames, src, std::string(), headers, includeNames, options, prog );
 
 		size_t size = 0;
-		if ( amd )
-			checkOrortc( orortcGetBitcodeSize( prog, &size ) );
-		else
-			checkOrortc( orortcGetCodeSize( prog, &size ) );
+
+			checkOrortc( nvrtcGetPTXSize( prog, &size ) );
 
 		std::string binary;
 		binary.resize( size );
-		if ( amd )
-			checkOrortc( orortcGetBitcode( prog, binary.data() ) );
-		else
-			checkOrortc( orortcGetCode( prog, binary.data() ) );
-		checkOrortc( orortcDestroyProgram( &prog ) );
+
+			checkOrortc( nvrtcGetPTX( prog, binary.data() ) );
+		checkOrortc( nvrtcDestroyProgram( &prog ) );
 		return binary;
 	}
 	else

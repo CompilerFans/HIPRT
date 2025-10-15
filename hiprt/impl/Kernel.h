@@ -24,7 +24,10 @@
 
 #pragma once
 #include <hiprt/hiprt_common.h>
-#include <Orochi/Orochi.h>
+#include <cuda_runtime_api.h>
+#include <cuda.h>
+#include <cuda_profiler_api.h>
+#include <nvrtc.h>
 
 namespace hiprt
 {
@@ -46,7 +49,7 @@ class Kernel
 		}
 	};
 
-	Kernel( oroFunction function = 0 ) : m_function( function ) {}
+	Kernel( CUfunction function = 0 ) : m_function( function ) {}
 
 	void setArgs( std::vector<Argument> args );
 
@@ -58,16 +61,16 @@ class Kernel
 		uint32_t  by,
 		uint32_t  bz,
 		uint32_t  sharedMemBytes,
-		oroStream stream );
+		cudaStream_t stream );
 
-	void launch( uint32_t nx, oroStream stream = 0, uint32_t sharedMemBytes = 0 );
-	void launch( uint32_t nx, uint32_t tx, oroStream stream = 0, uint32_t sharedMemBytes = 0 );
+	void launch( uint32_t nx, cudaStream_t stream = 0, uint32_t sharedMemBytes = 0 );
+	void launch( uint32_t nx, uint32_t tx, cudaStream_t stream = 0, uint32_t sharedMemBytes = 0 );
 
 	uint32_t getNumSmem();
 	uint32_t getNumRegs();
 
   private:
-	oroFunction			 m_function;
+	CUfunction			 m_function;
 	std::vector<uint8_t> m_args;
 	std::vector<void*>	 m_argPtrs;
 };

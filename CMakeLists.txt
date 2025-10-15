@@ -94,7 +94,7 @@ endfunction()
 
 
 
-# Remove the last character from the string if it's a / or \\  
+# Remove the last character from the string if it's a / or \\
 function(remove_trailing_slash strInOut)
 	string(LENGTH "${${strInOut}}" strLength)
 	math(EXPR lastIndex "${strLength} - 1")
@@ -127,10 +127,10 @@ function(get_hip_sdk_version result result_path)
 
 	# Check if HIP_PATH is defined as an environment variable
 	elseif(DEFINED ENV{HIP_PATH})
-		
+
 		set(HIP_PATH $ENV{HIP_PATH})
 		message(STATUS "HIP_PATH is defined as an environment variable: ${HIP_PATH}")
-			
+
 	# if HIP_PATH is not in cmake, and not in environment variable
 	else()
 		message(WARNING "WARNING: HIP_PATH is not defined as a CMake parameter or an environment variable - NOT RECOMMENDED")
@@ -177,9 +177,9 @@ function(get_hip_sdk_version result result_path)
 				endif()
 			endif()
 		else()
-		
+
 			# HIP_PATH is expected to look like: C:\Program Files\AMD\ROCm\5.7
-			
+
 			if(EXISTS "${HIP_PATH}\\bin\\hipcc.exe")
 				# in newer version of HIP SDK (>= 6.3), we are using 'hipcc.exe --version' to check the version
 				# message(STATUS "using hipcc.exe to get the version")
@@ -193,14 +193,14 @@ function(get_hip_sdk_version result result_path)
 
 
 		endif()
-	
+
 	# build hip command for Linux
 	else()
-	
+
 		# If not defined we try to take it from the PATH
 		if(NOT HIP_PATH)
 			set(hipCommand "hipcc")
-			
+
 		# otherwise, build the hipcc command with full path.
 		else()
 			set(hipCommand "${HIP_PATH}/bin/${hipCommand}")
@@ -316,12 +316,12 @@ add_definitions(-D__USE_HIP__)
 add_definitions(-DHIPRT_PUBLIC_REPO)
 
 
-if (NOT FORCE_DISABLE_CUDA)
-	# Enable CUDA if possible
-	include(${CMAKE_CURRENT_SOURCE_DIR}/contrib/Orochi/Orochi/enable_cuew.cmake)
-else()
-	message(STATUS "CUDA support is forced to disabled.")
-endif()
+# if (NOT FORCE_DISABLE_CUDA)
+# 	# Enable CUDA if possible
+# 	include(${CMAKE_CURRENT_SOURCE_DIR}/contrib/Orochi/Orochi/enable_cuew.cmake)
+# else()
+# 	message(STATUS "CUDA support is forced to disabled.")
+# endif()
 
 
 # Base output directory
@@ -434,19 +434,19 @@ if(PRECOMPILE)
 			VERBATIM
 			DEPENDS ${bvh_source}
 		)
-		
+
 	# create the 'precompile_kernels' project
 	add_custom_target(precompile_kernels ALL
 		DEPENDS ${KERNEL_HIPRT_COMP} ${KERNEL_OROCHI_COMP}
 		)
-	
+
 	if(NOT NO_UNITTEST)
 
 		set(unittest_kernel_source
 		${CMAKE_SOURCE_DIR}/test/bitcodes/custom_func_table.cpp
 		${CMAKE_SOURCE_DIR}/test/bitcodes/unit_test.cpp
 		)
-		
+
 		message(">> add_custom_command: ${PYTHON_EXECUTABLE} precompile_bitcode.py ${CUDA_OPTION} --hipSdkPath \"${HIP_FINAL_PATH}\"")
 		add_custom_command(
 			OUTPUT ${KERNEL_UNITTEST_COMP}
@@ -457,15 +457,15 @@ if(PRECOMPILE)
 			VERBATIM
 			DEPENDS ${unittest_kernel_source}
 			)
-			
+
 		# create the 'precompile_unittest_kernels' project
 		add_custom_target(precompile_unittest_kernels ALL
 			DEPENDS ${KERNEL_UNITTEST_COMP}
 			)
-			
+
 		add_dependencies(${HIPRT_NAME} precompile_unittest_kernels)
 	endif()
-	
+
 
 endif()
 
@@ -474,13 +474,13 @@ endif()
 # convert the binary to a buffer that will be embeded inside the binary
 # it's expected the step 'PRECOMPILE' has been executed.
 if ( BAKE_COMPILED_KERNEL )
-	
+
 	message(">> precompiled will be embedded.")
-	
+
 	set(PYTHON_FILE "${CMAKE_CURRENT_SOURCE_DIR}/contrib/Orochi/scripts/convert_binary_to_array.py")
 
 	set(ARCHIVE_SCRIPT  "${CMAKE_CURRENT_SOURCE_DIR}/contrib/Orochi/scripts/create_archive.cmake")
-	
+
 	# HIPRT binary
 	set(KERNEL_HIPRT_H "${CMAKE_CURRENT_SOURCE_DIR}/hiprt/impl/bvh_build_array.h")
 	add_custom_command(
@@ -560,13 +560,13 @@ if ( BAKE_COMPILED_KERNEL )
 			PUBLIC
 			contrib/zstd/lib
 		)
-		
+
 		set_target_properties(zstd_embedded PROPERTIES POSITION_INDEPENDENT_CODE ON)  # -fPIC
 		target_compile_definitions(zstd_embedded PRIVATE ZSTD_DISABLE_ASM)  # disable ASM for easier build
 
 		#  Link against zstd_embedded
 		target_link_libraries(${HIPRT_NAME}   zstd_embedded )
-		
+
 		# the 'ORO_LINK_ZSTD' flag enables use of ZSTD API in the source code.
 		target_compile_definitions(${HIPRT_NAME} PRIVATE ORO_LINK_ZSTD)
 	endif()
@@ -575,8 +575,8 @@ if ( BAKE_COMPILED_KERNEL )
 
 	# enable the 'BAKE_COMPILED_KERNEL' on Orochi:  this mode is activated by adding those 2 defines.
 	target_compile_definitions(${HIPRT_NAME} PRIVATE ORO_PP_LOAD_FROM_STRING HIPRT_BITCODE_LINKING ORO_PRECOMPILED)
-	
-	#enable the 'BAKE_COMPILED_KERNEL' on HIPRT: 
+
+	#enable the 'BAKE_COMPILED_KERNEL' on HIPRT:
 	target_compile_definitions(${HIPRT_NAME} PRIVATE HIPRT_BAKE_COMPILED_KERNEL )
 endif()
 
@@ -620,7 +620,7 @@ file(GLOB HIPRT_IMPL_HEADERS "${CMAKE_CURRENT_SOURCE_DIR}/hiprt/impl/*.h")
 list(REMOVE_ITEM HIPRT_IMPL_HEADERS "${CMAKE_CURRENT_SOURCE_DIR}/hiprt/impl/bvh_build_array.h")
 install(FILES ${HIPRT_IMPL_HEADERS}
 		DESTINATION include/hiprt/impl)
-		
+
 # add some header files from Orochi
 file(GLOB HIPRT_ORO_HEADERS "${CMAKE_CURRENT_SOURCE_DIR}/contrib/Orochi/ParallelPrimitives/*.h")
 install(FILES ${HIPRT_ORO_HEADERS}

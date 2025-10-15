@@ -31,7 +31,7 @@
 #if ( defined( __CUDACC_RTC__ ) || defined( __HIPCC_RTC__ ) )
 #define __KERNELCC_RTC__
 #endif
-
+#include <cuda_runtime_api.h>
 #if !defined( __KERNELCC__ )
 #include <algorithm>
 #include <cfloat>

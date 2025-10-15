@@ -21,7 +21,10 @@
 //
 #pragma once
 
-
+#include <cuda_runtime_api.h>
+#include <cuda.h>
+#include <cuda_profiler_api.h>
+#include <nvrtc.h>
 
 
 // This part allows Orochi.h to be included by the device kernel code to compile, and use generic oro** names.
@@ -896,9 +899,9 @@ oroError_t OROAPI oroIpcGetEventHandle(oroIpcEventHandle_t * handle, oroEvent_t 
 oroError_t OROAPI oroIpcGetMemHandle(oroIpcMemHandle_t * handle, void * devPtr);
 oroError_t OROAPI oroIpcOpenEventHandle(oroEvent_t * event, oroIpcEventHandle_t handle);
 oroError_t OROAPI oroIpcOpenMemHandle(void ** devPtr, oroIpcMemHandle_t handle, unsigned int flags);
-oroError_t OROAPI oroLaunchCooperativeKernel(const void * f, dim3 gridDim, dim3 blockDimX, void ** kernelParams, unsigned int sharedMemBytes, oroStream_t stream);
+oroError_t OROAPI oroLaunchCooperativeKernel(const void * f, _3dim gridDim, _3dim blockDimX, void ** kernelParams, unsigned int sharedMemBytes, oroStream_t stream);
 oroError_t OROAPI oroLaunchCooperativeKernelMultiDevice(oroLaunchParams * launchParamsList, int numDevices, unsigned int flags);
-oroError_t OROAPI oroLaunchKernel(const void * function_address, dim3 numBlocks, dim3 dimBlocks, void ** args, size_t sharedMemBytes, oroStream_t stream);
+oroError_t OROAPI oroLaunchKernel(const void * function_address, _3dim numBlocks, _3dim dimBlocks, void ** args, size_t sharedMemBytes, oroStream_t stream);
 oroError_t OROAPI oroMalloc(void ** ptr, size_t size);
 oroError_t OROAPI oroMalloc3D(oroPitchedPtr * pitchedDevPtr, oroExtent extent);
 oroError_t OROAPI oroMalloc3DArray(oroArray_t * array, const  oroChannelFormatDesc * desc,  oroExtent extent, unsigned int flags);
@@ -1263,7 +1266,7 @@ enum {
 //     customPaths_Hip[]    = {"amdhip64_6.dll", "amdhip64.dll", NULL};
 //     customPaths_Hiprtc[] = {"hiprtc0600.dll", "hiprtc0507.dll", NULL};
 //     Note that those lists are non-correlated, meaning Orochi can take for example the second element of customPaths_Hip and the first element of customPaths_Hiprtc.
-int oroInitialize( oroApi api, oroU32 flags, 
+int oroInitialize( oroApi api, oroU32 flags,
 	const char** customPaths_Hip hipew__dparm(0),
 	const char** customPaths_Hiprtc hipew__dparm(0),
 	const char** customPaths_Cuda hipew__dparm(0),

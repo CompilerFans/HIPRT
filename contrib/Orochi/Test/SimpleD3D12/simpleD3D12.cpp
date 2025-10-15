@@ -51,7 +51,7 @@ void RunSineWaveKernel1(oroDevice gOroDevice, size_t mesh_width, size_t mesh_hei
   Vertex* oroDevVertptr, oroStream streamToRun,
   float AnimTime)
 {
-  struct dim3
+  struct _3dim
   {
     int x, y, z;
   };
@@ -65,8 +65,8 @@ void RunSineWaveKernel1(oroDevice gOroDevice, size_t mesh_width, size_t mesh_hei
       printf("Error: kernel file not found.");
       return;
   }
-  dim3 block = { 16, 16, 1 };
-  dim3 grid = { mesh_width / 16, mesh_height / 16, 1 };
+  _3dim block = { 16, 16, 1 };
+  _3dim grid = { mesh_width / 16, mesh_height / 16, 1 };
   Vertex* vertices = (Vertex*)oroDevVertptr;
   void* args[] = { &vertices, &mesh_width, &mesh_height, &AnimTime };
 
@@ -287,7 +287,7 @@ void DX12OroInterop::InitOro() {
   char name[100];
   int devId = 0; //if only one device
   m_oroDeviceID = devId;
-  
+
   oroDeviceGet(&gOroDevice, devId);
   oroDeviceGetName(name, 100, gOroDevice);
   printf("> Using CUDA Device [%d]: %s\n", devId, name);
@@ -440,7 +440,7 @@ void DX12OroInterop::LoadAssets() {
 
     (oroExternalMemoryGetMappedBuffer(&gOroDevPtr, gOroExtMem, &externalMemoryBufferDesc));
 
-    
+
 
 #ifdef USE_STREAM
     RunSineWaveKernel1(gOroDevice, vertBufWidth, vertBufHeight, (Vertex*)gOroDevPtr, gOroStream, m_AnimTime);
@@ -458,7 +458,7 @@ void DX12OroInterop::LoadAssets() {
       IID_PPV_ARGS(&m_fence)));
 
     oroExternalSemaphoreHandleDesc externalSemaphoreHandleDesc;
-   
+
     memset(&externalSemaphoreHandleDesc, 0,
       sizeof(externalSemaphoreHandleDesc));
     WindowsSecurityAttributes windowsSecurityAttributes;
@@ -591,7 +591,7 @@ void DX12OroInterop::MoveToNextFrame() {
 #else
   oroWaitExternalSemaphoresAsync(&gOroExtSem, &externalSemaphoreWaitParams, 1, oroStream(0));
 #endif
-  
+
   m_AnimTime += 0.01f;
 
 #ifdef USE_STREAM
