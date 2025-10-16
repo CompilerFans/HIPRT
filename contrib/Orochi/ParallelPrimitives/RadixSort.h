@@ -54,7 +54,7 @@ class RadixSort final
 		LOG,
 	};
 
-	RadixSort( oroDevice device, OrochiUtils& oroutils, oroStream stream = 0, const std::string& kernelPath = "", const std::string& includeDir = "" );
+	RadixSort( int device, OrochiUtils& cudautils, cudaStream_t stream = 0, const std::string& kernelPath = "", const std::string& includeDir = "" );
 
 	// Allow move but disallow copy.
 	RadixSort( RadixSort&& ) noexcept = default;
@@ -65,9 +65,9 @@ class RadixSort final
 
 	void setFlag( Flag flag ) noexcept;
 
-	void sort( const KeyValueSoA& src, const KeyValueSoA& dst, uint32_t n, int startBit, int endBit, oroStream stream = 0 ) noexcept;
+	void sort( const KeyValueSoA& src, const KeyValueSoA& dst, uint32_t n, int startBit, int endBit, cudaStream_t stream = 0 ) noexcept;
 
-	void sort( u32* src, u32* dst, uint32_t n, int startBit, int endBit, oroStream stream = 0 ) noexcept;
+	void sort( u32* src, u32* dst, uint32_t n, int startBit, int endBit, cudaStream_t stream = 0 ) noexcept;
 
   private:
 	// @brief Compile the kernels for radix sort.
@@ -78,7 +78,7 @@ class RadixSort final
 	/// @brief Configure the settings, compile the kernels and allocate the memory.
 	/// @param kernelPath The kernel path.
 	/// @param includeDir The include directory.
-	void configure( const std::string& kernelPath, const std::string& includeDir, oroStream stream ) noexcept;
+	void configure( const std::string& kernelPath, const std::string& includeDir, cudaStream_t stream ) noexcept;
 
   private:
 	Flag m_flags{ Flag::NO_LOG };
@@ -92,16 +92,16 @@ class RadixSort final
 		SORT_ONESWEEP_REORDER_KEY_PAIR_64
 	};
 
-	std::unordered_map<Kernel, oroFunction> oroFunctions;
+	std::unordered_map<Kernel, cudaFunction_t> cudaFunctions;
 
-	oroDevice m_device{};
-	oroDeviceProp m_props{};
+	int m_device{};
+	cudaDeviceProp m_props{};
 
-	OrochiUtils& m_oroutils;
+	OrochiUtils& m_cudautils;
 
-	oroFunction m_gHistogram;
-	oroFunction m_onesweep_reorderKey64;
-	oroFunction m_onesweep_reorderKeyPair64;
+	cudaFunction_t m_gHistogram;
+	cudaFunction_t m_onesweep_reorderKey64;
+	cudaFunction_t m_onesweep_reorderKeyPair64;
 
 	GpuMemory<uint8_t> m_lookbackBuffer;
 	GpuMemory<uint8_t> m_gpSumBuffer;
