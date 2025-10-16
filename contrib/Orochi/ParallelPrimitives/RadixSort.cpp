@@ -50,12 +50,12 @@ static const char** RadixSortKernelsIncludes = nullptr;
 #endif
 
 #if defined( ORO_PRECOMPILED ) && defined( ORO_PP_LOAD_FROM_STRING )
-#include <ParallelPrimitives/cache/oro_compiled_kernels.h> // generate this header with 'convert_binary_to_array.py'
+#include <ParallelPrimitives/cache/cuda_compiled_kernels.h> // generate this header with 'convert_binary_to_array.py'
 #else
-const unsigned char oro_compiled_kernels_h[] = "";
-const size_t oro_compiled_kernels_h_size = 0;
-const size_t oro_compiled_kernels_h_size_uncompressed = 0;
-const bool oro_compiled_kernels_h_isCompressed = false;
+const unsigned char cuda_compiled_kernels_h[] = "";
+const size_t cuda_compiled_kernels_h_size = 0;
+const size_t cuda_compiled_kernels_h_size_uncompressed = 0;
+const bool cuda_compiled_kernels_h_isCompressed = false;
 #endif
 
 constexpr uint64_t div_round_up64( uint64_t val, uint64_t divisor ) noexcept { return ( val + divisor - 1 ) / divisor; }
@@ -105,16 +105,16 @@ const HMODULE GetCurrentModule()
 void GetCurrentModule1() {}
 #endif
 
-void printKernelInfo( const std::string& name, oroFunction func )
+void printKernelInfo( const std::string& name, cudaFunction_t func )
 {
 	std::cout << "Function: " << name;
 
 	int numReg{};
 	int sharedSizeBytes{};
 	int constSizeBytes{};
-	oroFuncGetAttribute( &numReg, ORO_FUNC_ATTRIBUTE_NUM_REGS, func );
-	oroFuncGetAttribute( &sharedSizeBytes, ORO_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES, func );
-	oroFuncGetAttribute( &constSizeBytes, ORO_FUNC_ATTRIBUTE_CONST_SIZE_BYTES, func );
+	// cudaFuncGetAttribute( &numReg, ORO_FUNC_ATTRIBUTE_NUM_REGS, func );
+	// cudaFuncGetAttribute( &sharedSizeBytes, ORO_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES, func );
+	// cudaFuncGetAttribute( &constSizeBytes, CU_FUNC_ATTRIBUTE_CONST_SIZE_BYTES, func );
 	std::cout << ", vgpr : shared = " << numReg << " : " << sharedSizeBytes << " : " << constSizeBytes << '\n';
 }
 
@@ -123,9 +123,9 @@ void printKernelInfo( const std::string& name, oroFunction func )
 namespace Oro
 {
 
-RadixSort::RadixSort( oroDevice device, OrochiUtils& oroutils, oroStream stream, const std::string& kernelPath, const std::string& includeDir ) : m_device{ device }, m_oroutils{ oroutils }
+RadixSort::RadixSort( int device, OrochiUtils& cudautils, cudaStream_t stream, const std::string& kernelPath, const std::string& includeDir ) : m_device{ device }, m_cudautils{ cudautils }
 {
-	oroGetDeviceProperties( &m_props, device );
+	cudaGetDeviceProperties( &m_props, device );
 	configure( kernelPath, includeDir, stream );
 }
 
@@ -156,9 +156,9 @@ void RadixSort::compileKernels( const std::string& kernelPath, const std::string
 	std::string log{};
 	if constexpr( usePrecompiledAndBakedKernel || useBitCode )
 	{
-		const bool isAmd = oroGetCurAPI( 0 ) == ORO_API_HIP;
+		const bool isAmd = false; // cudaGetCurAPI( 0 ) == ORO_API_HIP;
 		binaryPath = getCurrentDir();
-		binaryPath += isAmd ? "oro_compiled_kernels.hipfb" : "oro_compiled_kernels.fatbin";
+		binaryPath += isAmd ? "cuda_compiled_kernels.hipfb" : "cuda_compiled_kernels.fatbin";
 		log = "loading pre-compiled kernels at path : " + binaryPath;
 	}
 	else
@@ -192,30 +192,30 @@ void RadixSort::compileKernels( const std::string& kernelPath, const std::string
 		if constexpr( usePrecompiledAndBakedKernel )
 		{
 			std::vector<unsigned char> binary;
-			OrochiUtils::HandlePrecompiled(binary, oro_compiled_kernels_h, oro_compiled_kernels_h_size, oro_compiled_kernels_h_isCompressed ? std::optional<size_t>{oro_compiled_kernels_h_size_uncompressed} : std::nullopt);
-			oroFunctions[record.kernelType] = m_oroutils.getFunctionFromPrecompiledBinary_asData(binary.data(), binary.size(), record.kernelName.c_str() );
+			OrochiUtils::HandlePrecompiled(binary, cuda_compiled_kernels_h, cuda_compiled_kernels_h_size, cuda_compiled_kernels_h_isCompressed ? std::optional<size_t>{cuda_compiled_kernels_h_size_uncompressed} : std::nullopt);
+			cudaFunctions[record.kernelType] = m_cudautils.getFunctionFromPrecompiledBinary_asData(binary.data(), binary.size(), record.kernelName.c_str() );
 		}
 		else if constexpr( useBakeKernel )
 		{
-			oroFunctions[record.kernelType] = m_oroutils.getFunctionFromString( m_device, hip_RadixSortKernels, currentKernelPath.c_str(), record.kernelName.c_str(), &opts, 1, hip::RadixSortKernelsArgs, hip::RadixSortKernelsIncludes );
+			cudaFunctions[record.kernelType] = m_cudautils.getFunctionFromString( m_device, hip_RadixSortKernels, currentKernelPath.c_str(), record.kernelName.c_str(), &opts, 1, hip::RadixSortKernelsArgs, hip::RadixSortKernelsIncludes );
 		}
 		else if constexpr( useBitCode )
 		{
-			oroFunctions[record.kernelType] = m_oroutils.getFunctionFromPrecompiledBinary( binaryPath.c_str(), record.kernelName.c_str() );
+			cudaFunctions[record.kernelType] = m_cudautils.getFunctionFromPrecompiledBinary( binaryPath.c_str(), record.kernelName.c_str() );
 		}
 		else
 		{
-			oroFunctions[record.kernelType] = m_oroutils.getFunctionFromFile( m_device, currentKernelPath.c_str(), record.kernelName.c_str(), &opts );
+			cudaFunctions[record.kernelType] = m_cudautils.getFunctionFromFile( m_device, currentKernelPath.c_str(), record.kernelName.c_str(), &opts );
 		}
 
 		if( m_flags == Flag::LOG )
 		{
-			printKernelInfo( record.kernelName, oroFunctions[record.kernelType] );
+			printKernelInfo( record.kernelName, cudaFunctions[record.kernelType] );
 		}
 	}
 }
 
-void RadixSort::configure( const std::string& kernelPath, const std::string& includeDir, oroStream stream ) noexcept
+void RadixSort::configure( const std::string& kernelPath, const std::string& includeDir, cudaStream_t stream ) noexcept
 {
 	compileKernels( kernelPath, includeDir );
 
@@ -234,7 +234,7 @@ void RadixSort::configure( const std::string& kernelPath, const std::string& inc
 }
 void RadixSort::setFlag( Flag flag ) noexcept { m_flags = flag; }
 
-void RadixSort::sort( const KeyValueSoA& src, const KeyValueSoA& dst, uint32_t n, int startBit, int endBit, oroStream stream ) noexcept
+void RadixSort::sort( const KeyValueSoA& src, const KeyValueSoA& dst, uint32_t n, int startBit, int endBit, cudaStream_t stream ) noexcept
 {
 	bool keyPair = src.value != nullptr;
 
@@ -244,13 +244,13 @@ void RadixSort::sort( const KeyValueSoA& src, const KeyValueSoA& dst, uint32_t n
 	{
 		if( keyPair )
 		{
-			const auto func = oroFunctions[Kernel::SORT_SINGLE_PASS_KV];
+			const auto func = cudaFunctions[Kernel::SORT_SINGLE_PASS_KV];
 			const void* args[] = { &src.key, &src.value, &dst.key, &dst.value, &n, &startBit, &endBit };
 			OrochiUtils::launch1D( func, SINGLE_SORT_WG_SIZE, args, SINGLE_SORT_WG_SIZE, 0, stream );
 		}
 		else
 		{
-			const auto func = oroFunctions[Kernel::SORT_SINGLE_PASS];
+			const auto func = cudaFunctions[Kernel::SORT_SINGLE_PASS];
 			const void* args[] = { &src, &dst, &n, &startBit, &endBit };
 			OrochiUtils::launch1D( func, SINGLE_SORT_WG_SIZE, args, SINGLE_SORT_WG_SIZE, 0, stream );
 		}
@@ -269,11 +269,11 @@ void RadixSort::sort( const KeyValueSoA& src, const KeyValueSoA& dst, uint32_t n
 	// counter for gHistogram.
 	{
 		int maxBlocksPerMP = 0;
-		oroError e = oroModuleOccupancyMaxActiveBlocksPerMultiprocessor( &maxBlocksPerMP, oroFunctions[Kernel::SORT_GHISTOGRAM], GHISTOGRAM_THREADS_PER_BLOCK, 0 );
-		const int nBlocks = e == oroSuccess ? maxBlocksPerMP * m_props.multiProcessorCount : 2048;
+		cudaError e = cudaOccupancyMaxActiveBlocksPerMultiprocessor( &maxBlocksPerMP, cudaFunctions[Kernel::SORT_GHISTOGRAM], GHISTOGRAM_THREADS_PER_BLOCK, 0 );
+		const int nBlocks = e == cudaSuccess ? maxBlocksPerMP * m_props.multiProcessorCount : 2048;
 
 		const void* args[] = { &src.key, &n, arg_cast( m_gpSumBuffer.address() ), &startBit, arg_cast( m_gpSumCounter.address() ) };
-		OrochiUtils::launch1D( oroFunctions[Kernel::SORT_GHISTOGRAM], nBlocks * GHISTOGRAM_THREADS_PER_BLOCK, args, GHISTOGRAM_THREADS_PER_BLOCK, 0, stream );
+		OrochiUtils::launch1D( cudaFunctions[Kernel::SORT_GHISTOGRAM], nBlocks * GHISTOGRAM_THREADS_PER_BLOCK, args, GHISTOGRAM_THREADS_PER_BLOCK, 0, stream );
 	}
 
 	auto s = src;
@@ -288,26 +288,26 @@ void RadixSort::sort( const KeyValueSoA& src, const KeyValueSoA& dst, uint32_t n
 		if( keyPair )
 		{
 			const void* args[] = { &s.key, &d.key, &s.value, &d.value, &n, arg_cast( m_gpSumBuffer.address() ), arg_cast( m_lookbackBuffer.address() ), arg_cast( m_tailIterator.address() ), &startBit, &i };
-			OrochiUtils::launch1D( oroFunctions[Kernel::SORT_ONESWEEP_REORDER_KEY_PAIR_64], numberOfBlocks * REORDER_NUMBER_OF_THREADS_PER_BLOCK, args, REORDER_NUMBER_OF_THREADS_PER_BLOCK, 0, stream );
+			OrochiUtils::launch1D( cudaFunctions[Kernel::SORT_ONESWEEP_REORDER_KEY_PAIR_64], numberOfBlocks * REORDER_NUMBER_OF_THREADS_PER_BLOCK, args, REORDER_NUMBER_OF_THREADS_PER_BLOCK, 0, stream );
 		}
 		else
 		{
 			const void* args[] = { &s.key, &d.key, &n, arg_cast( m_gpSumBuffer.address() ), arg_cast( m_lookbackBuffer.address() ), arg_cast( m_tailIterator.address() ), &startBit, &i };
-			OrochiUtils::launch1D( oroFunctions[Kernel::SORT_ONESWEEP_REORDER_KEY_64], numberOfBlocks * REORDER_NUMBER_OF_THREADS_PER_BLOCK, args, REORDER_NUMBER_OF_THREADS_PER_BLOCK, 0, stream );
+			OrochiUtils::launch1D( cudaFunctions[Kernel::SORT_ONESWEEP_REORDER_KEY_64], numberOfBlocks * REORDER_NUMBER_OF_THREADS_PER_BLOCK, args, REORDER_NUMBER_OF_THREADS_PER_BLOCK, 0, stream );
 		}
 		std::swap( s, d );
 	}
 
 	if( s.key == src.key )
 	{
-		m_oroutils.copyDtoDAsync( dst.key, src.key, n, stream );
+		m_cudautils.copyDtoDAsync( dst.key, src.key, n, stream );
 
 		if( keyPair )
 		{
-			m_oroutils.copyDtoDAsync( dst.value, src.value, n, stream );
+			m_cudautils.copyDtoDAsync( dst.value, src.value, n, stream );
 		}
 	}
 }
 
-void RadixSort::sort( u32* src, u32* dst, uint32_t n, int startBit, int endBit, oroStream stream ) noexcept { sort( KeyValueSoA{ src, nullptr }, KeyValueSoA{ dst, nullptr }, n, startBit, endBit, stream ); }
+void RadixSort::sort( u32* src, u32* dst, uint32_t n, int startBit, int endBit, cudaStream_t stream ) noexcept { sort( KeyValueSoA{ src, nullptr }, KeyValueSoA{ dst, nullptr }, n, startBit, endBit, stream ); }
 }; // namespace Oro

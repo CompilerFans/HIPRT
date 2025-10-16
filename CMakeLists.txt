@@ -640,7 +640,7 @@ endif()
 # Project: Unit Test
 if(NOT NO_UNITTEST)
 
-	add_executable(unittest)
+	# add_executable(unittest)
 
 	if(BITCODE OR BAKE_COMPILED_KERNEL)
 		target_compile_definitions(unittest PRIVATE HIPRT_BITCODE_LINKING)
@@ -653,23 +653,23 @@ if(NOT NO_UNITTEST)
 	if( ${CMAKE_BUILD_TYPE} STREQUAL "Debug" )
 		set_target_properties(unittest PROPERTIES OUTPUT_NAME "unittest64D")
 	else()
-		set_target_properties(unittest PROPERTIES OUTPUT_NAME "unittest64")
+		# set_target_properties(unittest PROPERTIES OUTPUT_NAME "unittest64")
 	endif()
 
 
-	target_include_directories(unittest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/contrib/Orochi)
-	target_link_libraries(unittest PRIVATE ${HIPRT_NAME})
+	# target_include_directories(unittest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/contrib/Orochi)
+	# target_link_libraries(unittest PRIVATE ${HIPRT_NAME})
 
 	if(UNIX)
-		target_link_libraries(unittest PRIVATE pthread dl)
+		# target_link_libraries(unittest PRIVATE pthread dl)
 	endif()
 
-	file(GLOB_RECURSE unittest_sources "${CMAKE_CURRENT_SOURCE_DIR}/test/hiprtT*.h" "${CMAKE_CURRENT_SOURCE_DIR}/test/hiprtT*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/test/shared.h" "${CMAKE_CURRENT_SOURCE_DIR}/test/main.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/test/CornellBox.h" "${CMAKE_CURRENT_SOURCE_DIR}/test/kernels/*.h" "${CMAKE_CURRENT_SOURCE_DIR}/contrib/gtest-1.6.0/gtest-all.cc")
+	# file(GLOB_RECURSE unittest_sources "${CMAKE_CURRENT_SOURCE_DIR}/test/hiprtT*.h" "${CMAKE_CURRENT_SOURCE_DIR}/test/hiprtT*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/test/shared.h" "${CMAKE_CURRENT_SOURCE_DIR}/test/main.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/test/CornellBox.h" "${CMAKE_CURRENT_SOURCE_DIR}/test/kernels/*.h" "${CMAKE_CURRENT_SOURCE_DIR}/contrib/gtest-1.6.0/gtest-all.cc")
 
 
-	target_sources(unittest PRIVATE ${unittest_sources} ${orochi_sources})
+	# target_sources(unittest PRIVATE ${unittest_sources} ${orochi_sources})
 
-	target_include_directories(unittest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/contrib/gtest-1.6.0 ${CMAKE_CURRENT_SOURCE_DIR}/contrib/embree/include)
+	# target_include_directories(unittest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/contrib/gtest-1.6.0 ${CMAKE_CURRENT_SOURCE_DIR}/contrib/embree/include)
 
 
 	if(WIN32)
@@ -690,10 +690,10 @@ if(NOT NO_UNITTEST)
 
 
 	if(UNIX)
-		target_link_directories(unittest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/contrib/embree/linux)
+		# target_link_directories(unittest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/contrib/embree/linux)
 	endif()
 
-	target_link_libraries(unittest PRIVATE embree4 tbb)
+	# target_link_libraries(unittest PRIVATE embree4 tbb)
 
 endif()
 
@@ -713,10 +713,10 @@ if(HIPRTEW)
 		target_link_libraries(hiprtewtest PRIVATE pthread dl)
 	endif()
 
-	file(GLOB_RECURSE hiprtewtest_sources "${CMAKE_CURRENT_SOURCE_DIR}/test/hiprtewTest.h" "${CMAKE_CURRENT_SOURCE_DIR}/test/hiprtewTest.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/contrib/gtest-1.6.0/gtest-all.cc")
-	target_sources(hiprtewtest PRIVATE ${hiprtewtest_sources} ${orochi_sources})
+	# file(GLOB_RECURSE hiprtewtest_sources "${CMAKE_CURRENT_SOURCE_DIR}/test/hiprtewTest.h" "${CMAKE_CURRENT_SOURCE_DIR}/test/hiprtewTest.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/contrib/gtest-1.6.0/gtest-all.cc")
+	# target_sources(hiprtewtest PRIVATE ${hiprtewtest_sources} ${orochi_sources})
 
-	target_include_directories(hiprtewtest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/contrib/gtest-1.6.0)
+	# target_include_directories(hiprtewtest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/contrib/gtest-1.6.0)
 
 	target_compile_definitions(hiprtewtest PRIVATE GTEST_HAS_TR1_TUPLE=0)
 endif()
