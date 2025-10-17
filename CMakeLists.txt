@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.19)   # at least 3.19 in order to have the compression-level in Zstd
 project(hiprt)
 
+# find_package(CUDA REQUIRED)
+enable_language(CUDA)
+find_package(CUDAToolkit REQUIRED)
 #
 # Options
 #
@@ -44,10 +47,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Define GTEST_HAS_TR1_TUPLE=0 globally
 add_definitions(-DGTEST_HAS_TR1_TUPLE=0)
 
-
-
-
-
+add_definitions(-DOROCHI_ENABLE_CUEW)
 
 
 # Functions
@@ -360,6 +360,9 @@ add_library(${HIPRT_NAME} SHARED)
 
 target_compile_definitions(${HIPRT_NAME} PRIVATE HIPRT_EXPORTS)
 
+# add OROCHI_ENABLE_CUEW micro
+target_compile_definitions(${HIPRT_NAME} PRIVATE OROCHI_ENABLE_CUEW)
+
 
 if( ${CMAKE_BUILD_TYPE} STREQUAL "Debug" )
 	set_target_properties(${HIPRT_NAME} PROPERTIES OUTPUT_NAME "${HIPRT_NAME}64D")
@@ -640,7 +643,27 @@ endif()
 # Project: Unit Test
 if(NOT NO_UNITTEST)
 
-	# add_executable(unittest)
+	add_executable(unittest)
+    # 添加 CUDA 库链接
+	# target_link_libraries(unittest PRIVATE
+	# 	${HIPRT_NAME}
+	# 	cudart      # 动态库
+	# 	cuda        # 动态库
+	# 	nvrtc       # 动态库
+	# )
+	# target_link_libraries(unittest PRIVATE
+	# 	${HIPRT_NAME}
+	# 	${CUDA_LIBRARIES}
+	# 	${CUDA_CUDART_LIBRARY}
+	# 	cuda
+	# 	${CUDA_nvrtc_LIBRARY}
+	# )
+    target_link_libraries(unittest PRIVATE
+        ${HIPRT_NAME}
+        CUDA::cudart
+        CUDA::cuda_driver
+        CUDA::nvrtc
+    )
 
 	if(BITCODE OR BAKE_COMPILED_KERNEL)
 		target_compile_definitions(unittest PRIVATE HIPRT_BITCODE_LINKING)
@@ -653,23 +676,23 @@ if(NOT NO_UNITTEST)
 	if( ${CMAKE_BUILD_TYPE} STREQUAL "Debug" )
 		set_target_properties(unittest PROPERTIES OUTPUT_NAME "unittest64D")
 	else()
-		# set_target_properties(unittest PROPERTIES OUTPUT_NAME "unittest64")
+		set_target_properties(unittest PROPERTIES OUTPUT_NAME "unittest64")
 	endif()
 
 
-	# target_include_directories(unittest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/contrib/Orochi)
-	# target_link_libraries(unittest PRIVATE ${HIPRT_NAME})
+	target_include_directories(unittest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/contrib/Orochi)
+	target_link_libraries(unittest PRIVATE ${HIPRT_NAME})
 
 	if(UNIX)
-		# target_link_libraries(unittest PRIVATE pthread dl)
+		target_link_libraries(unittest PRIVATE pthread dl)
 	endif()
 
-	# file(GLOB_RECURSE unittest_sources "${CMAKE_CURRENT_SOURCE_DIR}/test/hiprtT*.h" "${CMAKE_CURRENT_SOURCE_DIR}/test/hiprtT*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/test/shared.h" "${CMAKE_CURRENT_SOURCE_DIR}/test/main.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/test/CornellBox.h" "${CMAKE_CURRENT_SOURCE_DIR}/test/kernels/*.h" "${CMAKE_CURRENT_SOURCE_DIR}/contrib/gtest-1.6.0/gtest-all.cc")
+	file(GLOB_RECURSE unittest_sources "${CMAKE_CURRENT_SOURCE_DIR}/test/hiprtT*.h" "${CMAKE_CURRENT_SOURCE_DIR}/test/hiprtT*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/test/shared.h" "${CMAKE_CURRENT_SOURCE_DIR}/test/main.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/test/CornellBox.h" "${CMAKE_CURRENT_SOURCE_DIR}/test/kernels/*.h" "${CMAKE_CURRENT_SOURCE_DIR}/contrib/gtest-1.6.0/gtest-all.cc")
 
 
-	# target_sources(unittest PRIVATE ${unittest_sources} ${orochi_sources})
+	target_sources(unittest PRIVATE ${unittest_sources} ${orochi_sources})
 
-	# target_include_directories(unittest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/contrib/gtest-1.6.0 ${CMAKE_CURRENT_SOURCE_DIR}/contrib/embree/include)
+	target_include_directories(unittest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/contrib/gtest-1.6.0 ${CMAKE_CURRENT_SOURCE_DIR}/contrib/embree/include)
 
 
 	if(WIN32)
@@ -690,10 +713,10 @@ if(NOT NO_UNITTEST)
 
 
 	if(UNIX)
-		# target_link_directories(unittest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/contrib/embree/linux)
+		target_link_directories(unittest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/contrib/embree/linux)
 	endif()
 
-	# target_link_libraries(unittest PRIVATE embree4 tbb)
+	target_link_libraries(unittest PRIVATE embree4 tbb)
 
 endif()
 
@@ -713,10 +736,10 @@ if(HIPRTEW)
 		target_link_libraries(hiprtewtest PRIVATE pthread dl)
 	endif()
 
-	# file(GLOB_RECURSE hiprtewtest_sources "${CMAKE_CURRENT_SOURCE_DIR}/test/hiprtewTest.h" "${CMAKE_CURRENT_SOURCE_DIR}/test/hiprtewTest.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/contrib/gtest-1.6.0/gtest-all.cc")
-	# target_sources(hiprtewtest PRIVATE ${hiprtewtest_sources} ${orochi_sources})
+	file(GLOB_RECURSE hiprtewtest_sources "${CMAKE_CURRENT_SOURCE_DIR}/test/hiprtewTest.h" "${CMAKE_CURRENT_SOURCE_DIR}/test/hiprtewTest.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/contrib/gtest-1.6.0/gtest-all.cc")
+	target_sources(hiprtewtest PRIVATE ${hiprtewtest_sources} ${orochi_sources})
 
-	# target_include_directories(hiprtewtest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/contrib/gtest-1.6.0)
+	target_include_directories(hiprtewtest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/contrib/gtest-1.6.0)
 
 	target_compile_definitions(hiprtewtest PRIVATE GTEST_HAS_TR1_TUPLE=0)
 endif()

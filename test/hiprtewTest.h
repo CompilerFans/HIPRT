@@ -48,85 +48,85 @@
 #define ASSERT( cond )
 #endif
 
-void checkOro( oroError res, const source_location& location = source_location::current() );
-void checkOrortc( orortcResult res, const source_location& location = source_location::current() );
+void checkOro( cudaError res, const source_location& location = source_location::current() );
+void checkOrortc( nvrtcResult res, const source_location& location = source_location::current() );
 void checkHiprt( hiprtError res, const source_location& location = source_location::current() );
 
 class hiprtewTest : public ::testing::Test
 {
   public:
 	void SetUp();
-	void TearDown() { oroCtxDestroy( m_oroCtx ); }
+	void TearDown() { cuCtxDestroy( m_cudaCtx ); }
 
-	void waitForCompletion( oroStream stream = 0 )
+	void waitForCompletion( cudaStream_t stream = 0 )
 	{
-		auto e = oroStreamSynchronize( stream );
-		ASSERT( e == oroSuccess );
+		auto e = cudaStreamSynchronize( stream );
+		ASSERT( e == cudaSuccess );
 	}
 
 	template <typename T>
 	void malloc( T*& ptr, size_t n )
 	{
-		oroError e = oroMalloc( (oroDeviceptr*)&ptr, sizeof( T ) * n );
-		ASSERT( e == oroSuccess );
+		cudaError e = cudaMalloc( (cudaDeviceptr*)&ptr, sizeof( T ) * n );
+		ASSERT( e == cudaSuccess );
 	}
 
 	void free( void* ptr )
 	{
-		oroError e = oroFree( (oroDeviceptr)ptr );
-		ASSERT( e == oroSuccess );
+		cudaError e = cudaFree( (cudaDeviceptr)ptr );
+		ASSERT( e == cudaSuccess );
 	}
 
 	void memset( void* ptr, int val, size_t n )
 	{
-		oroError e = oroMemset( (oroDeviceptr)ptr, val, n );
-		ASSERT( e == oroSuccess );
+		cudaError e = cudaMemset( (cudaDeviceptr)ptr, val, n );
+		ASSERT( e == cudaSuccess );
 	}
 
 	template <typename T>
 	void copyHtoD( T* dst, T* src, size_t n )
 	{
-		oroError e = oroMemcpyHtoD( (oroDeviceptr)dst, src, sizeof( T ) * n );
-		ASSERT( e == oroSuccess );
+		cudaError e = cuMemcpyHtoD( (cudaDeviceptr)dst, src, sizeof( T ) * n );
+		ASSERT( e == cudaSuccess );
 	}
 
 	template <typename T>
 	void copyDtoH( T* dst, T* src, size_t n )
 	{
-		oroError e = oroMemcpyDtoH( dst, (oroDeviceptr)src, sizeof( T ) * n );
-		ASSERT( e == oroSuccess );
+		cudaError e = cuMemcpyDtoH( dst, (cudaDeviceptr)src, sizeof( T ) * n );
+		ASSERT( e == cudaSuccess );
 	}
 
 	template <typename T>
 	void copyDtoD( T* dst, T* src, size_t n )
 	{
-		oroError e = oroMemcpyDtoD( (oroDeviceptr)dst, (oroDeviceptr)src, sizeof( T ) * n );
-		ASSERT( e == oroSuccess );
+		cudaError e = cuMemcpyDtoD( (cudaDeviceptr)dst, (cudaDeviceptr)src, sizeof( T ) * n );
+		ASSERT( e == cudaSuccess );
 	}
 
 	template <typename T>
-	void copyHtoDAsync( T* dst, T* src, size_t n, oroStream stream )
+	void copyHtoDAsync( T* dst, T* src, size_t n, cudaStream_t stream )
 	{
-		oroError e = oroMemcpyHtoDAsync( (oroDeviceptr)dst, src, sizeof( T ) * n, stream );
-		ASSERT( e == oroSuccess );
+		cudaError e = cuMemcpyHtoDAsync( (cudaDeviceptr)dst, src, sizeof( T ) * n, stream );
+		ASSERT( e == cudaSuccess );
 	}
 
 	template <typename T>
-	void copyDtoHAsync( T* dst, T* src, size_t n, oroStream stream )
+	void copyDtoHAsync( T* dst, T* src, size_t n, cudaStream_t stream )
 	{
-		oroError e = oroMemcpyDtoHAsync( dst, (oroDeviceptr)src, sizeof( T ) * n, stream );
-		ASSERT( e == oroSuccess );
+		cudaError e = cuMemcpyDtoHAsync( dst, (cudaDeviceptr)src, sizeof( T ) * n, stream );
+		ASSERT( e == cudaSuccess );
 	}
 
 	template <typename T>
-	void copyDtoDAsync( T* dst, T* src, size_t n, oroStream stream )
+	void copyDtoDAsync( T* dst, T* src, size_t n, cudaStream_t stream )
 	{
-		oroError e = oroMemcpyDtoDAsync( (oroDeviceptr)dst, (oroDeviceptr)src, sizeof( T ) * n, stream );
-		ASSERT( e == oroSuccess );
+		cudaError e = cuMemcpyDtoDAsync( (cudaDeviceptr)dst, (cudaDeviceptr)src, sizeof( T ) * n, stream );
+		ASSERT( e == cudaSuccess );
 	}
 
   protected:
 	hiprtContextCreationInput m_ctxtInput;
-	oroCtx					  m_oroCtx;
-	oroDevice				  m_oroDevice;
+	CUcontext					  m_Ctx;
+	CUdevice				  m_cudaDevice;
 };

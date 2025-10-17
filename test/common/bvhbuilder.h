@@ -235,8 +235,8 @@ void BvhBuilder::build( uint32_t nPrims, const std::vector<Aabb>& primBoxes, std
 			}
 		}
 
-		nodes[nodeIndex].aabbMin = min( minLeftBox.m_min, minRightBox.m_min );
-		nodes[nodeIndex].aabbMax = max( minLeftBox.m_max, minRightBox.m_max );
+		nodes[nodeIndex].aabbMin = hiprt::min( minLeftBox.m_min, minRightBox.m_min );
+		nodes[nodeIndex].aabbMax = hiprt::max( minLeftBox.m_max, minRightBox.m_max );
 		if ( minIndex - begin == 1 )
 		{
 			nodes[nodeIndex].childIndices[0]   = indices[minAxis][begin];

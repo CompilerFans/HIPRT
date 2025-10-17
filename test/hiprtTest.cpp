@@ -21,7 +21,10 @@
 //  SOFTWARE.
 //
 //////////////////////////////////////////////////////////////////////////////////////////
-
+#include <cuda_runtime_api.h>
+#include <cuda.h>
+#include <cuda_profiler_api.h>
+#include <nvrtc.h>
 #include <test/hiprtTest.h>
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <contrib/stbi/stbi_image_write.h>
@@ -38,23 +41,33 @@
 
 CmdArguments g_parsedArgs;
 
-void checkOro( oroError res, const source_location& location )
+void checkOro( cudaError res, const source_location& location )
 {
-	if ( res != oroSuccess )
+	if ( res != cudaSuccess )
+	{
+		// const char* msg;
+		cudaGetErrorString( res );
+		std::cerr << "Orochi error: '" << res << "' on line " << location.line() << " "
+				  << " in '" << location.file_name() << "'." << std::endl;
+		std::abort();
+	}
+}
+void checkOro( CUresult res, const source_location& location )
+{
+	if ( res != CUDA_SUCCESS )
 	{
 		const char* msg;
-		oroGetErrorString( res, &msg );
+		cuGetErrorString( res, &msg );
 		std::cerr << "Orochi error: '" << msg << "' on line " << location.line() << " "
 				  << " in '" << location.file_name() << "'." << std::endl;
 		std::abort();
 	}
 }
-
-void checkOrortc( orortcResult res, const source_location& location )
+void checkOrortc( nvrtcResult res, const source_location& location )
 {
-	if ( res != ORORTC_SUCCESS )
+	if ( res != NVRTC_SUCCESS )
 	{
-		std::cerr << "Orortc error: '" << orortcGetErrorString( res ) << "' [ " << res << " ] on line " << location.line()
+		std::cerr << "Orortc error: '" << nvrtcGetErrorString( res ) << "' [ " << res << " ] on line " << location.line()
 				  << " "
 				  << " in '" << location.file_name() << "'." << std::endl;
 		std::abort();
@@ -118,20 +131,20 @@ struct GeometryData
 
 void hiprtTest::SetUp()
 {
-	oroInitialize( (oroApi)( ORO_API_HIP | ORO_API_CUDA ), 0, g_hip_paths, g_hiprtc_paths );
+	// cudaInitialize( (cudaApi)( ORO_API_HIP | ORO_API_CUDA ), 0, g_hip_paths, g_hiprtc_paths );
 
-	checkOro( oroInit( 0 ) );
-	oroError deviceGetError = oroDeviceGet( &m_oroDevice, g_parsedArgs.m_deviceIdx );
-	if ( deviceGetError != oroSuccess )
+	checkOro( cuInit( 0 ) );
+	cudaError deviceGetError = cudaGetDevice( &m_cudaDevice);
+	if ( deviceGetError != cudaSuccess )
 	{
 		// if failed, try to understand what happened.
 
 		int deviceCountHip = 0;
-		oroGetDeviceCount( &deviceCountHip, ORO_API_HIP );
+		// cudaGetDeviceCount( &deviceCountHip);
 		int deviceCountCuda = 0;
-		oroGetDeviceCount( &deviceCountCuda, ORO_API_CUDADRIVER );
+		cudaGetDeviceCount( &deviceCountCuda );
 
-		std::cout << "ERROR detected inside oroDeviceGet." << std::endl;
+		std::cout << "ERROR detected inside cudaGetDevice." << std::endl;
 		std::cout << "number of HIP devices detected = " << deviceCountHip << std::endl;
 		std::cout << "number of CUDA devices detected = " << deviceCountCuda << std::endl;
 		if ( deviceCountHip == 0 && deviceCountCuda == 0 )
@@ -139,18 +152,20 @@ void hiprtTest::SetUp()
 
 		checkOro( deviceGetError );
 	}
-	checkOro( oroCtxCreate( &m_oroCtx, 0, m_oroDevice ) );
+	checkOro( cuCtxCreate( &m_Ctx, 0, m_cudaDevice ) );
 
-	oroDeviceProp props;
-	checkOro( oroGetDeviceProperties( &props, m_oroDevice ) );
+	cudaDeviceProp props;
+	checkOro( cudaGetDeviceProperties( &props, m_cudaDevice ) );
 	std::cout << "Executing on '" << props.name << "'" << std::endl;
+	std::cout << "pciDeviceID on '" << props.pciDeviceID << "'" << std::endl;
+	std::cout << "m_cudaDevice on '" << m_cudaDevice << "'" << std::endl;
 
 	if ( std::string( props.name ).find( "NVIDIA" ) != std::string::npos )
 		m_ctxtInput.deviceType = hiprtDeviceNVIDIA;
-	else
-		m_ctxtInput.deviceType = hiprtDeviceAMD;
-	m_ctxtInput.ctxt   = oroGetRawCtx( m_oroCtx );
-	m_ctxtInput.device = oroGetRawDevice( m_oroDevice );
+	// else
+	// 	m_ctxtInput.deviceType = hiprtDeviceAMD;
+	m_ctxtInput.ctxt   = reinterpret_cast<void *> (&m_Ctx );
+	m_ctxtInput.device = cuCtxGetDevice( &m_cudaDevice );
 }
 
 void hiprtTest::buildBvh( hiprtGeometryBuildInput& buildInput )
@@ -409,8 +424,8 @@ void hiprtTest::buildEmbreeBvh(
 
 		for ( uint32_t j = 0; j < 2; j++ )
 		{
-			internalNode.aabbMin = min( internalNode.aabbMin, embreeNode->m_childAabbsMin[j] );
-			internalNode.aabbMax = max( internalNode.aabbMax, embreeNode->m_childAabbsMax[j] );
+			internalNode.aabbMin = hiprt::min( internalNode.aabbMin, embreeNode->m_childAabbsMin[j] );
+			internalNode.aabbMax = hiprt::max( internalNode.aabbMax, embreeNode->m_childAabbsMax[j] );
 
 			uint32_t		 childIndex = embreeNode->m_childIndices[j];
 			hiprtBvhNodeType childType	= hiprtBvhNodeTypeInternal;
@@ -708,7 +723,7 @@ hiprtError hiprtTest::buildTraceKernelsFromBitcode(
 		}
 	}
 
-	const bool isAmd = oroGetCurAPI( 0 ) == ORO_API_HIP;
+	const bool isAmd = false; // cudaGetCurAPI( 0 ) == ORO_API_HIP;
 	if ( isAmd )
 	{
 		options.push_back( "-fgpu-rdc" );
@@ -728,8 +743,8 @@ hiprtError hiprtTest::buildTraceKernelsFromBitcode(
 	std::string includePath = "-I" + getRootDir().string();
 	options.push_back( includePath.c_str() );
 
-	orortcProgram prog;
-	checkOrortc( orortcCreateProgram(
+	nvrtcProgram prog;
+	checkOrortc( nvrtcCreateProgram(
 		&prog,
 		sourceCode.data(),
 		srcPath.string().c_str(),
@@ -739,20 +754,20 @@ hiprtError hiprtTest::buildTraceKernelsFromBitcode(
 
 	for ( auto functionName : functionNames )
 	{
-		checkOrortc( orortcAddNameExpression( prog, functionName ) );
+		checkOrortc( nvrtcAddNameExpression( prog, functionName ) );
 	}
-	orortcResult e = orortcCompileProgram( prog, static_cast<int>( options.size() ), options.data() );
+	nvrtcResult e = nvrtcCompileProgram( prog, static_cast<int>( options.size() ), options.data() );
 
-	if ( e != ORORTC_SUCCESS )
+	if ( e != NVRTC_SUCCESS )
 	{
 		size_t logSize = 0;
-		checkOrortc( orortcGetProgramLogSize( prog, &logSize ) );
+		checkOrortc( nvrtcGetProgramLogSize( prog, &logSize ) );
 
 		std::cerr << "Error while compiling :" << srcPath << " - Compile log:" << std::endl;
 		if ( logSize )
 		{
 			std::string log( logSize, '\0' );
-			checkOrortc( orortcGetProgramLog( prog, &log[0] ) );
+			checkOrortc( nvrtcGetProgramLog( prog, &log[0] ) );
 			std::cerr << log << std::endl;
 		}
 		else
@@ -764,15 +779,11 @@ hiprtError hiprtTest::buildTraceKernelsFromBitcode(
 
 	std::string bitcodeBinary;
 	size_t		size = 0;
-	if ( isAmd )
-		checkOrortc( orortcGetBitcodeSize( prog, &size ) );
-	else
-		checkOrortc( orortcGetCodeSize( prog, &size ) );
+
+		checkOrortc( nvrtcGetPTXSize( prog, &size ) );
 	bitcodeBinary.resize( size );
-	if ( isAmd )
-		checkOrortc( orortcGetBitcode( prog, bitcodeBinary.data() ) );
-	else
-		checkOrortc( orortcGetCode( prog, bitcodeBinary.data() ) );
+
+		checkOrortc( nvrtcGetPTX( prog, bitcodeBinary.data() ) );
 
 	functionsOut.resize( functionNames.size() );
 	hiprtError error = hiprtBuildTraceKernelsFromBitcode(
@@ -795,7 +806,7 @@ hiprtError hiprtTest::buildTraceKernelFromBitcode(
 	hiprtContext								 ctxt,
 	const std::filesystem::path&				 srcPath,
 	const std::string&							 functionName,
-	oroFunction&								 functionOut,
+	cudaFunction_t&								 functionOut,
 	std::optional<std::vector<const char*>>		 opts,
 	std::optional<std::vector<hiprtFuncNameSet>> funcNameSets,
 	uint32_t									 numGeomTypes,
@@ -816,11 +827,11 @@ hiprtError hiprtTest::buildTraceKernelFromBitcode(
 		e = buildTraceKernelsFromBitcode(
 			ctxt, srcPath, { functionName.c_str() }, functions, options, funcNameSets, numGeomTypes, numRayTypes );
 		ASSERT( functions.size() == 1 );
-		functionOut = *reinterpret_cast<oroFunction*>( &functions.back() );
+		functionOut = *reinterpret_cast<cudaFunction_t*>( &functions.back() );
 	}
 	else
 	{
-		const bool isAmd = oroGetCurAPI( 0 ) == ORO_API_HIP;
+		const bool isAmd = false; // cudaGetCurAPI( 0 ) == ORO_API_HIP;
 		HIPRT_ASSERT( isAmd == true ); // precompiled path supported only on AMD
 
 		auto loadFile = []( const std::filesystem::path& path, std::vector<uint8_t>& dst ) {
@@ -858,15 +869,15 @@ hiprtError hiprtTest::buildTraceKernelFromBitcode(
 		std::vector<uint8_t> binary;
 		loadFile( path, binary );
 
-		oroModule module;
-		oroError  res = oroModuleLoadData( &module, binary.data() );
-		if ( res != oroSuccess )
+		CUmodule module;
+		CUresult  res = cuModuleLoadData( &module, binary.data() );
+		if ( res != CUDA_SUCCESS )
 		{
 			// add some verbose to help debugging missing file.
-			std::cout << "oroModuleLoadData FAILED (error=" << res << ") loading file: " << path.string().c_str() << std::endl;
+			std::cout << "cuModuleLoadData FAILED (error=" << res << ") loading file: " << path.string().c_str() << std::endl;
 		}
 		checkOro( res );
-		checkOro( oroModuleGetFunction( &functionOut, module, functionName.c_str() ) );
+		checkOro( cuModuleGetFunction( &functionOut, module, functionName.c_str() ) );
 	}
 	return e;
 }
@@ -888,7 +899,7 @@ hiprtError hiprtTest::buildTraceKernels(
 	std::vector<const char*> options;
 	if ( opts ) options = *opts;
 
-	const bool isAmd = oroGetCurAPI( 0 ) == ORO_API_HIP;
+	const bool isAmd = false; // cudaGetCurAPI( 0 ) == ORO_API_HIP;
 	if ( isAmd )
 		options.push_back( "-ffast-math" );
 	else
@@ -928,7 +939,7 @@ hiprtError hiprtTest::buildTraceKernel(
 	hiprtContext								 ctxt,
 	const std::filesystem::path&				 srcPath,
 	const std::string&							 functionName,
-	oroFunction&								 functionOut,
+	cudaFunction_t&								 functionOut,
 	std::optional<std::vector<const char*>>		 opts,
 	std::optional<std::vector<hiprtFuncNameSet>> funcNameSets,
 	uint32_t									 numGeomTypes,
@@ -938,7 +949,7 @@ hiprtError hiprtTest::buildTraceKernel(
 	hiprtError					  e =
 		buildTraceKernels( ctxt, srcPath, { functionName.c_str() }, functions, opts, funcNameSets, numGeomTypes, numRayTypes );
 	ASSERT( functions.size() == 1 );
-	functionOut = *reinterpret_cast<oroFunction*>( &functions.back() );
+	functionOut = *reinterpret_cast<cudaFunction_t*>( &functions.back() );
 	return e;
 }
 
@@ -1008,21 +1019,21 @@ void hiprtTest::writeImage( const std::filesystem::path& imgPath, uint32_t width
 	stbi_write_png( imgPath.string().c_str(), width, height, 4, data, width * 4 );
 }
 
-void hiprtTest::launchKernel( oroFunction func, uint32_t nx, uint32_t ny, void** args, uint32_t sharedMemoryBytes )
+void hiprtTest::launchKernel( cudaFunction_t func, uint32_t nx, uint32_t ny, void** args, uint32_t sharedMemoryBytes )
 {
 	constexpr uint32_t tx  = 16u;
 	constexpr uint32_t ty  = 16u;
 	uint32_t		   nbx = hiprt::DivideRoundUp( nx, tx );
 	uint32_t		   nby = hiprt::DivideRoundUp( ny, ty );
-	checkOro( oroModuleLaunchKernel( func, nbx, nby, 1, tx, ty, 1, sharedMemoryBytes, 0, args, 0 ) );
+	checkOro( cudaLaunchKernel( func, dim3(nbx, nby, 1), dim3(tx, ty, 1), args, sharedMemoryBytes, 0 ) );
 }
 
 void hiprtTest::launchKernel(
-	oroFunction func, uint32_t nx, uint32_t ny, uint32_t tx, uint32_t ty, void** args, uint32_t sharedMemoryBytes )
+	cudaFunction_t func, uint32_t nx, uint32_t ny, uint32_t tx, uint32_t ty, void** args, uint32_t sharedMemoryBytes )
 {
 	uint32_t nbx = hiprt::DivideRoundUp( nx, tx );
 	uint32_t nby = hiprt::DivideRoundUp( ny, ty );
-	checkOro( oroModuleLaunchKernel( func, nbx, nby, 1, tx, ty, 1, sharedMemoryBytes, 0, args, 0 ) );
+	checkOro( cudaLaunchKernel( func, dim3(nbx, nby, 1), dim3(tx, ty, 1), args, sharedMemoryBytes, 0 ) );
 }
 
 void ObjTestCases::createScene(
@@ -1229,14 +1240,14 @@ void ObjTestCases::createScene(
 	if ( ( bvhBuildFlag & 3 ) == hiprtBuildFlagBitCustomBvhImport ) threadCount = 1;
 	std::vector<std::thread>			  threads( threadCount );
 	std::vector<std::chrono::nanoseconds> bvhBuildTimes( threadCount );
-	std::vector<oroStream>				  streams( threadCount );
+	std::vector<cudaStream_t>				  streams( threadCount );
 	for ( size_t threadIndex = 0; threadIndex < threadCount; ++threadIndex )
 	{
-		checkOro( oroStreamCreate( &streams[threadIndex] ) );
+		checkOro( cudaStreamCreate( &streams[threadIndex] ) );
 	}
 
-	oroCtx ctx;
-	checkOro( oroCtxGetCurrent( &ctx ) );
+	CUcontext ctx;
+	checkOro( cuCtxGetCurrent( &ctx ) );
 
 	m_scene.m_geometries.resize( shapes.size() );
 	m_scene.m_instances.resize( shapes.size() );
@@ -1244,7 +1255,7 @@ void ObjTestCases::createScene(
 	{
 		threads[threadIndex] = std::thread(
 			[&]( uint32_t threadIndex ) {
-				checkOro( oroCtxSetCurrent( ctx ) );
+				checkOro( cuCtxGetCurrent( &ctx ) );
 
 				std::vector<hiprtGeometry*>			 geomAddrs;
 				std::vector<hiprtGeometryBuildInput> geomInputs;
@@ -1349,7 +1360,7 @@ void ObjTestCases::createScene(
 	for ( size_t threadIndex = 0; threadIndex < threadCount; ++threadIndex )
 	{
 		threads[threadIndex].join();
-		checkOro( oroStreamDestroy( streams[threadIndex] ) );
+		checkOro( cudaStreamDestroy( streams[threadIndex] ) );
 		bvhBuildTime = std::max( bvhBuildTime, bvhBuildTimes[threadIndex] );
 	}
 
@@ -1531,7 +1542,7 @@ void ObjTestCases::render(
 	hiprtGlobalStackBuffer stackBuffer;
 	checkHiprt( hiprtCreateGlobalStackBuffer( m_scene.m_ctx, stackBufferInput, stackBuffer ) );
 
-	oroFunction	   func;
+	cudaFunction_t	   func;
 	hiprtFuncTable funcTable = nullptr;
 
 	if constexpr ( UseFilter )
@@ -1577,10 +1588,10 @@ void ObjTestCases::render(
 		&funcTable };
 
 	int numRegs{};
-	checkOro( oroFuncGetAttribute( &numRegs, ORO_FUNC_ATTRIBUTE_NUM_REGS, func ) );
+	// checkOro( cudaFuncGetAttribute( &numRegs, ORO_FUNC_ATTRIBUTE_NUM_REGS, func ) );
 
 	int numSmem{};
-	checkOro( oroFuncGetAttribute( &numSmem, ORO_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES, func ) );
+	// checkOro( cudaFuncGetAttribute( &numSmem, ORO_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES, func ) );
 
 	std::cout << "Trace kernel: registers " << numRegs << ", shared memory " << numSmem << std::endl;
 	waitForCompletion();
