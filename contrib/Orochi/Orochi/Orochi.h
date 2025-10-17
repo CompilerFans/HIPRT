@@ -32,7 +32,7 @@
 
 #include "../contrib/hipew/include/hipew.h"
 
-
+// #define OROCHI_ENABLE_CUEW
 #define OROAPI HIPAPI
 #define ORO_CB HIP_CB
 

@@ -26,23 +26,23 @@
 #include <test/CornellBox.h>
 #include <numeric>
 
-void checkOro( oroError res, const source_location& location )
+void checkOro( cudaError res, const source_location& location )
 {
-	if ( res != oroSuccess )
+	if ( res != cudaSuccess )
 	{
 		const char* msg;
-		oroGetErrorString( res, &msg );
+		cudaGetErrorString( res, &msg );
 		std::cerr << "Orochi error: '" << msg << "' on line " << location.line() << " "
 				  << " in '" << location.file_name() << "'." << std::endl;
 		std::abort();
 	}
 }
 
-void checkOrortc( orortcResult res, const source_location& location )
+void checkOrortc( nvrtcResult res, const source_location& location )
 {
-	if ( res != ORORTC_SUCCESS )
+	if ( res != NVRTC_SUCCESS )
 	{
-		std::cerr << "Orortc error: '" << orortcGetErrorString( res ) << "' [ " << res << " ] on line " << location.line()
+		std::cerr << "Orortc error: '" << nvrtcGetErrorString( res ) << "' [ " << res << " ] on line " << location.line()
 				  << " "
 				  << " in '" << location.file_name() << "'." << std::endl;
 		std::abort();
@@ -108,22 +108,23 @@ TEST_F( hiprtewTest, HiprtEwTest )
 
 void hiprtewTest::SetUp()
 {
-	oroInitialize( (oroApi)( ORO_API_HIP | ORO_API_CUDA ), 0 );
+	// cudaInitialize( (cudaApi)( ORO_API_HIP | ORO_API_CUDA ), 0 );
 
-	checkOro( oroInit( 0 ) );
-	checkOro( oroDeviceGet( &m_oroDevice, 0 ) );
-	checkOro( oroCtxCreate( &m_oroCtx, 0, m_oroDevice ) );
+	checkOro( cuInit( 0 ) );
+	checkOro( cudaGetDevice( &m_cudaDevice ) );
+	checkOro( cuCtxCreate( &m_cudaCtx, 0, m_cudaDevice ) );
 
-	oroDeviceProp props;
-	checkOro( oroGetDeviceProperties( &props, m_oroDevice ) );
+	cudaDeviceProp props;
+	checkOro( cudaGetDeviceProperties( &props, m_cudaDevice ) );
 	std::cout << "Executing on '" << props.name << "'" << std::endl;
+	std::cout << "Executing on '" << props.pciDeviceID << "'" << std::endl;
 
 	if ( std::string( props.name ).find( "NVIDIA" ) != std::string::npos )
 		m_ctxtInput.deviceType = hiprtDeviceNVIDIA;
 	else
 		m_ctxtInput.deviceType = hiprtDeviceAMD;
-	m_ctxtInput.ctxt   = oroGetRawCtx( m_oroCtx );
-	m_ctxtInput.device = oroGetRawDevice( m_oroDevice );
+	m_ctxtInput.ctxt   = cudaGetRawCtx( m_cudaCtx );
+	m_ctxtInput.device = cudaGetRawDevice( m_cudaDevice );
 
 	int result;
 	hiprtewInit( &result );
