@@ -71,8 +71,8 @@ namespace hiprt
 {
 Compiler::Compiler()
 {
-	if ( UseBitcode || UseBakedCompiledKernel || hiprtcCreateProgram == nullptr || hiprtcCompileProgram == nullptr ||
-		 hiprtcDestroyProgram == nullptr )
+	if ( UseBitcode || UseBakedCompiledKernel /* || hiprtcCreateProgram == nullptr || hiprtcCompileProgram == nullptr ||
+		 hiprtcDestroyProgram == nullptr */ )
 	{
 		// If we use the precompiled bitcode, we won't check RTIP 3.1 support through HIPRTC.
 		// Or, if the HIP Run Time Compiler is not loaded (e.g. hiprtc0604.dll) , we can't check RTIP 3.1 support.

@@ -138,21 +138,16 @@ void hiprtTest::SetUp()
 	if ( deviceGetError != cudaSuccess )
 	{
 		// if failed, try to understand what happened.
-
-		int deviceCountHip = 0;
-		// cudaGetDeviceCount( &deviceCountHip);
 		int deviceCountCuda = 0;
 		cudaGetDeviceCount( &deviceCountCuda );
 
 		std::cout << "ERROR detected inside cudaGetDevice." << std::endl;
-		std::cout << "number of HIP devices detected = " << deviceCountHip << std::endl;
 		std::cout << "number of CUDA devices detected = " << deviceCountCuda << std::endl;
-		if ( deviceCountHip == 0 && deviceCountCuda == 0 )
+		if ( deviceCountCuda == 0 )
 			std::cout << "NO COMPATIBLE DEVICE FOUND. check your driver." << std::endl;
 
 		checkOro( deviceGetError );
 	}
-	checkOro( cuCtxCreate( &m_Ctx, 0, m_cudaDevice ) );
 
 	cudaDeviceProp props;
 	checkOro( cudaGetDeviceProperties( &props, m_cudaDevice ) );
@@ -162,10 +157,7 @@ void hiprtTest::SetUp()
 
 	if ( std::string( props.name ).find( "NVIDIA" ) != std::string::npos )
 		m_ctxtInput.deviceType = hiprtDeviceNVIDIA;
-	// else
-	// 	m_ctxtInput.deviceType = hiprtDeviceAMD;
-	m_ctxtInput.ctxt   = reinterpret_cast<void *> (&m_Ctx );
-	m_ctxtInput.device = cuCtxGetDevice( &m_cudaDevice );
+	m_ctxtInput.device = cudaGetDevice( &m_cudaDevice );
 }
 
 void hiprtTest::buildBvh( hiprtGeometryBuildInput& buildInput )
@@ -1025,7 +1017,7 @@ void hiprtTest::launchKernel( cudaFunction_t func, uint32_t nx, uint32_t ny, voi
 	constexpr uint32_t ty  = 16u;
 	uint32_t		   nbx = hiprt::DivideRoundUp( nx, tx );
 	uint32_t		   nby = hiprt::DivideRoundUp( ny, ty );
-	checkOro( cudaLaunchKernel( func, dim3(nbx, nby, 1), dim3(tx, ty, 1), args, sharedMemoryBytes, 0 ) );
+	checkOro( cuLaunchKernel( func, nbx, nby, 1, tx, ty, 1, sharedMemoryBytes, 0, args, 0 ) ); // cudaLaunchKernel( func, dim3(nbx, nby, 1), dim3(tx, ty, 1), args, sharedMemoryBytes, 0 ) );
 }
 
 void hiprtTest::launchKernel(
@@ -1033,7 +1025,7 @@ void hiprtTest::launchKernel(
 {
 	uint32_t nbx = hiprt::DivideRoundUp( nx, tx );
 	uint32_t nby = hiprt::DivideRoundUp( ny, ty );
-	checkOro( cudaLaunchKernel( func, dim3(nbx, nby, 1), dim3(tx, ty, 1), args, sharedMemoryBytes, 0 ) );
+	checkOro( cuLaunchKernel( func, nbx, nby, 1, tx, ty, 1, sharedMemoryBytes, 0, args, 0 ) ); // cudaLaunchKernel( func, dim3(nbx, nby, 1), dim3(tx, ty, 1), args, sharedMemoryBytes, 0 ) );
 }
 
 void ObjTestCases::createScene(
@@ -1246,16 +1238,12 @@ void ObjTestCases::createScene(
 		checkOro( cudaStreamCreate( &streams[threadIndex] ) );
 	}
 
-	CUcontext ctx;
-	checkOro( cuCtxGetCurrent( &ctx ) );
-
 	m_scene.m_geometries.resize( shapes.size() );
 	m_scene.m_instances.resize( shapes.size() );
 	for ( size_t threadIndex = 0; threadIndex < threadCount; ++threadIndex )
 	{
 		threads[threadIndex] = std::thread(
 			[&]( uint32_t threadIndex ) {
-				checkOro( cuCtxGetCurrent( &ctx ) );
 
 				std::vector<hiprtGeometry*>			 geomAddrs;
 				std::vector<hiprtGeometryBuildInput> geomInputs;
@@ -1587,11 +1575,18 @@ void ObjTestCases::render(
 		&aoRadius,
 		&funcTable };
 
+	// cudaFuncAttributes attr;
+	// checkOro( cudaFuncGetAttributes( &attr, (const void*)func ) );
+	// int numRegs{};
+	// numRegs = attr.numRegs;
+	// int numSmem{};
+	// numSmem = attr.sharedSizeBytes;
+
 	int numRegs{};
-	// checkOro( cudaFuncGetAttribute( &numRegs, ORO_FUNC_ATTRIBUTE_NUM_REGS, func ) );
+	checkOro( cuFuncGetAttribute( &numRegs, CU_FUNC_ATTRIBUTE_NUM_REGS, func ) );
 
 	int numSmem{};
-	// checkOro( cudaFuncGetAttribute( &numSmem, ORO_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES, func ) );
+	checkOro( cuFuncGetAttribute( &numSmem, CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES, func ) );
 
 	std::cout << "Trace kernel: registers " << numRegs << ", shared memory " << numSmem << std::endl;
 	waitForCompletion();

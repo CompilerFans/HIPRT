@@ -161,6 +161,7 @@ class Context
 	std::string getDriverVersion() const;
 
 	int	 getDevice() const noexcept { return m_device; }
+	void setDevice( int d ) { m_device = d; }
 	OrochiUtils& getOrochiUtils() { return m_cudautils; }
 	Compiler&	 getCompiler() { return m_compiler; }
 

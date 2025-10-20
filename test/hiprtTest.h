@@ -92,7 +92,7 @@ class hiprtTest : public ::testing::Test
 {
   public:
 	void SetUp();
-	void TearDown() { checkOro( cuCtxDestroy( m_Ctx ) ); }
+	void TearDown() { }
 
   protected:
 	void buildBvh( hiprtGeometryBuildInput& buildInput );

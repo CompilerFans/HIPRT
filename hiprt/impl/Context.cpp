@@ -51,7 +51,7 @@ Context::~Context()
 std::vector<hiprtGeometry>
 Context::createGeometries( const std::vector<hiprtGeometryBuildInput>& buildInputs, const hiprtBuildOptions buildOptions )
 {
-	checkOro( cuCtxSetCurrent( m_ctxt ) );
+	// checkOro( cuCtxSetCurrent( m_ctxt ) );
 
 	size_t				size = 0;
 	std::vector<size_t> sizes( buildInputs.size() );
@@ -113,7 +113,7 @@ Context::createGeometries( const std::vector<hiprtGeometryBuildInput>& buildInpu
 
 void Context::destroyGeometries( const std::vector<hiprtGeometry> geometries )
 {
-	checkOro( cuCtxSetCurrent( m_ctxt ) );
+	// checkOro( cuCtxSetCurrent( m_ctxt ) );
 
 	std::lock_guard<std::mutex> lockMutex( m_poolMutex );
 	for ( hiprtGeometry geometry : geometries )
@@ -147,7 +147,7 @@ void Context::buildGeometries(
 	cudaStream_t									stream,
 	std::vector<hiprtDevicePtr>&				buffers )
 {
-	checkOro( cuCtxSetCurrent( m_ctxt ) );
+	// checkOro( cuCtxSetCurrent( m_ctxt ) );
 
 	std::vector<hiprtGeometryBuildInput> batchInputs;
 	std::vector<hiprtDevicePtr>			 batchBuffers;
@@ -206,7 +206,7 @@ void Context::updateGeometries(
 	cudaStream_t									stream,
 	std::vector<hiprtDevicePtr>&				buffers )
 {
-	checkOro( cuCtxSetCurrent( m_ctxt ) );
+	// checkOro( cuCtxSetCurrent( m_ctxt ) );
 	for ( size_t i = 0; i < buildInputs.size(); ++i )
 	{
 		if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitCustomBvhImport )
@@ -290,7 +290,7 @@ size_t Context::getGeometriesBuildTempBufferSize(
 
 std::vector<hiprtGeometry> Context::compactGeometries( const std::vector<hiprtGeometry>& geometriesIn, cudaStream_t stream )
 {
-	checkOro( cuCtxSetCurrent( m_ctxt ) );
+	// checkOro( cuCtxSetCurrent( m_ctxt ) );
 
 	size_t				size = 0;
 	std::vector<size_t> sizes( geometriesIn.size() );
@@ -356,7 +356,7 @@ std::vector<hiprtGeometry> Context::compactGeometries( const std::vector<hiprtGe
 std::vector<hiprtScene>
 Context::createScenes( const std::vector<hiprtSceneBuildInput>& buildInputs, const hiprtBuildOptions buildOptions )
 {
-	checkOro( cuCtxSetCurrent( m_ctxt ) );
+	// checkOro( cuCtxSetCurrent( m_ctxt ) );
 
 	size_t				size = 0;
 	std::vector<size_t> sizes( buildInputs.size() );
@@ -427,7 +427,7 @@ Context::createScenes( const std::vector<hiprtSceneBuildInput>& buildInputs, con
 
 void Context::destroyScenes( const std::vector<hiprtScene> scenes )
 {
-	checkOro( cuCtxSetCurrent( m_ctxt ) );
+	// checkOro( cuCtxSetCurrent( m_ctxt ) );
 
 	std::lock_guard<std::mutex> lockMutex( m_poolMutex );
 	for ( hiprtScene scene : scenes )
@@ -461,7 +461,7 @@ void Context::buildScenes(
 	cudaStream_t								 stream,
 	std::vector<hiprtDevicePtr>&			 buffers )
 {
-	checkOro( cuCtxSetCurrent( m_ctxt ) );
+	// checkOro( cuCtxSetCurrent( m_ctxt ) );
 
 	std::vector<hiprtSceneBuildInput> batchInputs;
 	std::vector<hiprtDevicePtr>		  batchBuffers;
@@ -529,7 +529,7 @@ void Context::updateScenes(
 	cudaStream_t								 stream,
 	std::vector<hiprtDevicePtr>&			 buffers )
 {
-	checkOro( cuCtxSetCurrent( m_ctxt ) );
+	// checkOro( cuCtxSetCurrent( m_ctxt ) );
 	for ( size_t i = 0; i < buildInputs.size(); ++i )
 	{
 		if ( InstanceIDBits < 32 && buildInputs[i].instanceCount >= ( 1u << InstanceIDBits ) )
@@ -632,7 +632,7 @@ size_t Context::getScenesBuildTempBufferSize(
 
 std::vector<hiprtScene> Context::compactScenes( const std::vector<hiprtScene>& scenesIn, cudaStream_t stream )
 {
-	checkOro( cuCtxSetCurrent( m_ctxt ) );
+	// checkOro( cuCtxSetCurrent( m_ctxt ) );
 
 	size_t				size = 0;
 	std::vector<size_t> sizes( scenesIn.size() );
@@ -712,7 +712,7 @@ std::vector<hiprtScene> Context::compactScenes( const std::vector<hiprtScene>& s
 
 hiprtFuncTable Context::createFuncTable( uint32_t numGeomTypes, uint32_t numRayTypes )
 {
-	checkOro( cuCtxSetCurrent( m_ctxt ) );
+	// checkOro( cuCtxSetCurrent( m_ctxt ) );
 
 	uint8_t* ptr = nullptr;
 	checkOro( cudaMalloc(
@@ -732,7 +732,7 @@ hiprtFuncTable Context::createFuncTable( uint32_t numGeomTypes, uint32_t numRayT
 
 void Context::setFuncTable( hiprtFuncTable funcTable, uint32_t geomType, uint32_t rayType, hiprtFuncDataSet set )
 {
-	checkOro( cuCtxSetCurrent( m_ctxt ) );
+	// checkOro( cuCtxSetCurrent( m_ctxt ) );
 
 	hiprtFuncTableHeader header;
 	checkOro( cuMemcpyDtoH( &header, static_cast<uintptr_t>(reinterpret_cast<size_t>( funcTable )), sizeof( hiprtFuncTableHeader ) ) );
@@ -744,13 +744,13 @@ void Context::setFuncTable( hiprtFuncTable funcTable, uint32_t geomType, uint32_
 
 void Context::destroyFuncTable( hiprtFuncTable funcTable )
 {
-	checkOro( cuCtxSetCurrent( m_ctxt ) );
+	// checkOro( cuCtxSetCurrent( m_ctxt ) );
 	checkOro( cudaFree( reinterpret_cast<void *>( funcTable ) ) );
 }
 
 void Context::createGlobalStackBuffer( const hiprtGlobalStackBufferInput& input, hiprtGlobalStackBuffer& stackBufferOut )
 {
-	checkOro( cuCtxSetCurrent( m_ctxt ) );
+	// checkOro( cuCtxSetCurrent( m_ctxt ) );
 
 	const size_t stackEntrySize =
 		input.entryType == hiprtStackEntryTypeInstance ? sizeof( hiprtInstanceStackEntry ) : sizeof( uint32_t );
@@ -765,7 +765,7 @@ void Context::createGlobalStackBuffer( const hiprtGlobalStackBufferInput& input,
 		size_t				   size		   = activeWarps * sizeof( uint32_t ) + stackCount * input.stackSize * stackEntrySize;
 		hiprtGlobalStackBuffer stackBuffer{ input.stackSize, stackCount, nullptr };
 		checkOro( cudaMalloc( reinterpret_cast<void **>( &stackBuffer.stackData ), size ) );
-		checkOro( cuMemsetD8( reinterpret_cast<size_t>( stackBuffer.stackData ), 0, sizeof( uint32_t ) * stackCount ) );
+		// checkOro( cuMemsetD8( reinterpret_cast<size_t>( stackBuffer.stackData ), 0, sizeof( uint32_t ) * stackCount ) );
 		stackBufferOut = stackBuffer;
 	}
 	else
@@ -779,13 +779,13 @@ void Context::createGlobalStackBuffer( const hiprtGlobalStackBufferInput& input,
 
 void Context::destroyGlobalStackBuffer( hiprtGlobalStackBuffer stackBuffer )
 {
-	checkOro( cuCtxSetCurrent( m_ctxt ) );
+	// checkOro( cuCtxSetCurrent( m_ctxt ) );
 	checkOro( cudaFree( reinterpret_cast<void *>( stackBuffer.stackData ) ) );
 }
 
 void Context::saveGeometry( hiprtGeometry inGeometry, const std::string& filename )
 {
-	checkOro( cuCtxSetCurrent( m_ctxt ) );
+	// checkOro( cuCtxSetCurrent( m_ctxt ) );
 
 	size_t size = 0;
 	{
@@ -833,7 +833,7 @@ hiprtGeometry Context::loadGeometry( const std::string& filename )
 	file.read( reinterpret_cast<char*>( buffer.data() ), size );
 
 	hiprtGeometry geometry;
-	checkOro( cuCtxSetCurrent( m_ctxt ) );
+	// checkOro( cuCtxSetCurrent( m_ctxt ) );
 	checkOro( cudaMalloc( reinterpret_cast<void **>( &geometry ), size ) );
 
 	GeomHeader header;
@@ -860,7 +860,7 @@ hiprtScene Context::loadScene( [[maybe_unused]] const std::string& filename ) { 
 
 void Context::exportGeometryAabb( hiprtGeometry inGeometry, float3& outAabbMin, float3& outAabbMax )
 {
-	checkOro( cuCtxSetCurrent( m_ctxt ) );
+	// checkOro( cuCtxSetCurrent( m_ctxt ) );
 
 	GeomHeader header;
 	checkOro( cuMemcpyDtoH( &header, reinterpret_cast<size_t>( inGeometry ), sizeof( GeomHeader ) ) );
@@ -877,7 +877,7 @@ void Context::exportGeometryAabb( hiprtGeometry inGeometry, float3& outAabbMin, 
 
 void Context::exportSceneAabb( hiprtScene inScene, float3& outAabbMin, float3& outAabbMax )
 {
-	checkOro( cuCtxSetCurrent( m_ctxt ) );
+	// checkOro( cuCtxSetCurrent( m_ctxt ) );
 
 	SceneHeader header;
 	checkOro( cuMemcpyDtoH( &header, reinterpret_cast<size_t>( inScene ), sizeof( SceneHeader ) ) );
@@ -906,7 +906,7 @@ void Context::buildKernels(
 	CUmodule&							 module,
 	bool								 cache )
 {
-	checkOro( cuCtxSetCurrent( m_ctxt ) );
+	// checkOro( cuCtxSetCurrent( m_ctxt ) );
 	m_compiler.buildKernels(
 		*this,
 		funcNames,
@@ -934,7 +934,7 @@ void Context::buildKernelsFromBitcode(
 	std::vector<CUfunction>&			 functions,
 	bool								 cache )
 {
-	checkOro( cuCtxSetCurrent( m_ctxt ) );
+	// checkOro( cuCtxSetCurrent( m_ctxt ) );
 	m_compiler.buildKernelsFromBitcode(
 		*this, funcNames, moduleName, bitcodeBinary, numGeomTypes, numRayTypes, funcNameSets, functions, cache );
 }
@@ -944,7 +944,7 @@ void Context::setCacheDir( const std::filesystem::path& path ) { m_compiler.setC
 uint32_t Context::getSMCount() const
 {
 	int smCount;
-	checkOro( cuCtxSetCurrent( m_ctxt ) );
+	// checkOro( cuCtxSetCurrent( m_ctxt ) );
 	checkOro( cudaDeviceGetAttribute( &smCount, cudaDevAttrMultiProcessorCount, m_device ) );
 	return smCount;
 }
@@ -952,7 +952,7 @@ uint32_t Context::getSMCount() const
 uint32_t Context::getMaxBlockSize() const
 {
 	cudaDeviceProp prop;
-	checkOro( cuCtxSetCurrent( m_ctxt ) );
+	// checkOro( cuCtxSetCurrent( m_ctxt ) );
 	checkOro( cudaGetDeviceProperties( &prop, m_device ) );
 	return prop.maxThreadsPerBlock;
 }
@@ -960,7 +960,7 @@ uint32_t Context::getMaxBlockSize() const
 uint32_t Context::getMaxGridSize() const
 {
 	cudaDeviceProp prop;
-	checkOro( cuCtxSetCurrent( m_ctxt ) );
+	// checkOro( cuCtxSetCurrent( m_ctxt ) );
 	checkOro( cudaGetDeviceProperties( &prop, m_device ) );
 	return prop.maxGridSize[0];
 }
@@ -968,7 +968,7 @@ uint32_t Context::getMaxGridSize() const
 std::string Context::getDeviceName() const
 {
 	cudaDeviceProp prop;
-	checkOro( cuCtxSetCurrent( m_ctxt ) );
+	// checkOro( cuCtxSetCurrent( m_ctxt ) );
 	checkOro( cudaGetDeviceProperties( &prop, m_device ) );
 	return std::string( prop.name );
 }
@@ -984,7 +984,7 @@ std::string Context::getDeviceName() const
 std::string Context::getDriverVersion() const
 {
 	int driverVersion;
-	checkOro( cuCtxSetCurrent( m_ctxt ) );
+	// checkOro( cuCtxSetCurrent( m_ctxt ) );
 	checkOro( cudaDriverGetVersion( &driverVersion ) );
 	return std::to_string( driverVersion );
 }

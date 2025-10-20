@@ -32,6 +32,7 @@
 #define __KERNELCC_RTC__
 #endif
 #include <cuda_runtime_api.h>
+// #include </usr/local/cuda-12.6/targets/x86_64-linux/include/cuda_runtime_api.h>
 #if !defined( __KERNELCC__ )
 #include <algorithm>
 #include <cfloat>

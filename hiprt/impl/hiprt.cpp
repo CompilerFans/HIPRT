@@ -34,11 +34,14 @@ using namespace hiprt;
 hiprtError hiprtCreateContext( uint32_t hiprtApiVersion, const hiprtContextCreationInput& input, hiprtContext& contextOut )
 {
 	// cudaInitialize( ( input.deviceType == hiprtDeviceAMD ) ? ORO_API_HIP : ORO_API_CUDA, 0, g_hip_paths, g_hiprtc_paths );
+	cuInit(0);
 	if ( hiprtApiVersion != HIPRT_API_VERSION ) return hiprtErrorInvalidApiVersion;
 
 	try
 	{
 		Context* ctxt = new Context( input );
+		// ctxt->m_device = 0;
+		ctxt->setDevice(0);
 		contextOut	  = reinterpret_cast<hiprtContext>( ctxt );
 	}
 	catch ( std::exception& e )

@@ -4,6 +4,9 @@ project(hiprt)
 # find_package(CUDA REQUIRED)
 enable_language(CUDA)
 find_package(CUDAToolkit REQUIRED)
+
+set(CMAKE_CUDA_ARCHITECTURES "89;86;80;75")
+
 #
 # Options
 #
@@ -600,7 +603,7 @@ target_include_directories(${HIPRT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/con
 
 file(GLOB_RECURSE hiprt_sources "${CMAKE_CURRENT_SOURCE_DIR}/hiprt/*.h" "${CMAKE_CURRENT_SOURCE_DIR}/hiprt/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/hiprt/*.inl")
 list(FILTER hiprt_sources EXCLUDE REGEX "hiprt/bitcodes/.*")
-file(GLOB_RECURSE orochi_sources "${CMAKE_CURRENT_SOURCE_DIR}/contrib/Orochi/Orochi/*.h" "${CMAKE_CURRENT_SOURCE_DIR}/contrib/Orochi/Orochi/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/contrib/Orochi/contrib/cuew/*.h" "${CMAKE_CURRENT_SOURCE_DIR}/contrib/Orochi/contrib/cuew/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/contrib/Orochi/contrib/hipew/*.h" "${CMAKE_CURRENT_SOURCE_DIR}/contrib/Orochi/contrib/hipew/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/contrib/Orochi/ParallelPrimitives/*.h" "${CMAKE_CURRENT_SOURCE_DIR}/contrib/Orochi/ParallelPrimitives/*.cpp")
+file(GLOB_RECURSE orochi_sources "${CMAKE_CURRENT_SOURCE_DIR}/contrib/Orochi/Orochi/*.h" "${CMAKE_CURRENT_SOURCE_DIR}/contrib/Orochi/Orochi/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/contrib/Orochi/ParallelPrimitives/*.h" "${CMAKE_CURRENT_SOURCE_DIR}/contrib/Orochi/ParallelPrimitives/*.cpp")
 target_sources(${HIPRT_NAME} PRIVATE ${hiprt_sources} ${orochi_sources})
 
 

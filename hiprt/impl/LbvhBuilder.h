@@ -244,7 +244,7 @@ void LbvhBuilder::build(
 		if ( pairTriangles )
 		{
 			uint2* pairIndices = temporaryMemoryArena.allocate<uint2>( primitives.getCount() );
-			checkOro( cuMemsetD8Async( reinterpret_cast<size_t>( taskCounter ), 0, sizeof( uint32_t ), stream ) );
+			checkOro( cuMemsetD8Async( reinterpret_cast<CUdeviceptr>( taskCounter ), 0, sizeof( uint32_t ), stream ) );
 			Kernel pairTrianglesKernel = compiler.getKernel(
 				context,
 				Utility::getRootDir() / "hiprt/impl/BvhBuilderKernels.h",
@@ -257,7 +257,7 @@ void LbvhBuilder::build(
 
 			uint32_t pairCount = 0;
 			checkOro(
-				cuMemcpyDtoHAsync( &pairCount, reinterpret_cast<size_t>( taskCounter ), sizeof( uint32_t ), stream ) );
+				cuMemcpyDtoHAsync( &pairCount, reinterpret_cast<CUdeviceptr>( taskCounter ), sizeof( uint32_t ), stream ) );
 			checkOro( cudaStreamSynchronize( stream ) );
 			primitives.setPairs( pairCount, pairIndices );
 		}
@@ -265,7 +265,7 @@ void LbvhBuilder::build(
 
 	// STEP 2: Calculate centroid bounding box by reduction
 	Aabb emptyBox;
-	checkOro( cuMemcpyHtoDAsync( reinterpret_cast<size_t>( centroidBox ), &emptyBox, sizeof( Aabb ), stream ) );
+	checkOro( cuMemcpyHtoDAsync( reinterpret_cast<CUdeviceptr>( centroidBox ), &emptyBox, sizeof( Aabb ), stream ) );
 
 	Kernel computeCentroidBoxKernel = compiler.getKernel(
 		context,
@@ -297,7 +297,7 @@ void LbvhBuilder::build(
 
 	// STEP 5: Emit topology and refit nodes
 	checkOro( cuMemsetD8Async(
-		reinterpret_cast<size_t>( updateCounters ), 0xFF, sizeof( uint32_t ) * primitives.getCount(), stream ) );
+		reinterpret_cast<CUdeviceptr>( updateCounters ), 0xFF, sizeof( uint32_t ) * primitives.getCount(), stream ) );
 	Kernel emitTopologyAndFitBoundsKernel = compiler.getKernel(
 		context,
 		Utility::getRootDir() / "hiprt/impl/LbvhBuilderKernels.h",
@@ -310,8 +310,8 @@ void LbvhBuilder::build(
 
 	uint32_t rootAddr;
 	checkOro( cuMemcpyDtoHAsync(
-		&rootAddr, reinterpret_cast<size_t>( &updateCounters[primitives.getCount() - 1] ), sizeof( uint32_t ), stream ) );
-	checkOro( cudaStreamSynchronize( stream ) );
+		&rootAddr, reinterpret_cast<CUdeviceptr>( &updateCounters[primitives.getCount() - 1] ), sizeof( uint32_t ), stream ) );
+	checkOro( cuStreamSynchronize( stream ) );
 
 	// STEP 6: Compute fat leaves
 	if constexpr ( std::is_same<PrimitiveNode, TrianglePacketNode>::value )
@@ -320,7 +320,7 @@ void LbvhBuilder::build(
 		uint32_t* parentAddrs	 = updateCounters + primitives.getCount();
 		uint32_t* triangleCounts = parentAddrs + primitives.getCount();
 		checkOro( cuMemsetD8Async(
-			reinterpret_cast<size_t>( updateCounters ), 0, sizeof( uint32_t ) * primitives.getCount(), stream ) );
+			reinterpret_cast<CUdeviceptr>( updateCounters ), 0, sizeof( uint32_t ) * primitives.getCount(), stream ) );
 
 		Kernel computeParentAddrsKernel = compiler.getKernel(
 			context,
@@ -343,9 +343,9 @@ void LbvhBuilder::build(
 
 	// STEP 7: Collapse
 	uint3 rootCollapseTask = { ( rootAddr << 4 ) | BoxType, 0, 0 };
-	checkOro( cuMemcpyHtoDAsync( reinterpret_cast<size_t>( taskQueue ), &rootCollapseTask, sizeof( uint3 ), stream ) );
+	checkOro( cuMemcpyHtoDAsync( reinterpret_cast<CUdeviceptr>( taskQueue ), &rootCollapseTask, sizeof( uint3 ), stream ) );
 	checkOro( cuMemsetD8Async(
-		reinterpret_cast<size_t>( taskQueue + 1 ), 0xFF, sizeof( uint3 ) * ( primitives.getCount() - 1 ), stream ) );
+		reinterpret_cast<CUdeviceptr>( taskQueue + 1 ), 0xFF, sizeof( uint3 ) * ( primitives.getCount() - 1 ), stream ) );
 
 	Kernel collapseKernel = compiler.getKernel(
 		context,
@@ -359,7 +359,7 @@ void LbvhBuilder::build(
 
 	uint32_t boxNodeCount{};
 	checkOro( cuMemcpyDtoHAsync(
-		&boxNodeCount, reinterpret_cast<size_t>( &header->m_boxNodeCount ), sizeof( uint32_t ), stream ) );
+		&boxNodeCount, reinterpret_cast<CUdeviceptr>( &header->m_boxNodeCount ), sizeof( uint32_t ), stream ) );
 	checkOro( cudaStreamSynchronize( stream ) );
 
 	Kernel compactTasksKernel = compiler.getKernel(
@@ -374,8 +374,8 @@ void LbvhBuilder::build(
 	} );
 
 	uint32_t taskCount{};
-	checkOro( cuMemcpyDtoHAsync( &taskCount, reinterpret_cast<size_t>( taskCounter ), sizeof( uint32_t ), stream ) );
-	checkOro( cudaStreamSynchronize( stream ) );
+	checkOro( cuMemcpyDtoHAsync( &taskCount, reinterpret_cast<CUdeviceptr>( taskCounter ), sizeof( uint32_t ), stream ) );
+	checkOro( cuStreamSynchronize( stream ) );
 
 	Kernel packLeavesKernel = compiler.getKernel(
 		context,
@@ -394,7 +394,7 @@ void LbvhBuilder::build(
 	// STEP 8: BVH cost
 	if constexpr ( LogBvhCost )
 	{
-		checkOro( cuMemsetD8Async( reinterpret_cast<size_t>( taskCounter ), 0, sizeof( float ), stream ) );
+		checkOro( cuMemsetD8Async( reinterpret_cast<CUdeviceptr>( taskCounter ), 0, sizeof( float ), stream ) );
 		Kernel computeCostKernel = compiler.getKernel(
 			context,
 			Utility::getRootDir() / "hiprt/impl/BvhBuilderKernels.h",
@@ -405,8 +405,8 @@ void LbvhBuilder::build(
 		computeCostKernel.launch( boxNodeCount, ReductionBlockSize, stream );
 
 		float cost;
-		checkOro( cuMemcpyDtoHAsync( &cost, reinterpret_cast<size_t>( taskCounter ), sizeof( float ), stream ) );
-		checkOro( cudaStreamSynchronize( stream ) );
+		checkOro( cuMemcpyDtoHAsync( &cost, reinterpret_cast<CUdeviceptr>( taskCounter ), sizeof( float ), stream ) );
+		checkOro( cuStreamSynchronize( stream ) );
 		std::cout << "Bvh cost: " << cost << std::endl;
 	}
 
@@ -447,7 +447,7 @@ void LbvhBuilder::update(
 	Header* header = storageMemoryArena.allocate<Header>();
 
 	Header h;
-	checkOro( cuMemcpyDtoHAsync( &h, reinterpret_cast<size_t>( header ), sizeof( Header ), stream ) );
+	checkOro( cuMemcpyDtoHAsync( &h, reinterpret_cast<CUdeviceptr>( header ), sizeof( Header ), stream ) );
 	checkOro( cudaStreamSynchronize( stream ) );
 
 	BoxNode*	   boxNodes	 = reinterpret_cast<BoxNode*>( h.m_boxNodes );

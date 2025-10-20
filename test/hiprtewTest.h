@@ -56,7 +56,7 @@ class hiprtewTest : public ::testing::Test
 {
   public:
 	void SetUp();
-	void TearDown() { cuCtxDestroy( m_cudaCtx ); }
+	void TearDown() { }
 
 	void waitForCompletion( cudaStream_t stream = 0 )
 	{

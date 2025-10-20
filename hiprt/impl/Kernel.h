@@ -24,6 +24,7 @@
 
 #pragma once
 #include <hiprt/hiprt_common.h>
+// #include <cuda_runtime.h>
 #include <cuda_runtime_api.h>
 #include <cuda.h>
 #include <cuda_profiler_api.h>

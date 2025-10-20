@@ -72,6 +72,8 @@ struct alignas( 4 * sizeof( T ) ) Vector<T, 4>
 // using float4 = hiprtFloat4;
 // #endif
 // #else
+
+#endif
 using hiprtInt2	  = int2;
 using hiprtInt3	  = int3;
 using hiprtInt4	  = int4;
@@ -81,7 +83,6 @@ using hiprtUint4  = uint4;
 using hiprtFloat2 = float2;
 using hiprtFloat3 = float3;
 using hiprtFloat4 = float4;
-#endif
 
 HIPRT_STATIC_ASSERT( sizeof( hiprtInt2 ) == 8 );
 HIPRT_STATIC_ASSERT( sizeof( hiprtInt3 ) == 12 );

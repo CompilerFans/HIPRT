@@ -30,7 +30,7 @@
 // This part allows Orochi.h to be included by the device kernel code to compile, and use generic cuda** names.
 // TODO: make this list exhaustive by auto-generating it with Orochi Summoner.
 
-#include "../contrib/hipew/include/hipew.h"
+// #include "../contrib/hipew/include/hipew.h"
 
 // #define OROCHI_ENABLE_CUEW
 #define OROAPI HIPAPI

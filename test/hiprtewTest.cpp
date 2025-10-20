@@ -112,7 +112,6 @@ void hiprtewTest::SetUp()
 
 	checkOro( cuInit( 0 ) );
 	checkOro( cudaGetDevice( &m_cudaDevice ) );
-	checkOro( cuCtxCreate( &m_cudaCtx, 0, m_cudaDevice ) );
 
 	cudaDeviceProp props;
 	checkOro( cudaGetDeviceProperties( &props, m_cudaDevice ) );

@@ -298,50 +298,6 @@ TEST_F( ObjTestCases, RotateCornellBox )
 	deleteScene( m_scene );
 }
 
-TEST_F( ObjTestCases, BvhUpdateCornellBox )
-{
-	constexpr uint32_t Option	  = VisualizeColor;
-	constexpr uint32_t FrameCount = 7;
-	constexpr bool	   Timings	  = true;
-	const std::string  kernelName = "PrimaryRayKernel_" + std::to_string( Option );
-
-	hiprtFrameSRT transform;
-	transform.translation = { 0.0f, 0.0f, -3.0f };
-	transform.scale		  = { 1.0f, 1.0f, 1.0f };
-	Camera camera		  = createCamera<TestCasesType::TestCornellBox>();
-
-	float angle = 0.0f;
-	for ( uint32_t i = 0; i < FrameCount; i++, angle += 0.1 )
-	{
-		transform.rotation = { 0.0f, 1.0f, 0.0f, angle };
-		setupScene(
-			camera,
-			getRootDir() / "test/common/meshes/cornellbox/cornellBox.obj",
-			false,
-			transform,
-			hiprtBuildFlagBitPreferFastBuild,
-			Timings );
-		render( std::nullopt, getRootDir() / "test/kernels/PrimaryRayKernel.h", kernelName, std::nullopt, Timings );
-		deleteScene( m_scene );
-	}
-
-	transform.rotation = { 0.0f, 1.0f, 0.0f, angle };
-	setupScene(
-		camera,
-		getRootDir() / "test/common/meshes/cornellbox/cornellBox.obj",
-		false,
-		transform,
-		hiprtBuildFlagBitPreferFastBuild,
-		Timings );
-	render(
-		"BvhUpdateCornellBox.png",
-		getRootDir() / "test/kernels/PrimaryRayKernel.h",
-		kernelName,
-		"BvhUpdateCornellBox.png",
-		Timings );
-	deleteScene( m_scene );
-}
-
 TEST_F( ObjTestCases, BvhFastCornellBox )
 {
 	constexpr uint32_t Option	  = VisualizeColor;
@@ -381,29 +337,6 @@ TEST_F( ObjTestCases, BvhHighQCornellBox )
 		Timings );
 	render(
 		"BvhHighQCornellBox.png",
-		getRootDir() / "test/kernels/PrimaryRayKernel.h",
-		kernelName,
-		"PrimaryRayCornellBox.png",
-		Timings );
-	deleteScene( m_scene );
-}
-
-TEST_F( ObjTestCases, BvhBalancedCornellBox )
-{
-	constexpr uint32_t Option	  = VisualizeColor;
-	constexpr bool	   Timings	  = true;
-	const std::string  kernelName = "PrimaryRayKernel_" + std::to_string( Option );
-
-	Camera camera = createCamera<TestCasesType::TestCornellBox>();
-	setupScene(
-		camera,
-		getRootDir() / "test/common/meshes/cornellbox/cornellBox.obj",
-		false,
-		std::nullopt,
-		hiprtBuildFlagBitPreferBalancedBuild,
-		Timings );
-	render(
-		"BvhBalancedCornellBox.png",
 		getRootDir() / "test/kernels/PrimaryRayKernel.h",
 		kernelName,
 		"PrimaryRayCornellBox.png",
@@ -462,18 +395,6 @@ TEST_F( ObjTestCases, AoRayEmbreeCornellBox )
 	deleteScene( m_scene );
 }
 
-TEST_F( ObjTestCases, PrimaryRayCornellBox )
-{
-	constexpr uint32_t Option	  = VisualizeColor;
-	const std::string  kernelName = "PrimaryRayKernel_" + std::to_string( Option );
-
-	Camera camera = createCamera<TestCasesType::TestCornellBox>();
-	setupScene( camera, getRootDir() / "test/common/meshes/cornellbox/cornellBox.obj" );
-	render(
-		"PrimaryRayCornellBox.png", getRootDir() / "test/kernels/PrimaryRayKernel.h", kernelName, "PrimaryRayCornellBox.png" );
-	deleteScene( m_scene );
-}
-
 TEST_F( ObjTestCases, UvsCornellBox )
 {
 	constexpr uint32_t Option	  = VisualizeUv;
@@ -515,6 +436,85 @@ TEST_F( ObjTestCases, NormalsCornellBox )
 	Camera camera = createCamera<TestCasesType::TestCornellBox>();
 	setupScene( camera, getRootDir() / "test/common/meshes/cornellbox/cornellBox.obj" );
 	render( "NormalsCornellBox.png", getRootDir() / "test/kernels/PrimaryRayKernel.h", kernelName, "NormalsCornellBox.png" );
+	deleteScene( m_scene );
+}
+
+TEST_F( ObjTestCases, BvhUpdateCornellBox )
+{
+	constexpr uint32_t Option	  = VisualizeColor;
+	constexpr uint32_t FrameCount = 7;
+	constexpr bool	   Timings	  = true;
+	const std::string  kernelName = "PrimaryRayKernel_" + std::to_string( Option );
+
+	hiprtFrameSRT transform;
+	transform.translation = { 0.0f, 0.0f, -3.0f };
+	transform.scale		  = { 1.0f, 1.0f, 1.0f };
+	Camera camera		  = createCamera<TestCasesType::TestCornellBox>();
+
+	float angle = 0.0f;
+	for ( uint32_t i = 0; i < FrameCount; i++, angle += 0.1 )
+	{
+		transform.rotation = { 0.0f, 1.0f, 0.0f, angle };
+		setupScene(
+			camera,
+			getRootDir() / "test/common/meshes/cornellbox/cornellBox.obj",
+			false,
+			transform,
+			hiprtBuildFlagBitPreferFastBuild,
+			Timings );
+		render( std::nullopt, getRootDir() / "test/kernels/PrimaryRayKernel.h", kernelName, std::nullopt, Timings );
+		deleteScene( m_scene );
+	}
+
+	transform.rotation = { 0.0f, 1.0f, 0.0f, angle };
+	setupScene(
+		camera,
+		getRootDir() / "test/common/meshes/cornellbox/cornellBox.obj",
+		false,
+		transform,
+		hiprtBuildFlagBitPreferFastBuild,
+		Timings );
+	render(
+		"BvhUpdateCornellBox.png",
+		getRootDir() / "test/kernels/PrimaryRayKernel.h",
+		kernelName,
+		"BvhUpdateCornellBox.png",
+		Timings );
+	deleteScene( m_scene );
+}
+
+TEST_F( ObjTestCases, BvhBalancedCornellBox )
+{
+	constexpr uint32_t Option	  = VisualizeColor;
+	constexpr bool	   Timings	  = true;
+	const std::string  kernelName = "PrimaryRayKernel_" + std::to_string( Option );
+
+	Camera camera = createCamera<TestCasesType::TestCornellBox>();
+	setupScene(
+		camera,
+		getRootDir() / "test/common/meshes/cornellbox/cornellBox.obj",
+		false,
+		std::nullopt,
+		hiprtBuildFlagBitPreferBalancedBuild,
+		Timings );
+	render(
+		"BvhBalancedCornellBox.png",
+		getRootDir() / "test/kernels/PrimaryRayKernel.h",
+		kernelName,
+		"PrimaryRayCornellBox.png",
+		Timings );
+	deleteScene( m_scene );
+}
+
+TEST_F( ObjTestCases, PrimaryRayCornellBox )
+{
+	constexpr uint32_t Option	  = VisualizeColor;
+	const std::string  kernelName = "PrimaryRayKernel_" + std::to_string( Option );
+
+	Camera camera = createCamera<TestCasesType::TestCornellBox>();
+	setupScene( camera, getRootDir() / "test/common/meshes/cornellbox/cornellBox.obj" );
+	render(
+		"PrimaryRayCornellBox.png", getRootDir() / "test/kernels/PrimaryRayKernel.h", kernelName, "PrimaryRayCornellBox.png" );
 	deleteScene( m_scene );
 }
 
@@ -2652,70 +2652,6 @@ TEST_F( hiprtTest, Update )
 	checkHiprt( hiprtDestroyContext( ctxt ) );
 }
 
-TEST_F( hiprtTest, BatchConstruction )
-{
-	hiprtContext ctxt;
-	hiprtCreateContext( HIPRT_API_VERSION, m_ctxtInput, ctxt );
-
-	hiprtTriangleMeshPrimitive mesh;
-	mesh.triangleCount	= 2;
-	mesh.triangleStride = sizeof( uint3 );
-	malloc( reinterpret_cast<uint3*&>( mesh.triangleIndices ), mesh.triangleCount );
-	uint32_t idx[] = { 0, 1, 2, 3, 4, 5 };
-	copyHtoD( reinterpret_cast<uint3*>( mesh.triangleIndices ), reinterpret_cast<uint3*>( idx ), mesh.triangleCount );
-
-	mesh.vertexCount  = 6;
-	mesh.vertexStride = sizeof( float3 );
-	malloc( reinterpret_cast<float3*&>( mesh.vertices ), mesh.vertexCount );
-	float3 v[] = {
-		{ 0.0f, 0.0f, 0.0f },
-		{ 1.0f, 0.0f, 0.0f },
-		{ 0.5f, 1.0f, 0.0f },
-		{ 0.0f, 0.0f, 1.0f },
-		{ 1.0f, 0.0f, 1.0f },
-		{ 0.5f, 1.0f, 1.0f } };
-	copyHtoD( reinterpret_cast<float3*>( mesh.vertices ), v, mesh.vertexCount );
-
-	constexpr size_t GeomCount = 1000000;
-
-	std::vector<hiprtGeometryBuildInput> geomInputs( GeomCount );
-	for ( hiprtGeometryBuildInput& geomInput : geomInputs )
-	{
-		geomInput.type					 = hiprtPrimitiveTypeTriangleMesh;
-		geomInput.primitive.triangleMesh = mesh;
-		geomInput.geomType				 = 0;
-	}
-
-	hiprtBuildOptions options;
-	options.buildFlags			   = hiprtBuildFlagBitPreferFastBuild;
-	options.batchBuildMaxPrimCount = 64u;
-
-	hiprtDevicePtr tempGeomBuffer = nullptr;
-	size_t		   tempGeomSize;
-	checkHiprt( hiprtGetGeometriesBuildTemporaryBufferSize( ctxt, GeomCount, geomInputs.data(), options, tempGeomSize ) );
-	malloc( reinterpret_cast<uint8_t*&>( tempGeomBuffer ), tempGeomSize );
-
-	std::vector<hiprtGeometry>	geometries( GeomCount );
-	std::vector<hiprtGeometry*> geomAddrs( GeomCount );
-	for ( size_t i = 0; i < GeomCount; ++i )
-		geomAddrs[i] = &geometries[i];
-	checkHiprt( hiprtCreateGeometries( ctxt, GeomCount, geomInputs.data(), options, geomAddrs.data() ) );
-
-	std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-	checkHiprt( hiprtBuildGeometries(
-		ctxt, hiprtBuildOperationBuild, GeomCount, geomInputs.data(), options, tempGeomBuffer, 0, geometries.data() ) );
-	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-
-	std::chrono::nanoseconds bvhBuildTime = end - begin;
-	std::cout << "Bvh batch build time " << std::chrono::duration_cast<std::chrono::seconds>( bvhBuildTime ).count() << " s"
-			  << std::endl;
-
-	free( mesh.triangleIndices );
-	free( mesh.vertices );
-	free( tempGeomBuffer );
-	checkHiprt( hiprtDestroyGeometries( ctxt, GeomCount, geometries.data() ) );
-}
-
 TEST_F( hiprtTest, PlocFallback )
 {
 	hiprtContext ctxt;
@@ -2796,6 +2732,70 @@ TEST_F( hiprtTest, TraceKernel )
 	std::cout << "Trace kernel: registers " << numRegs << ", shared memory " << numSmem << std::endl;
 
 	checkHiprt( hiprtDestroyContext( ctxt ) );
+}
+
+TEST_F( hiprtTest, BatchConstruction )
+{
+	hiprtContext ctxt;
+	hiprtCreateContext( HIPRT_API_VERSION, m_ctxtInput, ctxt );
+
+	hiprtTriangleMeshPrimitive mesh;
+	mesh.triangleCount	= 2;
+	mesh.triangleStride = sizeof( uint3 );
+	malloc( reinterpret_cast<uint3*&>( mesh.triangleIndices ), mesh.triangleCount );
+	uint32_t idx[] = { 0, 1, 2, 3, 4, 5 };
+	copyHtoD( reinterpret_cast<uint3*>( mesh.triangleIndices ), reinterpret_cast<uint3*>( idx ), mesh.triangleCount );
+
+	mesh.vertexCount  = 6;
+	mesh.vertexStride = sizeof( float3 );
+	malloc( reinterpret_cast<float3*&>( mesh.vertices ), mesh.vertexCount );
+	float3 v[] = {
+		{ 0.0f, 0.0f, 0.0f },
+		{ 1.0f, 0.0f, 0.0f },
+		{ 0.5f, 1.0f, 0.0f },
+		{ 0.0f, 0.0f, 1.0f },
+		{ 1.0f, 0.0f, 1.0f },
+		{ 0.5f, 1.0f, 1.0f } };
+	copyHtoD( reinterpret_cast<float3*>( mesh.vertices ), v, mesh.vertexCount );
+
+	constexpr size_t GeomCount = 1000000;
+
+	std::vector<hiprtGeometryBuildInput> geomInputs( GeomCount );
+	for ( hiprtGeometryBuildInput& geomInput : geomInputs )
+	{
+		geomInput.type					 = hiprtPrimitiveTypeTriangleMesh;
+		geomInput.primitive.triangleMesh = mesh;
+		geomInput.geomType				 = 0;
+	}
+
+	hiprtBuildOptions options;
+	options.buildFlags			   = hiprtBuildFlagBitPreferFastBuild;
+	options.batchBuildMaxPrimCount = 64u;
+
+	hiprtDevicePtr tempGeomBuffer = nullptr;
+	size_t		   tempGeomSize;
+	checkHiprt( hiprtGetGeometriesBuildTemporaryBufferSize( ctxt, GeomCount, geomInputs.data(), options, tempGeomSize ) );
+	malloc( reinterpret_cast<uint8_t*&>( tempGeomBuffer ), tempGeomSize );
+
+	std::vector<hiprtGeometry>	geometries( GeomCount );
+	std::vector<hiprtGeometry*> geomAddrs( GeomCount );
+	for ( size_t i = 0; i < GeomCount; ++i )
+		geomAddrs[i] = &geometries[i];
+	checkHiprt( hiprtCreateGeometries( ctxt, GeomCount, geomInputs.data(), options, geomAddrs.data() ) );
+
+	std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+	checkHiprt( hiprtBuildGeometries(
+		ctxt, hiprtBuildOperationBuild, GeomCount, geomInputs.data(), options, tempGeomBuffer, 0, geometries.data() ) );
+	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+
+	std::chrono::nanoseconds bvhBuildTime = end - begin;
+	std::cout << "Bvh batch build time " << std::chrono::duration_cast<std::chrono::seconds>( bvhBuildTime ).count() << " s"
+			  << std::endl;
+
+	free( mesh.triangleIndices );
+	free( mesh.vertices );
+	free( tempGeomBuffer );
+	checkHiprt( hiprtDestroyGeometries( ctxt, GeomCount, geometries.data() ) );
 }
 
 int main( int argc, const char* argv[] )

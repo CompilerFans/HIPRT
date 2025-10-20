@@ -32,7 +32,7 @@ namespace hiprt
 void Kernel::launch(
 	uint32_t gx, uint32_t gy, uint32_t gz, uint32_t bx, uint32_t by, uint32_t bz, uint32_t sharedMemBytes, cudaStream_t stream )
 {
-	checkOro( cudaLaunchKernel( m_function, dim3(gx, gy, gz), dim3(bx, by, bz), m_argPtrs.data(), sharedMemBytes, stream) );
+	checkOro( cuLaunchKernel( m_function, gx, gy, gz, bx, by, bz, sharedMemBytes, stream, m_argPtrs.data(), 0 ) ); // cudaLaunchKernel( m_function, dim3(gx, gy, gz), dim3(bx, by, bz), m_argPtrs.data(), sharedMemBytes, stream) );
 }
 
 void Kernel::setArgs( std::vector<Argument> args )
@@ -62,7 +62,7 @@ void Kernel::setArgs( std::vector<Argument> args )
 void Kernel::launch( uint32_t nx, cudaStream_t stream, uint32_t sharedMemBytes )
 {
 	int tb, minNb;
-	checkOro( cuOccupancyMaxPotentialBlockSize( &minNb, &tb, m_function, 0, 0, 0 ) );
+	checkOro( cuOccupancyMaxPotentialBlockSize( &minNb, &tb, m_function, 0, 0, 0) ); // cudaOccupancyMaxPotentialBlockSize( &minNb, &tb, m_function, 0, 0) );
 	uint32_t nb = DivideRoundUp( nx, static_cast<uint32_t>( tb ) );
 	launch( nb, 1, 1, tb, 1, 1, sharedMemBytes, stream );
 }
@@ -77,14 +77,14 @@ void Kernel::launch( uint32_t nx, uint32_t tx, cudaStream_t stream, uint32_t sha
 uint32_t Kernel::getNumSmem()
 {
 	int numSmem;
-	// checkOro( cudaFuncGetAttribute( &numSmem, CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES, m_function ) );
+	checkOro( cuFuncGetAttribute( &numSmem, CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES, m_function ) );
 	return numSmem;
 }
 
 uint32_t Kernel::getNumRegs()
 {
 	int numRegs;
-	// checkOro( cudaFuncGetAttribute( &numRegs, CU_FUNC_ATTRIBUTE_NUM_REGS, m_function ) );
+	checkOro( cuFuncGetAttribute( &numRegs, CU_FUNC_ATTRIBUTE_NUM_REGS, m_function ) );
 	return numRegs;
 }
 } // namespace hiprt
