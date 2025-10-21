@@ -79,27 +79,29 @@ Compiler::Compiler()
 
 		// We'll assume it's supported, and Context::getRtip is supposed to make extra checks to be sure it's actually
 		// supported.
+		printf("============== run in hiprt ========== \n");
 		m_rtip31Support = true;
 	}
-	else
-	{
-		// check the RTIP 3.1 support of the RTC
+	// else
+	// {
+	// 	// check the RTIP 3.1 support of the RTC
 
-		const std::string src =
-			"__global__ void rtcTest() { __builtin_amdgcn_image_bvh8_intersect_ray(0, 0.0f, 0xff, { 0.0f, 0.0f, 0.0f "
-			"}, { 1.0f, 0.0f, 0.0f }, 0, { 0, 0, 0, 0 }, nullptr, nullptr ); }";
+	// 	const std::string src =
+	// 		"__global__ void rtcTest() { __builtin_amdgcn_image_bvh8_intersect_ray(0, 0.0f, 0xff, { 0.0f, 0.0f, 0.0f "
+	// 		"}, { 1.0f, 0.0f, 0.0f }, 0, { 0, 0, 0, 0 }, nullptr, nullptr ); }";
 
-		nvrtcProgram prog;
-		checkOrortc( nvrtcCreateProgram( &prog, src.c_str(), "", 0, nullptr, nullptr ) );
+	// 	printf("==============run in AMD========== \n");
+	// 	nvrtcProgram prog;
+	// 	checkOrortc( nvrtcCreateProgram( &prog, src.c_str(), "", 0, nullptr, nullptr ) );
 
-		m_rtip31Support = false;
+	// 	m_rtip31Support = false;
 
-		if ( nvrtcCompileProgram( prog, 0, nullptr ) == NVRTC_SUCCESS )
-		{
-			m_rtip31Support = true;
-			checkOrortc( nvrtcDestroyProgram( &prog ) );
-		}
-	}
+	// 	if ( nvrtcCompileProgram( prog, 0, nullptr ) == NVRTC_SUCCESS )
+	// 	{
+	// 		m_rtip31Support = true;
+	// 		checkOrortc( nvrtcDestroyProgram( &prog ) );
+	// 	}
+	// }
 }
 
 Compiler::~Compiler()
