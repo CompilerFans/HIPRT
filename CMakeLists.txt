@@ -75,6 +75,7 @@ function(write_version_info in_file header_file version_file version_str_out)
 	string(REPLACE "@HIPRT_HASH_VERSION@" "${hash}" header_content "${header_content}")
 	string(REPLACE "@HIPRT_VERSION_STR@" "\"${version_str}\"" header_content "${header_content}")
 	string(REPLACE "@HIPRT_API_VERSION@" "${HIPRT_VERSION}" header_content "${header_content}")
+	string(REPLACE "@HIP_VERSION_STR@" "\"${CUDAToolkit_VERSION_MAJOR}.${CUDAToolkit_VERSION_MINOR}\"" header_content "${header_content}")
 
 	file(WRITE ${header_file} "${header_content}")
 	set(${version_str_out} ${version_str} PARENT_SCOPE)
@@ -103,6 +104,7 @@ endif()
 
 set(version_str_ "UNDEF")
 write_version_info("${CMAKE_CURRENT_SOURCE_DIR}/hiprt/hiprt.h.in" "${CMAKE_CURRENT_SOURCE_DIR}/hiprt/hiprt.h" "${CMAKE_CURRENT_SOURCE_DIR}/version.txt" version_str_)
+write_version_info("${CMAKE_CURRENT_SOURCE_DIR}/hiprt/hiprtew.h.in" "${CMAKE_CURRENT_SOURCE_DIR}/hiprt/hiprtew.h" "${CMAKE_CURRENT_SOURCE_DIR}/version.txt" version_str_)
 
 set(HIPRT_NAME "hiprt${version_str_}")
 

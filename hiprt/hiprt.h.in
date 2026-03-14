@@ -31,6 +31,7 @@
 
 #define HIPRT_API_VERSION @HIPRT_API_VERSION@
 #define HIPRT_VERSION_STR @HIPRT_VERSION_STR@
+#define HIP_VERSION_STR @HIP_VERSION_STR@
 
 #include <hiprt/hiprt_types.h>
 #include <stddef.h>
@@ -559,6 +560,24 @@ HIPRT_API hiprtError hiprtBuildTraceKernels(
 	hiprtFuncNameSet* funcNameSets,
 	hiprtApiFunction* functionsOut,
 	hiprtApiModule*	  moduleOut,
+	bool			  cache );
+
+/** \brief Legacy precompiled-kernel entry kept for source compatibility.
+ *
+ * The CUDA-only backend does not support the historical bitcode workflow and
+ * returns `hiprtErrorNotImplemented`.
+ */
+HIPRT_API hiprtError hiprtBuildTraceKernelsFromBitcode(
+	hiprtContext	  context,
+	uint32_t		  numFunctions,
+	const char**	  funcNames,
+	const char*		  moduleName,
+	const char*		  bitcodeBinary,
+	size_t			  bitcodeBinarySize,
+	uint32_t		  numGeomTypes,
+	uint32_t		  numRayTypes,
+	hiprtFuncNameSet* funcNameSets,
+	hiprtApiFunction* functionsOut,
 	bool			  cache );
 
 /** \brief Setting log level.

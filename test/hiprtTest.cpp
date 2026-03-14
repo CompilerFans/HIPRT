@@ -153,7 +153,7 @@ void hiprtTest::SetUp()
 	std::cout << "m_cudaDevice on '" << m_cudaDevice << "'" << std::endl;
 
 	if ( std::string( props.name ).find( "NVIDIA" ) != std::string::npos )
-		m_ctxtInput.deviceType = hiprtDeviceCUDA;
+		m_ctxtInput.deviceType = hiprtDeviceNVIDIA;
 	m_ctxtInput.device = cudaGetDevice( &m_cudaDevice );
 }
 

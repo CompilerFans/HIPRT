@@ -40,11 +40,11 @@ typedef uint32_t		 hiprtLogLevel;
 typedef uint32_t		 hiprtBuildFlags;
 typedef uint32_t		 hiprtRayMask;
 
-typedef int	  hiprtApiDevice;	// CUDA device ordinal
-typedef void* hiprtApiCtx;		// CUcontext
-typedef void* hiprtApiStream;	// cudaStream_t
-typedef void* hiprtApiFunction; // CUfunction
-typedef void* hiprtApiModule;	// CUmodule
+typedef int	  hiprtApiDevice;	// Legacy API device handle, mapped to a CUDA device ordinal.
+typedef void* hiprtApiCtx;		// Legacy API context handle, mapped to CUcontext.
+typedef void* hiprtApiStream;	// Legacy API stream handle, mapped to cudaStream_t.
+typedef void* hiprtApiFunction; // Legacy API function handle, mapped to CUfunction.
+typedef void* hiprtApiModule;	// Legacy API module handle, mapped to CUmodule.
 
 /** \brief Ray traversal type.
  *
@@ -311,10 +311,12 @@ struct hiprtFuncNameSet
  */
 enum hiprtDeviceType
 {
-	/*!< CUDA device */
-	hiprtDeviceCUDA,
-	/*!< Backward-compatible alias */
-	hiprtDeviceNVIDIA = hiprtDeviceCUDA,
+	/*!< Legacy AMD entry kept for source compatibility. */
+	hiprtDeviceAMD,
+	/*!< NVIDIA / CUDA backend. */
+	hiprtDeviceNVIDIA,
+	/*!< Optional CUDA alias. */
+	hiprtDeviceCUDA = hiprtDeviceNVIDIA,
 };
 
 /** \brief Context creation input.

@@ -697,6 +697,33 @@ hiprtError hiprtBuildTraceKernels(
 	return hiprtSuccess;
 }
 
+hiprtError hiprtBuildTraceKernelsFromBitcode(
+	hiprtContext	  context,
+	uint32_t		  numFunctions,
+	const char**	  functionNames,
+	const char*		  moduleName,
+	const char*		  bitcodeBinary,
+	size_t			  bitcodeBinarySize,
+	uint32_t		  numGeomTypes,
+	uint32_t		  numRayTypes,
+	hiprtFuncNameSet* functionNameSets,
+	hiprtApiFunction* functionsOut,
+	bool			  cache )
+{
+	(void)context;
+	(void)numFunctions;
+	(void)functionNames;
+	(void)moduleName;
+	(void)bitcodeBinary;
+	(void)bitcodeBinarySize;
+	(void)numGeomTypes;
+	(void)numRayTypes;
+	(void)functionNameSets;
+	(void)functionsOut;
+	(void)cache;
+	return hiprtErrorNotImplemented;
+}
+
 hiprtError hiprtSetCacheDirPath( hiprtContext context, const char* path )
 {
 	if ( !context ) return hiprtErrorInvalidParameter;
