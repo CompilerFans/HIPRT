@@ -24,11 +24,7 @@
 
 #pragma once
 #include <algorithm>
-#if defined( USE_HIPRTEW )
-#include <hiprt/hiprtew.h>
-#else
 #include <hiprt/hiprt.h>
-#endif
 #include <queue>
 #include <cfloat>
 

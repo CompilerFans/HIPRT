@@ -37,7 +37,6 @@
 #include <chrono>
 #include <thread>
 #include <algorithm>
-#include <hiprt/hiprt_libpath.h>
 
 CmdArguments g_parsedArgs;
 
@@ -131,8 +130,6 @@ struct GeometryData
 
 void hiprtTest::SetUp()
 {
-	// cudaInitialize( (cudaApi)( ORO_API_HIP | ORO_API_CUDA ), 0, g_hip_paths, g_hiprtc_paths );
-
 	checkOro( cuInit( 0 ) );
 	cudaError deviceGetError = cudaGetDevice( &m_cudaDevice);
 	if ( deviceGetError != cudaSuccess )
@@ -673,207 +670,6 @@ bool hiprtTest::readSourceCode(
 	return true;
 }
 
-hiprtError hiprtTest::buildTraceKernelsFromBitcode(
-	hiprtContext								 ctxt,
-	const std::filesystem::path&				 srcPath,
-	std::vector<const char*>					 functionNames,
-	std::vector<hiprtApiFunction>&				 functionsOut,
-	std::optional<std::vector<const char*>>		 opts,
-	std::optional<std::vector<hiprtFuncNameSet>> funcNameSets,
-	uint32_t									 numGeomTypes,
-	uint32_t									 numRayTypes )
-{
-	std::vector<const char*>		   options;
-	std::vector<std::filesystem::path> includeNamesData;
-	std::string						   sourceCode;
-
-	if ( !readSourceCode( srcPath, sourceCode, includeNamesData ) )
-	{
-		std::cerr << "Unable to open '" << srcPath << "'" << std::endl;
-		return hiprtErrorInternal;
-	}
-
-	std::vector<std::string> headersData( includeNamesData.size() );
-	std::vector<const char*> headers;
-	std::vector<const char*> includeNames;
-	for ( size_t i = 0; i < includeNamesData.size(); i++ )
-	{
-		if ( !readSourceCode( getRootDir() / includeNamesData[i], headersData[i] ) )
-		{
-			std::cerr << "Unable to find header '" << includeNamesData[i] << "' at " << getRootDir() << "/" << std::endl;
-			return hiprtErrorInternal;
-		}
-		includeNames.push_back( includeNamesData[i].string().c_str() );
-		headers.push_back( headersData[i].c_str() );
-	}
-
-	if ( opts )
-	{
-		for ( const auto o : *opts )
-		{
-			options.push_back( o );
-		}
-	}
-
-	const bool isAmd = false; // cudaGetCurAPI( 0 ) == ORO_API_HIP;
-	if ( isAmd )
-	{
-		options.push_back( "-fgpu-rdc" );
-		options.push_back( "-Xclang" );
-		options.push_back( "-disable-llvm-passes" );
-		options.push_back( "-Xclang" );
-		options.push_back( "-mno-constructor-aliases" );
-		options.push_back( "-ffast-math" );
-	}
-	else
-	{
-		options.push_back( "--device-c" );
-		options.push_back( "--use_fast_math" );
-	}
-	options.push_back( "-std=c++17" );
-
-	std::string includePath = "-I" + getRootDir().string();
-	options.push_back( includePath.c_str() );
-
-	nvrtcProgram prog;
-	checkOrortc( nvrtcCreateProgram(
-		&prog,
-		sourceCode.data(),
-		srcPath.string().c_str(),
-		static_cast<int>( headers.size() ),
-		headers.data(),
-		includeNames.data() ) );
-
-	for ( auto functionName : functionNames )
-	{
-		checkOrortc( nvrtcAddNameExpression( prog, functionName ) );
-	}
-	nvrtcResult e = nvrtcCompileProgram( prog, static_cast<int>( options.size() ), options.data() );
-
-	if ( e != NVRTC_SUCCESS )
-	{
-		size_t logSize = 0;
-		checkOrortc( nvrtcGetProgramLogSize( prog, &logSize ) );
-
-		std::cerr << "Error while compiling :" << srcPath << " - Compile log:" << std::endl;
-		if ( logSize )
-		{
-			std::string log( logSize, '\0' );
-			checkOrortc( nvrtcGetProgramLog( prog, &log[0] ) );
-			std::cerr << log << std::endl;
-		}
-		else
-		{
-			std::cerr << "Empty Log" << std::endl;
-		}
-		return hiprtErrorInternal;
-	}
-
-	std::string bitcodeBinary;
-	size_t		size = 0;
-
-		checkOrortc( nvrtcGetPTXSize( prog, &size ) );
-	bitcodeBinary.resize( size );
-
-		checkOrortc( nvrtcGetPTX( prog, bitcodeBinary.data() ) );
-
-	functionsOut.resize( functionNames.size() );
-	hiprtError error = hiprtBuildTraceKernelsFromBitcode(
-		ctxt,
-		static_cast<uint32_t>( functionNames.size() ),
-		functionNames.data(),
-		srcPath.string().c_str(),
-		bitcodeBinary.data(),
-		size,
-		numGeomTypes,
-		numRayTypes,
-		funcNameSets ? funcNameSets.value().data() : nullptr,
-		functionsOut.data(),
-		true );
-
-	return error;
-}
-
-hiprtError hiprtTest::buildTraceKernelFromBitcode(
-	hiprtContext								 ctxt,
-	const std::filesystem::path&				 srcPath,
-	const std::string&							 functionName,
-	cudaFunction_t&								 functionOut,
-	std::optional<std::vector<const char*>>		 opts,
-	std::optional<std::vector<hiprtFuncNameSet>> funcNameSets,
-	uint32_t									 numGeomTypes,
-	uint32_t									 numRayTypes )
-{
-	bool						  usePrecompiledBitcode = g_parsedArgs.m_usePrecompiledBitcodes;
-	std::vector<hiprtApiFunction> functions;
-	hiprtError					  e = hiprtSuccess;
-
-	std::vector<const char*> options;
-	if ( opts ) options = *opts;
-
-	std::string bitcodeLinkingDef = "-DHIPRT_BITCODE_LINKING";
-	options.push_back( bitcodeLinkingDef.c_str() );
-
-	if ( !usePrecompiledBitcode )
-	{
-		e = buildTraceKernelsFromBitcode(
-			ctxt, srcPath, { functionName.c_str() }, functions, options, funcNameSets, numGeomTypes, numRayTypes );
-		ASSERT( functions.size() == 1 );
-		functionOut = *reinterpret_cast<cudaFunction_t*>( &functions.back() );
-	}
-	else
-	{
-		const bool isAmd = false; // cudaGetCurAPI( 0 ) == ORO_API_HIP;
-		HIPRT_ASSERT( isAmd == true ); // precompiled path supported only on AMD
-
-		auto loadFile = []( const std::filesystem::path& path, std::vector<uint8_t>& dst ) {
-			std::fstream f( path, std::ios::binary | std::ios::in );
-			if ( f.is_open() )
-			{
-				size_t sizeFile;
-				f.seekg( 0, std::fstream::end );
-				size_t size = sizeFile = static_cast<size_t>( f.tellg() );
-				dst.resize( size );
-				f.seekg( 0, std::fstream::beg );
-				f.read( reinterpret_cast<char*>( dst.data() ), size );
-				f.close();
-			}
-			else
-			{
-				std::cout << "FAILED to open file: " << path.string().c_str() << std::endl;
-			}
-		};
-
-		std::filesystem::path path = ( getRootDir() / "dist/bin" /
-#ifdef _DEBUG
-									   "Debug"
-#else
-									   "Release"
-#endif
-									   / "hiprt" )
-										 .string() +
-									 HIPRT_VERSION_STR + "_" + HIP_VERSION_STR + "_";
-#if !defined( __GNUC__ )
-		path += "precompiled_bitcode_win.hipfb";
-#else
-		path += "precompiled_bitcode_linux.hipfb";
-#endif
-		std::vector<uint8_t> binary;
-		loadFile( path, binary );
-
-		CUmodule module;
-		CUresult  res = cuModuleLoadData( &module, binary.data() );
-		if ( res != CUDA_SUCCESS )
-		{
-			// add some verbose to help debugging missing file.
-			std::cout << "cuModuleLoadData FAILED (error=" << res << ") loading file: " << path.string().c_str() << std::endl;
-		}
-		checkOro( res );
-		checkOro( cuModuleGetFunction( &functionOut, module, functionName.c_str() ) );
-	}
-	return e;
-}
-
 hiprtError hiprtTest::buildTraceKernels(
 	hiprtContext								 ctxt,
 	const std::filesystem::path&				 srcPath,
@@ -891,11 +687,7 @@ hiprtError hiprtTest::buildTraceKernels(
 	std::vector<const char*> options;
 	if ( opts ) options = *opts;
 
-	const bool isAmd = false; // cudaGetCurAPI( 0 ) == ORO_API_HIP;
-	if ( isAmd )
-		options.push_back( "-ffast-math" );
-	else
-		options.push_back( "--use_fast_math" );
+	options.push_back( "--use_fast_math" );
 
 	std::vector<std::string> headersData( includeNamesData.size() );
 	std::vector<const char*> headers;
@@ -1542,18 +1334,11 @@ void ObjTestCases::render(
 		hiprtFuncDataSet funcDataSet;
 		checkHiprt( hiprtCreateFuncTable( m_scene.m_ctx, 1, 1, funcTable ) );
 		checkHiprt( hiprtSetFuncTable( m_scene.m_ctx, funcTable, 0, 0, funcDataSet ) );
-		if constexpr ( UseBitcode )
-			buildTraceKernelFromBitcode( m_scene.m_ctx, kernelPath, funcName, func, opts, funcNameSets, 1, 1 );
-		else
-			buildTraceKernel( m_scene.m_ctx, kernelPath, funcName, func, opts, funcNameSets, 1, 1 );
+		buildTraceKernel( m_scene.m_ctx, kernelPath, funcName, func, opts, funcNameSets, 1, 1 );
 	}
 	else
 	{
-		if constexpr ( UseBitcode )
-			buildTraceKernelFromBitcode( m_scene.m_ctx, kernelPath, funcName, func, opts );
-
-		else
-			buildTraceKernel( m_scene.m_ctx, kernelPath, funcName, func, opts );
+		buildTraceKernel( m_scene.m_ctx, kernelPath, funcName, func, opts );
 	}
 
 	uint2 res	 = { g_parsedArgs.m_ww, g_parsedArgs.m_wh };

@@ -23,19 +23,22 @@
 //////////////////////////////////////////////////////////////////////////////////////////
 
 #pragma once
+
+#include <filesystem>
+#include <mutex>
+#include <optional>
+
 #include <hiprt/hiprt_types.h>
 #include <hiprt/impl/Kernel.h>
-#include <filesystem>
-#include <optional>
-#include <mutex>
 
 namespace hiprt
 {
 class Context;
+
 class Compiler
 {
   public:
-	Compiler();
+	Compiler() = default;
 	~Compiler();
 
 	Kernel getKernel(
@@ -72,29 +75,15 @@ class Compiler
 		bool								 extended,
 		bool								 cache );
 
-	void buildKernelsFromBitcode(
-		Context&							 context,
-		const std::vector<const char*>&		 funcNames,
-		const std::filesystem::path&		 moduleName,
-		const std::string_view				 bitcodeBinary,
-		uint32_t							 numGeomTypes,
-		uint32_t							 numRayTypes,
-		const std::vector<hiprtFuncNameSet>& funcNameSets,
-		std::vector<CUfunction>&			 functions,
-		bool								 cache );
-
 	void setCacheDir( const std::filesystem::path& path );
 
-	bool isRtip31Supported() const { return m_rtip31Support; }
+	bool isRtip31Supported() const { return false; }
 
 	static std::string kernelNameSufix( const std::string& traits );
 
   private:
 	static std::string readSourceCode(
 		const std::filesystem::path& path, std::optional<std::vector<std::filesystem::path>> includes = std::nullopt );
-
-	static std::filesystem::path getBitcodePath( bool amd );
-	static std::filesystem::path getFatbinPath( bool amd );
 
 	static bool isCachedFileUpToDate( const std::filesystem::path& cachedFile, const std::filesystem::path& moduleName );
 
@@ -115,18 +104,10 @@ class Compiler
 		uint32_t									 numGeomTypes = 0,
 		uint32_t									 numRayTypes  = 1 );
 
-	std::string loadCacheFileToBinary( const std::string& cacheName, const std::string& deviceName );
-
-	void cacheBinaryToFile( const std::string& binary, const std::string& cacheName, const std::string& deviceName );
-
-	CUfunction getFunctionFromPrecompiledBinary( const std::string& funcName );
-
-	std::string buildFunctionTableBitcode(
-		Context& context, uint32_t numGeomTypes, uint32_t numRayTypes, const std::vector<hiprtFuncNameSet>& funcNameSets );
+	std::string loadCacheFileToBinary( const std::string& cacheName );
+	void		cacheBinaryToFile( const std::string& binary, const std::string& cacheName );
 
 	std::filesystem::path m_cacheDirectory = "cache";
-
-	bool m_rtip31Support = false;
 
 	std::string m_rtipStr;
 
@@ -135,8 +116,5 @@ class Compiler
 
 	std::mutex						 m_moduleMutex;
 	std::map<std::string, CUmodule> m_moduleCache;
-
-	std::mutex						   m_binMutex;
-	std::map<std::string, std::string> m_binCache;
 };
 } // namespace hiprt

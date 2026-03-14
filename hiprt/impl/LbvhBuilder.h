@@ -170,7 +170,7 @@ void LbvhBuilder::build(
 
 	uint32_t* updateCounters = reinterpret_cast<uint32_t*>( boxNodes ) + 2 * primitives.getCount();
 
-	RadixSort sort( context.getDevice(), stream, context.getOrochiUtils() );
+	RadixSort sort( context.getDevice() );
 	Timer	  timer;
 
 	Compiler&				 compiler = context.getCompiler();

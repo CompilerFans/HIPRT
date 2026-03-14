@@ -24,11 +24,11 @@
 
 #pragma once
 
-#if ( defined( __CUDACC__ ) || defined( __HIPCC__ ) )
+#if defined( __CUDACC__ )
 #define __KERNELCC__
 #endif
 
-#if ( defined( __CUDACC_RTC__ ) || defined( __HIPCC_RTC__ ) )
+#if defined( __CUDACC_RTC__ )
 #define __KERNELCC_RTC__
 #endif
 #include <cuda_runtime_api.h>
@@ -44,8 +44,12 @@
 #include <fstream>
 #include <iostream>
 #include <type_traits>
+#ifndef __host__
 #define __host__
+#endif
+#ifndef __device__
 #define __device__
+#endif
 #endif
 
 #if !defined( __KERNELCC_RTC__ )
@@ -87,22 +91,9 @@
 #define HIPRT_DEVICE __device__
 #define HIPRT_HOST_DEVICE __host__ __device__
 
-#if defined( HIPRT_BAKE_KERNEL_GENERATED )
-#define GET_ARGS( X ) ( hip::X##Args )
-#define GET_INC( X ) ( hip::X##Includes )
-#else
-#define GET_ARGS( X ) static_cast<const char**>( nullptr )
-#define GET_INC( X ) static_cast<const char**>( nullptr )
-#endif
-
-#if defined( HIPRT_LOAD_FROM_STRING )
-#define GET_ARG_LIST( X ) sizeof( GET_ARGS( X ) ) / sizeof( void* ), GET_ARGS( X ), GET_INC( X )
-#else
 #define GET_ARG_LIST( X ) 0, 0, 0
-#endif
 
 #if defined( __KERNELCC_RTC__ )
-#if defined( __CUDACC_RTC__ ) || HIP_VERSION_MAJOR < 7
 using int8_t   = char;
 using uint8_t  = unsigned char;
 using int16_t  = short;
@@ -111,16 +102,6 @@ using int32_t  = int;
 using uint32_t = unsigned int;
 using int64_t  = long long;
 using uint64_t = unsigned long long;
-#else
-using int8_t					   = __hip_internal::int8_t;
-using uint8_t					   = __hip_internal::uint8_t;
-using int16_t					   = __hip_internal::int16_t;
-using uint16_t					   = __hip_internal::uint16_t;
-using int32_t					   = __hip_internal::int32_t;
-using uint32_t					   = __hip_internal::uint32_t;
-using int64_t					   = __hip_internal::int64_t;
-using uint64_t					   = __hip_internal::uint64_t;
-#endif
 #endif
 
 HIPRT_STATIC_ASSERT( sizeof( int8_t ) == 1 );
@@ -181,31 +162,10 @@ constexpr uint32_t InstanceIDBits			 = 24u;
 
 #ifdef __KERNELCC__
 #ifndef HIPRT_RTIP
-#if __gfx1200__ || __gfx1201__
-// to enable full hardware support, we need either the Rocm 6.4+ on Windows, or the Rocm 7+ on Linux
-#if ( HIP_VERSION_MAJOR >= 7 ) || \
-	( defined( HIPCC_OS_WINDOWS ) && ( ( HIP_VERSION_MAJOR > 6 ) || ( HIP_VERSION_MAJOR == 6 && HIP_VERSION_MINOR >= 4 ) ) )
-#define HIPRT_RTIP 31
-#else
-#define HIPRT_RTIP 20
-#warning \
-	"HW supports RTIP 3.1 but the compiler is of an older version; build with ROCm 6.4+ (Win) or 7.0+ (Linux) to fully utilize HW ray tracing features"
-#endif
-#elif __gfx1100__ || __gfx1101__ || __gfx1102__ || __gfx1103__ || __gfx1150__ || __gfx1151__ || __gfx1152__ || __gfx1153__
-#define HIPRT_RTIP 20
-#elif __gfx1030__ || __gfx1031__ || __gfx1032__ || __gfx1033__ || __gfx1034__ || __gfx1035__ || __gfx1036__
-#define HIPRT_RTIP 11
-#else
 #define HIPRT_RTIP 0
 #endif
-#endif
 
-#if __gfx900__ || __gfx902__ || __gfx904__ || __gfx906__ || __gfx908__ || __gfx909__ || __gfx90a__ || __gfx90c__ || \
-	__gfx940__ || __gfx941__ || __gfx942__
-constexpr uint32_t WarpSize = 64;
-#else
-constexpr uint32_t WarpSize		   = 32;
-#endif
+constexpr uint32_t WarpSize = 32;
 
 constexpr uint32_t Rtip = HIPRT_RTIP;
 
@@ -218,7 +178,7 @@ constexpr uint32_t BranchingFactor = 4;
 
 HIPRT_HOST_DEVICE HIPRT_INLINE float as_float( uint32_t value )
 {
-#if defined( __KERNELCC__ )
+#if defined( __CUDA_ARCH__ )
 	return __uint_as_float( value );
 #else
 	return *reinterpret_cast<float*>( &value );
@@ -227,7 +187,7 @@ HIPRT_HOST_DEVICE HIPRT_INLINE float as_float( uint32_t value )
 
 HIPRT_HOST_DEVICE HIPRT_INLINE int as_int( float value )
 {
-#if defined( __KERNELCC__ )
+#if defined( __CUDA_ARCH__ )
 	return __float_as_int( value );
 #else
 	return *reinterpret_cast<int*>( &value );
@@ -236,7 +196,7 @@ HIPRT_HOST_DEVICE HIPRT_INLINE int as_int( float value )
 
 HIPRT_HOST_DEVICE HIPRT_INLINE uint32_t as_uint( float value )
 {
-#if defined( __KERNELCC__ )
+#if defined( __CUDA_ARCH__ )
 	return __float_as_uint( value );
 #else
 	return *reinterpret_cast<uint32_t*>( &value );
@@ -245,7 +205,7 @@ HIPRT_HOST_DEVICE HIPRT_INLINE uint32_t as_uint( float value )
 
 HIPRT_HOST_DEVICE HIPRT_INLINE uint32_t clz( uint32_t value )
 {
-#if defined( __KERNELCC__ )
+#if defined( __CUDA_ARCH__ )
 	return __clz( value );
 #else
 	uint32_t count = 0;
@@ -341,7 +301,6 @@ constexpr HIPRT_HOST_DEVICE T Log2( T n )
 	return n <= 1 ? 0 : 1 + Log2( ( n + 1 ) / 2 );
 }
 
-#if !defined( __KERNELCC_RTC__ ) || defined( __CUDACC_RTC__ ) || HIP_VERSION_MAJOR < 7
 template <class T, class U>
 struct is_same
 {
@@ -371,12 +330,6 @@ struct conditional<false, T, F>
 {
 	using type = F;
 };
-#else
-template <class T, class U>
-using is_same = __hip_internal::is_same<T, U>;
-template <bool B, class T, class F>
-using conditional = __hip_internal::conditional<B, T, F>;
-#endif
 
 template <class T>
 struct remove_reference

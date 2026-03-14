@@ -173,7 +173,7 @@ void PlocBuilder::build(
 	mortonCodeValues[0] = reinterpret_cast<uint32_t*>( boxNodes ) + 2 * primitives.getCount();
 	mortonCodeValues[1] = reinterpret_cast<uint32_t*>( boxNodes ) + 3 * primitives.getCount();
 
-	RadixSort sort( context.getDevice(), stream, context.getOrochiUtils() );
+	RadixSort sort( context.getDevice() );
 	Timer	  timer;
 
 	Compiler&				 compiler = context.getCompiler();

@@ -520,11 +520,10 @@ TEST_F( ObjTestCases, PrimaryRayCornellBox )
 
 TEST_F( hiprtTest, CudaEnabled )
 {
-// this unit test is just to inform if CUEW is disabled.
-// if it fails, this means that you should install the CUDA SDK, add its include path to this project, and enable
-// OROCHI_ENABLE_CUEW. ( if the CUDA SDK is installed, the premake script should automatically enable CUEW )
-#ifndef OROCHI_ENABLE_CUEW
-	printf( "This build may not be able to run on NVIDIA.\n" );
+// This build now targets CUDA directly, so the only hard requirement is that the
+// CUDA toolkit include path is injected for runtime NVRTC compilation.
+#ifndef HIPRT_CUDA_INCLUDE_DIR
+	printf( "This build is missing the CUDA toolkit include path.\n" );
 	ASSERT_TRUE( false );
 #endif
 }
@@ -574,16 +573,8 @@ TEST_F( hiprtTest, MinimumCornellBox )
 	std::vector<hiprtFuncNameSet> funcNameSets = { funcName_unused, funcName_unused, funcNameSet };
 
 	cudaFunction_t func;
-	if constexpr ( UseBitcode )
-	{
-		buildTraceKernelFromBitcode(
+	buildTraceKernel(
 			ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "CornellBoxKernel", func, std::nullopt, funcNameSets, 3, 1 );
-	}
-	else
-	{
-		buildTraceKernel(
-			ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "CornellBoxKernel", func, std::nullopt, funcNameSets, 3, 1 );
-	}
 
 	hiprtFuncDataSet funcDataSet;
 	hiprtFuncTable	 funcTable;
@@ -664,16 +655,8 @@ TEST_F( hiprtTest, Compaction )
 	std::vector<hiprtFuncNameSet> funcNameSets = { funcName_unused, funcName_unused, funcNameSet };
 
 	cudaFunction_t func;
-	if constexpr ( UseBitcode )
-	{
-		buildTraceKernelFromBitcode(
+	buildTraceKernel(
 			ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "CornellBoxKernel", func, std::nullopt, funcNameSets, 3, 1 );
-	}
-	else
-	{
-		buildTraceKernel(
-			ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "CornellBoxKernel", func, std::nullopt, funcNameSets, 3, 1 );
-	}
 
 	hiprtFuncDataSet funcDataSet;
 	hiprtFuncTable	 funcTable;
@@ -750,16 +733,8 @@ TEST_F( hiprtTest, BatchCornellBox )
 	std::vector<hiprtFuncNameSet> funcNameSets = { funcNameSet };
 
 	cudaFunction_t func;
-	if constexpr ( UseBitcode )
-	{
-		buildTraceKernelFromBitcode(
+	buildTraceKernel(
 			ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "CornellBoxKernel", func, std::nullopt, funcNameSets, 1, 1 );
-	}
-	else
-	{
-		buildTraceKernel(
-			ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "CornellBoxKernel", func, std::nullopt, funcNameSets, 1, 1 );
-	}
 
 	hiprtFuncDataSet funcDataSet;
 	hiprtFuncTable	 funcTable;
@@ -884,11 +859,7 @@ TEST_F( hiprtTest, CustomBvhImport )
 
 	cudaFunction_t func;
 
-	if constexpr ( UseBitcode )
-		buildTraceKernelFromBitcode(
-			ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "CornellBoxKernel", func, std::nullopt, funcNameSets, 1, 1 );
-	else
-		buildTraceKernel(
+	buildTraceKernel(
 			ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "CornellBoxKernel", func, std::nullopt, funcNameSets, 1, 1 );
 
 	hiprtFuncDataSet funcDataSet;
@@ -978,11 +949,7 @@ TEST_F( hiprtTest, BvhIoApi )
 	funcNameSet.filterFuncName				   = "duplicityFilter";
 	std::vector<hiprtFuncNameSet> funcNameSets = { funcNameSet };
 
-	if constexpr ( UseBitcode )
-		buildTraceKernelFromBitcode(
-			ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "CornellBoxKernel", func, std::nullopt, funcNameSets, 1, 1 );
-	else
-		buildTraceKernel(
+	buildTraceKernel(
 			ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "CornellBoxKernel", func, std::nullopt, funcNameSets, 1, 1 );
 
 	uint8_t* dst;
@@ -1048,10 +1015,7 @@ TEST_F( hiprtTest, MeshIntersection )
 	checkHiprt( hiprtBuildGeometry( ctxt, hiprtBuildOperationBuild, geomInput, options, geomTemp, 0, geom ) );
 
 	cudaFunction_t func;
-	if constexpr ( UseBitcode )
-		buildTraceKernelFromBitcode( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "MeshIntersectionKernel", func );
-	else
-		buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "MeshIntersectionKernel", func );
+	buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "MeshIntersectionKernel", func );
 
 	uint8_t* dst;
 	malloc( dst, g_parsedArgs.m_ww * g_parsedArgs.m_wh * 4 );
@@ -1099,10 +1063,7 @@ TEST_F( hiprtTest, MeshIntersectionNonIndexed )
 	checkHiprt( hiprtBuildGeometry( ctxt, hiprtBuildOperationBuild, geomInput, options, geomTemp, 0, geom ) );
 
 	cudaFunction_t func;
-	if constexpr ( UseBitcode )
-		buildTraceKernelFromBitcode( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "MeshIntersectionKernel", func );
-	else
-		buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "MeshIntersectionKernel", func );
+	buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "MeshIntersectionKernel", func );
 
 	uint8_t* dst;
 	malloc( dst, g_parsedArgs.m_ww * g_parsedArgs.m_wh * 4 );
@@ -1192,10 +1153,7 @@ TEST_F( hiprtTest, PairTriangles )
 	checkHiprt( hiprtBuildScene( ctxt, hiprtBuildOperationBuild, sceneInput, options, sceneTemp, 0, scene ) );
 
 	cudaFunction_t func;
-	if constexpr ( UseBitcode )
-		buildTraceKernelFromBitcode( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "PairTrianglesKernel", func );
-	else
-		buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "PairTrianglesKernel", func );
+	buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "PairTrianglesKernel", func );
 
 	uint8_t* dst;
 	malloc( dst, g_parsedArgs.m_ww * g_parsedArgs.m_wh * 4 );
@@ -1262,13 +1220,7 @@ TEST_F( hiprtTest, Cutout )
 	std::vector<hiprtFuncNameSet> funcNameSets = { funcName_unused, funcName_unused, funcName_unused, funcNameSet };
 
 	cudaFunction_t func;
-
-	// note : precompiled bitcode path is not used for this test
-	if constexpr ( UseBitcode )
-		buildTraceKernelFromBitcode(
-			ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "CutoutKernel", func, std::nullopt, funcNameSets, 4, 1 );
-	else
-		buildTraceKernel(
+	buildTraceKernel(
 			ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "CutoutKernel", func, std::nullopt, funcNameSets, 4, 1 );
 
 	hiprtFuncDataSet funcDataSet;
@@ -1334,18 +1286,7 @@ TEST_F( hiprtTest, CustomIntersection )
 	std::vector<hiprtFuncNameSet> funcNameSets = { funcNameSet };
 
 	cudaFunction_t func;
-	if constexpr ( UseBitcode )
-		buildTraceKernelFromBitcode(
-			ctxt,
-			getRootDir() / "test/kernels/HiprtTestKernel.h",
-			"CustomIntersectionKernel",
-			func,
-			std::nullopt,
-			funcNameSets,
-			1,
-			1 );
-	else
-		buildTraceKernel(
+	buildTraceKernel(
 			ctxt,
 			getRootDir() / "test/kernels/HiprtTestKernel.h",
 			"CustomIntersectionKernel",
@@ -1456,11 +1397,7 @@ TEST_F( hiprtTest, SceneIntersectionSingleton )
 	checkHiprt( hiprtBuildScene( ctxt, hiprtBuildOperationBuild, sceneInput, options, sceneTemp, 0, scene ) );
 
 	cudaFunction_t func;
-	if constexpr ( UseBitcode )
-		buildTraceKernelFromBitcode(
-			ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "SceneIntersectionSingleton", func );
-	else
-		buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "SceneIntersectionSingleton", func );
+	buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "SceneIntersectionSingleton", func );
 
 	uint8_t* dst;
 	malloc( dst, g_parsedArgs.m_ww * g_parsedArgs.m_wh * 4 );
@@ -1610,18 +1547,7 @@ TEST_F( hiprtTest, SceneIntersection )
 
 	cudaFunction_t func;
 
-	if constexpr ( UseBitcode )
-		buildTraceKernelFromBitcode(
-			ctxt,
-			getRootDir() / "test/kernels/HiprtTestKernel.h",
-			"SceneIntersectionKernel",
-			func,
-			std::nullopt,
-			funcNameSets,
-			1,
-			1 );
-	else
-		buildTraceKernel(
+	buildTraceKernel(
 			ctxt,
 			getRootDir() / "test/kernels/HiprtTestKernel.h",
 			"SceneIntersectionKernel",
@@ -1834,20 +1760,7 @@ TEST_F( hiprtTest, SceneIntersectionMlas )
 	std::vector<hiprtFuncNameSet> funcNameSets = { funcNameSet };
 
 	cudaFunction_t func;
-
-	// note : precompiled bitcode path is not used for this test
-	if constexpr ( UseBitcode )
-		buildTraceKernelFromBitcode(
-			ctxt,
-			getRootDir() / "test/kernels/HiprtTestKernel.h",
-			"SceneIntersectionKernel",
-			func,
-			std::nullopt,
-			funcNameSets,
-			1,
-			1 );
-	else
-		buildTraceKernel(
+	buildTraceKernel(
 			ctxt,
 			getRootDir() / "test/kernels/HiprtTestKernel.h",
 			"SceneIntersectionKernel",
@@ -1966,11 +1879,7 @@ TEST_F( hiprtTest, Shear )
 	checkHiprt( hiprtBuildScene( ctxt, hiprtBuildOperationBuild, sceneInput, options, sceneTemp, 0, scene ) );
 
 	cudaFunction_t func;
-	if constexpr ( UseBitcode )
-		buildTraceKernelFromBitcode(
-			ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "SceneIntersectionSingleton", func );
-	else
-		buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "SceneIntersectionSingleton", func );
+	buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "SceneIntersectionSingleton", func );
 
 	uint8_t* dst;
 	malloc( dst, g_parsedArgs.m_ww * g_parsedArgs.m_wh * 4 );
@@ -2136,10 +2045,7 @@ TEST_F( hiprtTest, MotionBlur )
 	}
 
 	cudaFunction_t func;
-	if constexpr ( UseBitcode )
-		buildTraceKernelFromBitcode( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "MotionBlurKernel", func );
-	else
-		buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "MotionBlurKernel", func );
+	buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "MotionBlurKernel", func );
 
 	uint8_t* dst;
 	malloc( dst, g_parsedArgs.m_ww * g_parsedArgs.m_wh * 4 );
@@ -2341,10 +2247,7 @@ TEST_F( hiprtTest, MotionBlurMatrix )
 	}
 
 	cudaFunction_t func;
-	if constexpr ( UseBitcode )
-		buildTraceKernelFromBitcode( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "MotionBlurKernel", func );
-	else
-		buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "MotionBlurKernel", func );
+	buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "MotionBlurKernel", func );
 
 	uint8_t* dst;
 	malloc( dst, g_parsedArgs.m_ww * g_parsedArgs.m_wh * 4 );
@@ -2454,21 +2357,8 @@ TEST_F( hiprtTest, MotionBlurSlerp )
 	// use 'funcNameSet' at slot 'geomType_SPHERE'
 	// for the previous slot, use empty functions.
 	std::vector<hiprtFuncNameSet> funcNameSets = { funcName_unused, funcNameSet };
-
-	// note : precompiled bitcode path is not used for this test
 	cudaFunction_t func;
-	if constexpr ( UseBitcode )
-		buildTraceKernelFromBitcode(
-			ctxt,
-			getRootDir() / "test/kernels/HiprtTestKernel.h",
-			"MotionBlurSlerpKernel",
-			func,
-			std::nullopt,
-			funcNameSets,
-			2,
-			1 );
-	else
-		buildTraceKernel(
+	buildTraceKernel(
 			ctxt,
 			getRootDir() / "test/kernels/HiprtTestKernel.h",
 			"MotionBlurSlerpKernel",
@@ -2553,10 +2443,7 @@ TEST_F( hiprtTest, Rebuild )
 	checkHiprt( hiprtBuildGeometry( ctxt, hiprtBuildOperationBuild, geomInput, options, geomTemp, 0, geom ) );
 
 	cudaFunction_t func;
-	if constexpr ( UseBitcode )
-		buildTraceKernelFromBitcode( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "MeshIntersectionKernel", func );
-	else
-		buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "MeshIntersectionKernel", func );
+	buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "MeshIntersectionKernel", func );
 
 	uint8_t* dst;
 	malloc( dst, g_parsedArgs.m_ww * g_parsedArgs.m_wh * 4 );
@@ -2623,10 +2510,7 @@ TEST_F( hiprtTest, Update )
 	checkHiprt( hiprtBuildGeometry( ctxt, hiprtBuildOperationBuild, geomInput, options, geomTemp, 0, geom ) );
 
 	cudaFunction_t func;
-	if constexpr ( UseBitcode )
-		buildTraceKernelFromBitcode( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "MeshIntersectionKernel", func );
-	else
-		buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "MeshIntersectionKernel", func );
+	buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "MeshIntersectionKernel", func );
 
 	uint8_t* dst;
 	malloc( dst, g_parsedArgs.m_ww * g_parsedArgs.m_wh * 4 );
@@ -2719,10 +2603,7 @@ TEST_F( hiprtTest, TraceKernel )
 	opts.push_back( sharedStackSizeDef.c_str() );
 
 	cudaFunction_t func;
-	if constexpr ( UseBitcode )
-		buildTraceKernelFromBitcode( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "TraceKernel", func, opts );
-	else
-		buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "TraceKernel", func, opts );
+	buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "TraceKernel", func, opts );
 	int numRegs;
 	// checkOro( cudaFuncGetAttribute( &numRegs, ORO_FUNC_ATTRIBUTE_NUM_REGS, func ) );
 
@@ -2809,7 +2690,6 @@ int main( int argc, const char* argv[] )
 	parser.add_argument().names( { "-h", "--height" } ).description( "height" ).required( false );
 	parser.add_argument().names( { "-r", "--referencePath" } ).description( "path for reference images" ).required( false );
 	parser.add_argument().names( { "-d", "--device" } ).description( "device" ).required( false );
-	parser.add_argument().names( { "-p", "--precompiled" } ).description( "use precompiled bitcodes" ).required( false );
 	parser.parse( argc, argv );
 	parser.print_help();
 
@@ -2828,10 +2708,6 @@ int main( int argc, const char* argv[] )
 	if ( parser.exists( "d" ) )
 	{
 		parsedArgs.m_deviceIdx = parser.get<uint32_t>( "d" );
-	}
-	if ( parser.exists( "p" ) )
-	{
-		parsedArgs.m_usePrecompiledBitcodes = true;
 	}
 
 	::testing::AddGlobalTestEnvironment( new InitCommandlineArgs( parsedArgs ) );

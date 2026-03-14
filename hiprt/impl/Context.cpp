@@ -36,16 +36,26 @@ namespace hiprt
 {
 Context::Context( const hiprtContextCreationInput& input )
 {
-	// TODO only accept CUDA API
-	// cudaApi api = ( input.deviceType == hiprtDeviceAMD ) ? ORO_API_HIP : ORO_API_CUDA;
-	// cuCtxCreateFromRaw( &m_ctxt, api, input.ctxt );
-	// m_device = cudaSetRawDevice( api, input.device );
+	m_device = input.device;
+	if ( m_device < 0 ) checkOro( cudaGetDevice( &m_device ) );
+
+	checkOro( cudaSetDevice( m_device ) );
+
+	CUdevice cuDevice = 0;
+	checkOro( cuDeviceGet( &cuDevice, m_device ) );
+	checkOro( cuDevicePrimaryCtxRetain( &m_ctxt, cuDevice ) );
+	checkOro( cuCtxSetCurrent( m_ctxt ) );
 }
 
 Context::~Context()
 {
-	m_cudautils.unloadKernelCache();
-	cuCtxDestroy( m_ctxt );
+	if ( m_ctxt == nullptr ) return;
+
+	CUdevice cuDevice = 0;
+	if ( cuCtxGetDevice( &cuDevice ) == CUDA_SUCCESS )
+	{
+		cuDevicePrimaryCtxRelease( cuDevice );
+	}
 }
 
 std::vector<hiprtGeometry>
@@ -924,21 +934,6 @@ void Context::buildKernels(
 		cache );
 }
 
-void Context::buildKernelsFromBitcode(
-	const std::vector<const char*>&		 funcNames,
-	const std::filesystem::path&		 moduleName,
-	const std::string_view				 bitcodeBinary,
-	uint32_t							 numGeomTypes,
-	uint32_t							 numRayTypes,
-	const std::vector<hiprtFuncNameSet>& funcNameSets,
-	std::vector<CUfunction>&			 functions,
-	bool								 cache )
-{
-	// checkOro( cuCtxSetCurrent( m_ctxt ) );
-	m_compiler.buildKernelsFromBitcode(
-		*this, funcNames, moduleName, bitcodeBinary, numGeomTypes, numRayTypes, funcNameSets, functions, cache );
-}
-
 void Context::setCacheDir( const std::filesystem::path& path ) { m_compiler.setCacheDir( path ); }
 
 uint32_t Context::getSMCount() const
@@ -991,55 +986,7 @@ std::string Context::getDriverVersion() const
 
 uint32_t Context::getRtip() const
 {
-	std::string deviceName = getDeviceName();
-	std::string archName   = "getGcnArchName()";
-
-	uint32_t archNumber = 0;
-	if ( archName.substr( 0, 3 ) == "gfx" )
-	{
-		std::string numberPart = archName.substr( 3 );
-		archNumber			   = std::stoi( numberPart );
-	}
-
-	uint32_t rtip = 0; // 0 means no hwi
-	if ( deviceName.find( "NVIDIA" ) == std::string::npos )
-	{
-		if ( archNumber >= 1030 ) rtip = 11;
-		if ( archNumber >= 1100 ) rtip = 20;
-		if ( archNumber >= 1200 )
-		{
-			int driverVersion = 0;
-			checkOro( cudaDriverGetVersion( &driverVersion ) );
-
-			bool driverRtip31 = false;
-#if defined( __WINDOWS__ )
-			if ( driverVersion >= 60400000 ) // on windows: rocm >= 6.4
-#else
-			if ( driverVersion >= 70000000 ) // on linux: rocm >= 7.0
-#endif
-				driverRtip31 = true;
-
-			const bool rtcRtip31 = m_compiler.isRtip31Supported();
-#if defined( __WINDOWS__ )
-			if ( driverRtip31 && !rtcRtip31 )
-				logWarn( "The driver supports RTIP 3.1 but HIPRTC DLLs are of an older version; use HIPRTC DLLs 6.4+ to fully "
-						 "utilize "
-						 "HW ray tracing features\n" );
-#else
-			if ( !driverRtip31 )
-				logWarn( "HW supports RTIP 3.1 but the driver is of an older version; use driver ROCm 6.4+ (Win) or 7.0+ "
-						 "(Linux) to fully "
-						 "utilize HW ray tracing features\n" );
-#endif
-
-			if ( driverRtip31 && rtcRtip31 )
-				rtip = 31;
-			else
-				rtip = 20;
-		}
-	}
-
-	return rtip;
+	return 0;
 }
 
 uint32_t Context::getBranchingFactor() const

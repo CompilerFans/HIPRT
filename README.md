@@ -1,7 +1,7 @@
 # HIPRT
 
 ## About 
-HIP RT is a ray tracing library for HIP, making it easy to write ray-tracing applications in HIP. The APIs and library are designed to be minimal, lower level, and simple to use and integrate into any existing HIP applications.
+HIP RT is a low-level ray tracing library. This repository now targets a CUDA/NVRTC runtime path and no longer depends on HIP toolchains, HIP runtime loaders, or compatibility layers.
 
 Although there are other ray tracing APIs which introduce many new things, we designed HIP RT in a slightly different way so you do not need to learn many new kernel types.
 
@@ -19,37 +19,15 @@ This is the main repository for the source code for HIPRT.
 3. `git submodule update --init --recursive`
 4. `git lfs fetch` (To get resources for running performance tests)
 
-Then, you can use either premake or cmake.
-   
-&nbsp;&nbsp;&nbsp;On Windows with premake:  
-&nbsp;&nbsp;&nbsp;5. `set HIP_PATH=C:\Program Files\AMD\ROCm\6.2\`  (optional: change default HIP SDK path)  
-&nbsp;&nbsp;&nbsp;6. `.\tools\premake5\win\premake5.exe vs2022`  
-&nbsp;&nbsp;&nbsp;7. `Open build\hiprt.sln with Visual Studio 2022.`  
+Build with CMake only.
 
-&nbsp;&nbsp;&nbsp;On Linux with premake:  
-&nbsp;&nbsp;&nbsp;5. `export HIP_PATH=/opt/rocm`  (optional: change default HIP SDK path)  
-&nbsp;&nbsp;&nbsp;6. `./tools/premake5/linux64/premake5 gmake`  
-&nbsp;&nbsp;&nbsp;7. `make -C build -j config=release_x64`  
+&nbsp;&nbsp;&nbsp;Example on Windows:  
+&nbsp;&nbsp;&nbsp;5. `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release`  
+&nbsp;&nbsp;&nbsp;6. `cmake --build build --config Release`  
 
-&nbsp;&nbsp;&nbsp;Example with Cmake on Windows:  
-&nbsp;&nbsp;&nbsp;5. `mkdir build`  
-&nbsp;&nbsp;&nbsp;6. `cmake -DCMAKE_BUILD_TYPE=Release -DBITCODE=OFF -DHIP_PATH="C:\Program Files\AMD\ROCm\5.7" -S . -B build`  
-&nbsp;&nbsp;&nbsp;7. `Open build\hiprt.sln with Visual Studio 2022.`  
-
-&nbsp;&nbsp;&nbsp;Example with Cmake on Linux:  
-&nbsp;&nbsp;&nbsp;5. `mkdir build`  
-&nbsp;&nbsp;&nbsp;6. `cmake -DCMAKE_BUILD_TYPE=Release -DBITCODE=OFF -DHIP_PATH="/opt/rocm" -S . -B build`  
-&nbsp;&nbsp;&nbsp;7. `cmake --build build --config Release`  
-
-
-
-
-### Using Bitcode
-Add the option `--bitcode` in premake, or `-DBITCODE=ON` in cmake to enable precompiled bitcode. 
-
-#### Generation of bitcode
-- After premake, go to `scripts/bitcodes`, then run `python compile.py` which compiles kernels to bitcode and fatbinary.
-- Or pass `--precompile` to premake, or `-DPRECOMPILE=ON` in cmake . It executes the `compile.py` during premake. Note that you cannot do it in git bash on windows (because of hipcc...)
+&nbsp;&nbsp;&nbsp;Example on Linux:  
+&nbsp;&nbsp;&nbsp;5. `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release`  
+&nbsp;&nbsp;&nbsp;6. `cmake --build build --config Release -j`  
 
 
 ## Running Unit Tests
@@ -62,12 +40,6 @@ There are three types of tests.
 Example: `..\dist\bin\Release\unittest64.exe --width=512 --height=512 --referencePath=.\references\ --gtest_filter=hiprt*:Obj*" `
 
 ## Developing HIPRT
-
-### Compiling Bundled Bitcode and Fatbinary 
-- Clone `hipSdk` repo to the root directory.
-- Go to `scripts/bitcodes`, run `python compile.py` which uses `hipcc` from the `hipSdk` directory. (todo. make it more general, maybe search for `hipcc` from path, if it's not found, use the directory above or something like this)
-	- Note use python version 3.*+.
-	- Git bash shell is not supported for compile.py.
 
 ### Coding Guidelines
 - Resolve compiler warnings.

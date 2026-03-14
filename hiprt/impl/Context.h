@@ -31,12 +31,11 @@
 #include <hiprt/impl/Compiler.h>
 #include <hiprt/impl/Error.h>
 #include <hiprt/impl/Logger.h>
-#include <ParallelPrimitives/RadixSort.h>
 
 namespace hiprt
 {
-	// test define
-	typedef void* cudaDeviceptr;
+using cudaDeviceptr = void*;
+
 class Context
 {
   public:
@@ -121,16 +120,6 @@ class Context
 		CUmodule&							 module,
 		bool								 cache );
 
-	void buildKernelsFromBitcode(
-		const std::vector<const char*>&		 funcNames,
-		const std::filesystem::path&		 moduleName,
-		const std::string_view				 bitcodeBinary,
-		uint32_t							 numGeomTypes,
-		uint32_t							 numRayTypes,
-		const std::vector<hiprtFuncNameSet>& funcNameSets,
-		std::vector<CUfunction>&			 functions,
-		bool								 cache );
-
 	void setCacheDir( const std::filesystem::path& path );
 
 	void setLogLevel( hiprtLogLevel level ) { m_logger.setLevel( level ); }
@@ -162,7 +151,6 @@ class Context
 
 	int	 getDevice() const noexcept { return m_device; }
 	void setDevice( int d ) { m_device = d; }
-	OrochiUtils& getOrochiUtils() { return m_cudautils; }
 	Compiler&	 getCompiler() { return m_compiler; }
 
 	uint32_t getRtip() const;
@@ -173,11 +161,10 @@ class Context
 	size_t	 getInstanceNodeSize() const;
 
   private:
-	int	m_device;
-	CUcontext		m_ctxt;
-	OrochiUtils m_cudautils;
-	Compiler	m_compiler;
-	Logger		m_logger;
+	int		  m_device;
+	CUcontext m_ctxt = nullptr;
+	Compiler  m_compiler;
+	Logger	  m_logger;
 
 	std::mutex											m_poolMutex;
 	std::map<std::pair<cudaDeviceptr, size_t>, uint32_t> m_poolHeads;

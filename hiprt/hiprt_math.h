@@ -226,7 +226,7 @@ HIPRT_HOST_DEVICE HIPRT_INLINE float4 make_float4( const uint4& a )
 }
 } // namespace hiprt
 
-#if !defined( __HIPCC__ )
+#if !defined( __CUDACC__ )
 // int vectors
 HIPRT_HOST_DEVICE HIPRT_INLINE int2 operator+( const int2& a, const int2& b ) { return int2{ a.x + b.x, a.y + b.y }; }
 

@@ -31,7 +31,6 @@
 
 #define HIPRT_API_VERSION @HIPRT_API_VERSION@
 #define HIPRT_VERSION_STR @HIPRT_VERSION_STR@
-#define HIP_VERSION_STR @HIP_VERSION_STR@
 
 #include <hiprt/hiprt_types.h>
 #include <stddef.h>
@@ -560,32 +559,6 @@ HIPRT_API hiprtError hiprtBuildTraceKernels(
 	hiprtFuncNameSet* funcNameSets,
 	hiprtApiFunction* functionsOut,
 	hiprtApiModule*	  moduleOut,
-	bool			  cache );
-
-/** \brief Get function instance with HIPRT routines.
- * \param context The HIPRT API context.
- * \param numFunctions The number of functions to compile.
- * \param funcNames Functions to to be returned, cannot be nullptr.
- * \param moduleName The name of the bitcode module.
- * \param bitcodeBinary The user compiled bitcode.
- * \param bitcodeBinarySize The size of the compiled bitcode.
- * \param numGeomTypes The number of geometry types.
- * \param numRayTypes The number of ray types.
- * \param funcNameSets The table of custom function names (numRayTypes x numGeomTypes).
- * \param functionsOut The output function instances.
- * \return A HIPRT error in case of a failure, hiprtSuccess otherwise.
- */
-HIPRT_API hiprtError hiprtBuildTraceKernelsFromBitcode(
-	hiprtContext	  context,
-	uint32_t		  numFunctions,
-	const char**	  funcNames,
-	const char*		  moduleName,
-	const char*		  bitcodeBinary,
-	size_t			  bitcodeBinarySize,
-	uint32_t		  numGeomTypes,
-	uint32_t		  numRayTypes,
-	hiprtFuncNameSet* funcNameSets,
-	hiprtApiFunction* functionsOut,
 	bool			  cache );
 
 /** \brief Setting log level.

@@ -52,7 +52,7 @@ typedef hiprtEmptyInstanceStack																	InstanceStack;
 // using float4 = hiprt::Vector<float, 4>;
 // #endif
 
-#if !defined( __KERNELCC__ ) || defined( HIPRT_BITCODE_LINKING )
+#if !defined( __KERNELCC__ )
 #include <hiprt/hiprt_math.h>
 #endif
 

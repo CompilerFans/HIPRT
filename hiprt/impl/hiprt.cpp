@@ -23,7 +23,6 @@
 //////////////////////////////////////////////////////////////////////////////////////////
 
 #include <hiprt/hiprt.h>
-#include <hiprt/hiprt_libpath.h>
 #include <hiprt/impl/Error.h>
 #include <hiprt/impl/Context.h>
 #include <hiprt/impl/Header.h>
@@ -33,15 +32,12 @@ using namespace hiprt;
 
 hiprtError hiprtCreateContext( uint32_t hiprtApiVersion, const hiprtContextCreationInput& input, hiprtContext& contextOut )
 {
-	// cudaInitialize( ( input.deviceType == hiprtDeviceAMD ) ? ORO_API_HIP : ORO_API_CUDA, 0, g_hip_paths, g_hiprtc_paths );
 	cuInit(0);
 	if ( hiprtApiVersion != HIPRT_API_VERSION ) return hiprtErrorInvalidApiVersion;
 
 	try
 	{
 		Context* ctxt = new Context( input );
-		// ctxt->m_device = 0;
-		ctxt->setDevice(0);
 		contextOut	  = reinterpret_cast<hiprtContext>( ctxt );
 	}
 	catch ( std::exception& e )
@@ -691,53 +687,6 @@ hiprtError hiprtBuildTraceKernels(
 			functionsOut[i] = reinterpret_cast<hiprtApiFunction>( functions[i] );
 
 		if ( moduleOut != nullptr ) *moduleOut = reinterpret_cast<hiprtApiModule>( module );
-	}
-	catch ( std::exception& e )
-	{
-		reinterpret_cast<Context*>( context )->logError( e.what() );
-		return hiprtErrorInternal;
-	}
-
-	return hiprtSuccess;
-}
-
-hiprtError hiprtBuildTraceKernelsFromBitcode(
-	hiprtContext	  context,
-	uint32_t		  numFunctions,
-	const char**	  functionNames,
-	const char*		  moduleName,
-	const char*		  bitcodeBinary,
-	size_t			  bitcodeBinarySize,
-	uint32_t		  numGeomTypes,
-	uint32_t		  numRayTypes,
-	hiprtFuncNameSet* functionNameSets,
-	hiprtApiFunction* functionsOut,
-	bool			  cache )
-{
-	if ( !context || numFunctions == 0 || functionNames == nullptr || functionsOut == nullptr || moduleName == nullptr ||
-		 bitcodeBinary == nullptr || bitcodeBinarySize == 0 )
-		return hiprtErrorInvalidParameter;
-
-	try
-	{
-		// TODO: use std::span after we switch to c++20
-		std::vector<const char*> funcNames;
-		for ( uint32_t i = 0; i < numFunctions; ++i )
-			funcNames.push_back( functionNames[i] );
-
-		std::vector<hiprtFuncNameSet> funcNameSets;
-		if ( functionNameSets != nullptr )
-		{
-			for ( uint32_t i = 0; i < numGeomTypes * numRayTypes; ++i )
-				funcNameSets.push_back( functionNameSets[i] );
-		}
-		std::string_view		 binary( bitcodeBinary, bitcodeBinarySize );
-		std::vector<CUfunction> functions;
-		reinterpret_cast<Context*>( context )->buildKernelsFromBitcode(
-			funcNames, moduleName, binary, numGeomTypes, numRayTypes, funcNameSets, functions, cache );
-
-		for ( uint32_t i = 0; i < numFunctions; ++i )
-			functionsOut[i] = reinterpret_cast<hiprtApiFunction>( functions[i] );
 	}
 	catch ( std::exception& e )
 	{

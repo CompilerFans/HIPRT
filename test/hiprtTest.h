@@ -24,8 +24,10 @@
 
 #pragma once
 #define NOMINMAX
+#include <cuda_runtime_api.h>
+#include <cuda.h>
+#include <nvrtc.h>
 #include <hiprt/hiprt.h>
-#include <Orochi/Orochi.h>
 #include <embree4/rtcore.h>
 #include <optional>
 #include <filesystem>
@@ -52,6 +54,8 @@
 #include <test/shared.h>
 // #include <cuda_runtime.h>
 
+using cudaFunction_t = CUfunction;
+
 void checkOro( cudaError res, const source_location& location = source_location::current() );
 void checkOro( CUresult res, const source_location& location = source_location::current() );
 void checkOrortc( nvrtcResult res, const source_location& location = source_location::current() );
@@ -60,22 +64,12 @@ void checkHiprt( hiprtError res, const source_location& location = source_locati
 std::string			  getEnvVariable( const std::string& key );
 std::filesystem::path getRootDir();
 
-namespace
-{
-#if defined( HIPRT_BITCODE_LINKING )
-constexpr bool UseBitcode = true;
-#else
-constexpr bool UseBitcode = false;
-#endif
-} // namespace
-
 struct CmdArguments
 {
 	uint32_t			  m_ww					   = 512u;
 	uint32_t			  m_wh					   = 512u;
 	std::filesystem::path m_referencePath		   = getRootDir() / "test/references/";
 	uint32_t			  m_deviceIdx			   = 0u;
-	bool				  m_usePrecompiledBitcodes = false;
 };
 
 extern CmdArguments g_parsedArgs;
@@ -132,26 +126,6 @@ class hiprtTest : public ::testing::Test
 		uint32_t									 numRayTypes  = 1u );
 
 	hiprtError buildTraceKernel(
-		hiprtContext								 ctxt,
-		const std::filesystem::path&				 srcPath,
-		const std::string&							 functionName,
-		cudaFunction_t&								 functionOut,
-		std::optional<std::vector<const char*>>		 opts		  = std::nullopt,
-		std::optional<std::vector<hiprtFuncNameSet>> funcNameSets = std::nullopt,
-		uint32_t									 numGeomTypes = 0u,
-		uint32_t									 numRayTypes  = 1u );
-
-	hiprtError buildTraceKernelsFromBitcode(
-		hiprtContext								 ctxt,
-		const std::filesystem::path&				 srcPath,
-		std::vector<const char*>					 functionNames,
-		std::vector<hiprtApiFunction>&				 functionsOut,
-		std::optional<std::vector<const char*>>		 opts		  = std::nullopt,
-		std::optional<std::vector<hiprtFuncNameSet>> funcNameSets = std::nullopt,
-		uint32_t									 numGeomTypes = 0u,
-		uint32_t									 numRayTypes  = 1u );
-
-	hiprtError buildTraceKernelFromBitcode(
 		hiprtContext								 ctxt,
 		const std::filesystem::path&				 srcPath,
 		const std::string&							 functionName,
