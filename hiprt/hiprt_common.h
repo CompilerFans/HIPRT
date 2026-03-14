@@ -94,6 +94,12 @@
 #define GET_ARG_LIST( X ) 0, 0, 0
 
 #if defined( __KERNELCC_RTC__ )
+#if defined( __has_include )
+#if __has_include( <stdint.h> )
+#include <stdint.h>
+#endif
+#endif
+#if !defined( INT8_MAX )
 using int8_t   = char;
 using uint8_t  = unsigned char;
 using int16_t  = short;
@@ -102,6 +108,7 @@ using int32_t  = int;
 using uint32_t = unsigned int;
 using int64_t  = long long;
 using uint64_t = unsigned long long;
+#endif
 #endif
 
 HIPRT_STATIC_ASSERT( sizeof( int8_t ) == 1 );
@@ -165,7 +172,11 @@ constexpr uint32_t InstanceIDBits			 = 24u;
 #define HIPRT_RTIP 0
 #endif
 
+#if defined( __MACACC__ )
+constexpr uint32_t WarpSize = 64;
+#else
 constexpr uint32_t WarpSize = 32;
+#endif
 
 constexpr uint32_t Rtip = HIPRT_RTIP;
 

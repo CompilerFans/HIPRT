@@ -133,7 +133,7 @@ HIPRT_DEVICE HIPRT_INLINE void openNodes(
 	const uint32_t laneIndex	= threadIdx.x % WarpSize;
 	const uint32_t sublaneIndex = laneIndex % BranchingFactor;
 	const uint32_t subwarpIndex = laneIndex / BranchingFactor;
-	const uint64_t subwarpMask	= ( ( 1 << BranchingFactor ) - 1 )
+	const uint64_t subwarpMask	= ( ( 1ull << BranchingFactor ) - 1 )
 								 << static_cast<uint64_t>( ( BranchingFactor * subwarpIndex ) );
 
 	bool done = childCount == BranchingFactor;
@@ -391,7 +391,7 @@ extern "C" __global__ void PairTriangles( TriangleMesh mesh, uint2* pairIndices,
 		const uint32_t firstPairedLane = __ffsll( static_cast<unsigned long long>( hiprt::ballot( pairable ) ) ) - 1;
 		if ( firstPairedLane < WarpSize )
 		{
-			activeMask &= ~( 1u << firstPairedLane );
+			activeMask &= ~( 1ull << firstPairedLane );
 			if ( laneIndex == firstPairedLane ) valid = false;
 
 			const uint32_t secondIndex = shfl( index, firstPairedLane );
@@ -695,7 +695,7 @@ __device__ void FitBounds( Header* header, PrimitiveContainer& primitives, BoxNo
 	const uint32_t laneIndex	= threadIdx.x % WarpSize;
 	const uint32_t sublaneIndex = laneIndex % BranchingFactor;
 	const uint32_t subwarpIndex = laneIndex / BranchingFactor;
-	const uint64_t subwarpMask	= ( ( 1 << BranchingFactor ) - 1 )
+	const uint64_t subwarpMask	= ( ( 1ull << BranchingFactor ) - 1 )
 								 << static_cast<uint64_t>( ( BranchingFactor * subwarpIndex ) );
 
 	uint32_t index = threadIndex / BranchingFactor;
@@ -1090,7 +1090,7 @@ __device__ void Collapse(
 	const uint32_t taskIndex	= index / BranchingFactor;
 	const uint32_t sublaneIndex = laneIndex % BranchingFactor;
 	const uint32_t subwarpIndex = laneIndex / BranchingFactor;
-	const uint64_t subwarpMask	= ( ( 1 << BranchingFactor ) - 1 )
+	const uint64_t subwarpMask	= ( ( 1ull << BranchingFactor ) - 1 )
 								 << static_cast<uint64_t>( ( BranchingFactor * subwarpIndex ) );
 
 	bool done = taskIndex >= maxBoxNodeCount || taskIndex >= referenceCount;
@@ -1979,11 +1979,11 @@ __device__ void PackLeavesWarp(
 			const uint32_t halfLaneIndex = laneIndex % 16;
 
 			const uint32_t broadcastLane0 = __ffsll( static_cast<unsigned long long>( packetMask ) ) - 1;
-			packetMask ^= 1 << broadcastLane0;
+			packetMask ^= 1ull << broadcastLane0;
 
 			const uint32_t broadcastLane1 = __ffsll( static_cast<unsigned long long>( packetMask ) ) - 1;
 			const bool	   secondValid	  = packetMask != 0;
-			if ( secondValid ) packetMask ^= 1 << broadcastLane1;
+			if ( secondValid ) packetMask ^= 1ull << broadcastLane1;
 
 			const uint32_t			 broadcastLane			 = ( halfWarpIndex == 0 ) ? broadcastLane0 : broadcastLane1;
 			const uint32_t			 broadcastSubwarpIndex	 = broadcastLane / LanesPerLeafPacketTask;

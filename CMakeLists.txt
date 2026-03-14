@@ -118,6 +118,7 @@ add_library(${HIPRT_NAME} SHARED)
 target_compile_definitions(${HIPRT_NAME} PRIVATE
 	HIPRT_EXPORTS
 	HIPRT_CUDA_INCLUDE_DIR="${HIPRT_CUDA_INCLUDE_DIR_ESCAPED}"
+	HIPRT_ROOT_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}"
 )
 
 if(${CMAKE_BUILD_TYPE} STREQUAL "Debug")
@@ -186,6 +187,7 @@ if(NOT NO_UNITTEST)
 		${CMAKE_CURRENT_SOURCE_DIR}/contrib/embree/include
 	)
 	target_compile_definitions(unittest PRIVATE HIPRT_CUDA_INCLUDE_DIR="${HIPRT_CUDA_INCLUDE_DIR_ESCAPED}")
+	target_compile_definitions(unittest PRIVATE HIPRT_ROOT_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}")
 
 	if(UNIX)
 		target_link_libraries(unittest PRIVATE pthread dl embree4 tbb)
