@@ -2213,9 +2213,9 @@ TEST_F( hiprtTest, SceneTraceKernelSingletonSrt )
 	checkHiprt( hiprtCreateScene( ctxt, sceneInput, options, scene ) );
 	checkHiprt( hiprtBuildScene( ctxt, hiprtBuildOperationBuild, sceneInput, options, sceneTemp, 0, scene ) );
 
-	constexpr uint32_t sharedStackSize	  = 1u;
-	constexpr uint32_t blockWidth		  = 64u;
-	constexpr uint32_t blockHeight		  = 1u;
+	constexpr uint32_t sharedStackSize	  = 16u;
+	constexpr uint32_t blockWidth		  = 8u;
+	constexpr uint32_t blockHeight		  = 8u;
 	constexpr uint32_t blockSize		  = blockWidth * blockHeight;
 	std::string		   blockSizeDef		  = "-DBLOCK_SIZE=" + std::to_string( blockSize );
 	std::string		   sharedStackSizeDef = "-DSHARED_STACK_SIZE=" + std::to_string( sharedStackSize );

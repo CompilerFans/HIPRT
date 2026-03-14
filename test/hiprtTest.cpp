@@ -632,7 +632,7 @@ void hiprtTest::buildEmbreeSceneBvh(
 }
 
 bool hiprtTest::readSourceCode(
-	const std::filesystem::path& srcPath, std::string& sourceCode, std::optional<std::vector<std::filesystem::path>> includes )
+	const std::filesystem::path& srcPath, std::string& sourceCode, std::vector<std::filesystem::path>* includes )
 {
 	std::fstream f( srcPath );
 	if ( f.is_open() )
@@ -641,7 +641,7 @@ bool hiprtTest::readSourceCode(
 		f.seekg( 0, std::fstream::end );
 		size_t size = sizeFile = static_cast<size_t>( f.tellg() );
 		f.seekg( 0, std::fstream::beg );
-		if ( includes )
+		if ( includes != nullptr )
 		{
 			sourceCode.clear();
 			std::string line;
@@ -652,8 +652,7 @@ bool hiprtTest::readSourceCode(
 					size_t		pa	= line.find( "<" );
 					size_t		pb	= line.find( ">" );
 					std::string buf = line.substr( pa + 1, pb - pa - 1 );
-					includes.value().push_back( buf );
-					sourceCode += line + '\n';
+					includes->push_back( buf );
 				}
 				sourceCode += line + '\n';
 			}
@@ -682,7 +681,7 @@ hiprtError hiprtTest::buildTraceKernels(
 {
 	std::vector<std::filesystem::path> includeNamesData;
 	std::string						   sourceCode;
-	readSourceCode( srcPath, sourceCode, includeNamesData );
+	readSourceCode( srcPath, sourceCode, &includeNamesData );
 
 	std::vector<const char*> options;
 	if ( opts ) options = *opts;
