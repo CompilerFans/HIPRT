@@ -1,5 +1,29 @@
 # HIPRT
 
+## 中文说明
+
+HIPRT 当前仓库保留 `HIPRT` 项目名称以及 `hiprt*` 公开 API 命名，但底层实现已经收敛为 CUDA-only。
+
+- 保留：`hiprt.h`、`hiprtew.h`、`hiprtCreateContext` 等公开接口
+- 去除：AMD HIP runtime、ROCm toolchain、`hipcc`、运行时 HIP 动态加载路径、旧 bitcode / 预编译链路
+- 当前构建方式：仅支持 `CMake + CUDA Toolkit`
+
+快速构建：
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release -j
+```
+
+一键脚本：
+
+```bash
+./scripts/build.sh
+./scripts/build_and_test.sh
+```
+
+如需更完整的中文改造说明，请查看 `docs/cuda-only-build-zh.md`。
+
 ## About 
 HIP RT is a low-level ray tracing library. This repository now targets a CUDA/NVRTC runtime path and no longer depends on HIP toolchains, HIP runtime loaders, or compatibility layers.
 
