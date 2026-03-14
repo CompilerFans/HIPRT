@@ -1167,22 +1167,10 @@ struct alignas( 64 ) UserInstanceNode : public InstanceNodeBase
 		else
 			m_geometry = reinterpret_cast<GeomHeader*>( instance.geometry );
 
-#if defined( __MACACC__ )
-		// On MACA, keep single-frame instances on the generic frame path until the static matrix path is validated.
+		// Keep instance transforms on the generic frame path until the static matrix path is validated.
 		m_static   = 0;
 		m_identity = 0;
 		m_transform = transform;
-#else
-		if ( transform.frameCount == 1 )
-		{
-			m_identity = copyInvTransformMatrix( frame, m_matrix ) ? 1 : 0;
-		}
-		else
-		{
-			m_identity	= 0;
-			m_transform = transform;
-		}
-#endif
 	}
 
 	uint32_t m_mask = FullRayMask;
@@ -1226,22 +1214,10 @@ struct alignas( 128 ) HwInstanceNode : public InstanceNodeBase
 		else
 			m_geometry = reinterpret_cast<GeomHeader*>( instance.geometry );
 
-#if defined( __MACACC__ )
-		// On MACA, keep single-frame instances on the generic frame path until the static matrix path is validated.
+		// Keep instance transforms on the generic frame path until the static matrix path is validated.
 		m_static   = 0;
 		m_identity = 0;
 		m_transform = transform;
-#else
-		if ( transform.frameCount == 1 )
-		{
-			m_identity = copyInvTransformMatrix( frame, m_matrix ) ? 1 : 0;
-		}
-		else
-		{
-			m_identity	= 0;
-			m_transform = transform;
-		}
-#endif
 
 		m_disableBoxSort	 = 0;
 		m_childCountMinusOne = childCount - 1;

@@ -78,12 +78,13 @@ Context::createGeometries( const std::vector<hiprtGeometryBuildInput>& buildInpu
 {
 	// checkOro( cuCtxSetCurrent( m_ctxt ) );
 	const hiprtBuildFlags effectiveBuildFlags = getEffectiveBuildFlags( *this, buildOptions.buildFlags );
+	const bool			 useBatchPath		= buildInputs.size() > 1;
 
 	size_t				size = 0;
 	std::vector<size_t> sizes( buildInputs.size() );
 	for ( size_t i = 0; i < buildInputs.size(); ++i )
 	{
-		if ( batchBuild( buildInputs[i], buildOptions ) )
+		if ( useBatchPath && batchBuild( buildInputs[i], buildOptions ) )
 		{
 			logInfo( "BatchBuild::createGeometry\n" );
 			sizes[i] = BatchBuilder::getStorageBufferSize( *this, buildInputs[i], buildOptions );
@@ -175,12 +176,13 @@ void Context::buildGeometries(
 {
 	// checkOro( cuCtxSetCurrent( m_ctxt ) );
 	const hiprtBuildFlags effectiveBuildFlags = getEffectiveBuildFlags( *this, buildOptions.buildFlags );
+	const bool			 useBatchPath		= buildInputs.size() > 1;
 
 	std::vector<hiprtGeometryBuildInput> batchInputs;
 	std::vector<hiprtDevicePtr>			 batchBuffers;
 	for ( size_t i = 0; i < buildInputs.size(); ++i )
 	{
-		if ( batchBuild( buildInputs[i], buildOptions ) )
+		if ( useBatchPath && batchBuild( buildInputs[i], buildOptions ) )
 		{
 			batchInputs.push_back( buildInputs[i] );
 			batchBuffers.push_back( buffers[i] );
@@ -195,7 +197,7 @@ void Context::buildGeometries(
 
 	for ( size_t i = 0; i < buildInputs.size(); ++i )
 	{
-		if ( !batchBuild( buildInputs[i], buildOptions ) )
+		if ( !( useBatchPath && batchBuild( buildInputs[i], buildOptions ) ) )
 		{
 			if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitCustomBvhImport )
 			{
@@ -269,10 +271,11 @@ size_t Context::getGeometriesBuildTempBufferSize(
 	const std::vector<hiprtGeometryBuildInput>& buildInputs, const hiprtBuildOptions buildOptions )
 {
 	const hiprtBuildFlags effectiveBuildFlags = getEffectiveBuildFlags( *this, buildOptions.buildFlags );
+	const bool			 useBatchPath		= buildInputs.size() > 1;
 	std::vector<hiprtGeometryBuildInput> batchInputs;
 	for ( size_t i = 0; i < buildInputs.size(); ++i )
 	{
-		if ( batchBuild( buildInputs[i], buildOptions ) ) batchInputs.push_back( buildInputs[i] );
+		if ( useBatchPath && batchBuild( buildInputs[i], buildOptions ) ) batchInputs.push_back( buildInputs[i] );
 	}
 
 	size_t size = 0;
@@ -284,7 +287,7 @@ size_t Context::getGeometriesBuildTempBufferSize(
 
 	for ( size_t i = 0; i < buildInputs.size(); ++i )
 	{
-		if ( !batchBuild( buildInputs[i], buildOptions ) )
+		if ( !( useBatchPath && batchBuild( buildInputs[i], buildOptions ) ) )
 		{
 			if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitCustomBvhImport )
 			{
@@ -387,6 +390,7 @@ Context::createScenes( const std::vector<hiprtSceneBuildInput>& buildInputs, con
 {
 	// checkOro( cuCtxSetCurrent( m_ctxt ) );
 	const hiprtBuildFlags effectiveBuildFlags = getEffectiveBuildFlags( *this, buildOptions.buildFlags );
+	const bool			 useBatchPath		= buildInputs.size() > 1;
 
 	size_t				size = 0;
 	std::vector<size_t> sizes( buildInputs.size() );
@@ -401,7 +405,7 @@ Context::createScenes( const std::vector<hiprtSceneBuildInput>& buildInputs, con
 			throw std::runtime_error( msg );
 		}
 
-		if ( batchBuild( buildInputs[i], buildOptions ) )
+		if ( useBatchPath && batchBuild( buildInputs[i], buildOptions ) )
 		{
 			logInfo( "BatchBuild::createScene\n" );
 			sizes[i] = BatchBuilder::getStorageBufferSize( *this, buildInputs[i], buildOptions );
@@ -493,6 +497,7 @@ void Context::buildScenes(
 {
 	// checkOro( cuCtxSetCurrent( m_ctxt ) );
 	const hiprtBuildFlags effectiveBuildFlags = getEffectiveBuildFlags( *this, buildOptions.buildFlags );
+	const bool			 useBatchPath		= buildInputs.size() > 1;
 
 	std::vector<hiprtSceneBuildInput> batchInputs;
 	std::vector<hiprtDevicePtr>		  batchBuffers;
@@ -507,7 +512,7 @@ void Context::buildScenes(
 			throw std::runtime_error( msg );
 		}
 
-		if ( batchBuild( buildInputs[i], buildOptions ) )
+		if ( useBatchPath && batchBuild( buildInputs[i], buildOptions ) )
 		{
 			batchInputs.push_back( buildInputs[i] );
 			batchBuffers.push_back( buffers[i] );
@@ -522,7 +527,7 @@ void Context::buildScenes(
 
 	for ( size_t i = 0; i < buildInputs.size(); ++i )
 	{
-		if ( !batchBuild( buildInputs[i], buildOptions ) )
+		if ( !( useBatchPath && batchBuild( buildInputs[i], buildOptions ) ) )
 		{
 			if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitCustomBvhImport )
 			{
@@ -605,6 +610,7 @@ size_t Context::getScenesBuildTempBufferSize(
 	const std::vector<hiprtSceneBuildInput>& buildInputs, const hiprtBuildOptions buildOptions )
 {
 	const hiprtBuildFlags effectiveBuildFlags = getEffectiveBuildFlags( *this, buildOptions.buildFlags );
+	const bool			 useBatchPath		= buildInputs.size() > 1;
 	std::vector<hiprtSceneBuildInput> batchInputs;
 	for ( size_t i = 0; i < buildInputs.size(); ++i )
 	{
@@ -617,7 +623,7 @@ size_t Context::getScenesBuildTempBufferSize(
 			throw std::runtime_error( msg );
 		}
 
-		if ( batchBuild( buildInputs[i], buildOptions ) ) batchInputs.push_back( buildInputs[i] );
+		if ( useBatchPath && batchBuild( buildInputs[i], buildOptions ) ) batchInputs.push_back( buildInputs[i] );
 	}
 
 	size_t size = 0;
@@ -629,7 +635,7 @@ size_t Context::getScenesBuildTempBufferSize(
 
 	for ( size_t i = 0; i < buildInputs.size(); ++i )
 	{
-		if ( !batchBuild( buildInputs[i], buildOptions ) )
+		if ( !( useBatchPath && batchBuild( buildInputs[i], buildOptions ) ) )
 		{
 
 			if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitCustomBvhImport )
