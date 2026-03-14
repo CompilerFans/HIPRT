@@ -124,25 +124,30 @@
   或
 - 它内部使用的 `Transform::transformRay()`
 
-## 当前最关键的失败诊断
+### 9. 当前 scene traversal 功能路径已恢复
 
-### 9. scene traversal 仍然在单实例最小场景下 miss
-
-以下诊断单测仍失败：
+以下 case 现已恢复通过：
 
 - `SceneClosestHitSingletonSrt`
+- `SceneIntersectionSingleton`
+- `SceneIntersection`
+- `SceneIntersectionMlas`
+- `TranslateCornellBox`
+- `ScaleCornellBox`
+- `RotateCornellBox`
+- `Shear`
 
-现象：
+当前恢复方式：
 
-- 对单实例 `SRT` scene
-- 中心 ray 在 geometry local ray 诊断中可 hit
-- 但在 `hiprtSceneTraversalClosest` 下仍 miss
+- scene build 完成后，在 host 侧对 `InstanceNode` 做一次补丁
+- 强制把单帧 instance 节点切回动态 transform 路径
 
-这意味着问题已经被压缩到：
+因此，当前功能性失败已经不再集中在 scene traversal 主路径，而是缩小为：
 
-- scene traversal 与 instance transform 的衔接
-  或
-- scene traversal 内部的 ray / t / stack / node 处理
+- scene / geometry update
+- transform 内部实现诊断
+
+## 当前最关键的失败诊断
 
 ### 10. `Transform::transformRay()` 的 device 结果与期望不一致
 
@@ -191,17 +196,11 @@
 
 1. `MatrixFrame::getMatrixFrameInv(frame)` 的 device 结果为什么与 host 预期不同
 2. `Transform::transformRay()` 为什么在 device 侧没有体现缩放
-3. scene traversal 使用 dynamic instance transform 时，ray / t / stack / node 的衔接是否有额外错误
+3. `BvhUpdateCornellBox` 为什么在当前 scene node host-side patch 之后仍然失败
 4. 在上述问题修正后，再回归：
-   - `SceneClosestHitSingletonSrt`
-   - `SceneIntersectionSingleton`
-   - `SceneIntersection`
-   - `SceneIntersectionMlas`
-   - `TranslateCornellBox`
-   - `ScaleCornellBox`
-   - `RotateCornellBox`
-   - `Shear`
    - `BvhUpdateCornellBox`
+   - `SceneInternalTransformRaySrt`
+   - `SceneInverseMatrixDebugSrt`
 
 ## 与当前状态文档的关系
 

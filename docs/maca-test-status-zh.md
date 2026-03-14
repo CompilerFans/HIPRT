@@ -32,9 +32,9 @@
 
 ## 当前结果概览
 
-- 总通过率：`40 / 51`，约 `78.4%`
-- `ObjTestCases`：`11 / 15` 通过
-- `hiprtTest`：`29 / 36` 通过
+- 总通过率：`48 / 51`，约 `94.1%`
+- `ObjTestCases`：`14 / 15` 通过
+- `hiprtTest`：`34 / 36` 通过
 
 ## 当前支持的 case
 
@@ -81,34 +81,17 @@
 - `SceneWorldToObjectRayMatrixShear`
 - `SceneTransformDebugSrt`
 - `SceneInterpolatedFrameDebugSrt`
+- `SceneClosestHitSingletonSrt`
 - `SceneManualClosestHitSingletonSrt`
 - `GeomClosestHitScaledRay`
+- `SceneIntersectionSingleton`
+- `SceneIntersection`
+- `SceneIntersectionMlas`
+- `Shear`
 
 ## 当前未支持 / 未收敛的 case
 
 ### 变换相关
-
-- `ObjTestCases.TranslateCornellBox`
-  现象：像素差异约 `40%`
-- `ObjTestCases.ScaleCornellBox`
-  现象：像素差异约 `100%`
-- `ObjTestCases.RotateCornellBox`
-  现象：像素差异约 `60%`
-- `hiprtTest.Shear`
-  现象：像素差异约 `20%`
-
-### Scene intersection 正确性
-
-- `hiprtTest.SceneIntersectionSingleton`
-  现象：像素差异约 `20%`
-- `hiprtTest.SceneIntersection`
-  现象：像素差异约 `10%`
-- `hiprtTest.SceneIntersectionMlas`
-  现象：像素差异约 `30%`
-- `hiprtTest.SceneClosestHitSingletonSrt`
-  现象：单实例 SRT scene 下中心射线仍 miss，geometry 对照组可 hit
-
-### Transform 内部路径诊断
 
 - `hiprtTest.SceneInternalTransformRaySrt`
   现象：device 侧 `Transform::transformRay()` 仍返回未缩放的 ray
@@ -130,6 +113,8 @@
   有少量像素差异输出，但仍在测试阈值内
 - `BatchCornellBox`
   当前是通过**单对象 API 不走 batch kernel** 的兼容策略打通的；多对象 batch 构建仍以 `BatchConstruction` 为主验证
+- `TranslateCornellBox` / `ScaleCornellBox` / `RotateCornellBox` / `Shear` / `SceneIntersection*`
+  已恢复通过，但当前恢复依赖 scene build 后的 instance node host-side patch
 
 ## 本轮修复后观察到的主要变化
 
@@ -146,21 +131,14 @@
   3. `hiprtPointWorldToObject()` 的 matrix shear 路径正确
   4. `hiprtGeomTraversalClosest` 在对应 local ray 上正确
   5. `SceneManualClosestHitSingletonSrt` 已通过，说明 helper 形式的 scene world-to-object + geometry traversal 组合正确
-  6. 剩余问题集中在 scene traversal / internal transformRay 路径，而不是 scene AABB 构建
+  6. `SceneClosestHitSingletonSrt` 已恢复通过，说明当前 scene traversal 功能路径已经恢复
+  7. 仍保留的失败诊断集中在 `Transform::transformRay()` / inverse matrix 的 device 内部实现
 - 当前剩余问题已经集中到：
-  1. instance transform / scene traversal 正确性
-  2. scene update 正确性
+  1. transform 内部实现诊断
+  2. scene / geometry update 正确性
 
 ## 后续收敛顺序
 
-1. `SceneIntersectionSingleton`
-2. `SceneIntersection`
-3. `SceneIntersectionMlas`
-4. `TranslateCornellBox`
-5. `ScaleCornellBox`
-6. `RotateCornellBox`
-7. `Shear`
-8. `BvhUpdateCornellBox`
-9. `SceneClosestHitSingletonSrt`
-10. `SceneInternalTransformRaySrt`
-11. `SceneInverseMatrixDebugSrt`
+1. `BvhUpdateCornellBox`
+2. `SceneInternalTransformRaySrt`
+3. `SceneInverseMatrixDebugSrt`

@@ -47,6 +47,62 @@ hiprtBuildFlags getEffectiveBuildFlags( const Context& context, hiprtBuildFlags 
 
 	return buildFlags;
 }
+
+void patchSceneInstanceNodes(
+	const Context& context, const hiprtSceneBuildInput& buildInput, hiprtScene scene, cudaStream_t stream )
+{
+	if ( context.getDeviceName().find( "NVIDIA" ) != std::string::npos ) return;
+	if ( buildInput.instanceCount == 0 || buildInput.frameCount == 0 ) return;
+
+	SceneHeader header{};
+	checkOro( cuMemcpyDtoH( &header, reinterpret_cast<size_t>( scene ), sizeof( SceneHeader ) ) );
+	if ( header.m_primCount == 0 || header.m_primNodes == nullptr ) return;
+
+	std::vector<hiprtTransformHeader> transformHeaders( buildInput.instanceCount );
+	if ( buildInput.instanceTransformHeaders != nullptr )
+	{
+		checkOro( cuMemcpyDtoH(
+			transformHeaders.data(),
+			reinterpret_cast<size_t>( buildInput.instanceTransformHeaders ),
+			sizeof( hiprtTransformHeader ) * buildInput.instanceCount ) );
+	}
+	else
+	{
+		for ( uint32_t i = 0; i < buildInput.instanceCount; ++i )
+			transformHeaders[i] = hiprtTransformHeader{ i, 1u };
+	}
+
+	if ( context.getRtip() >= 31 )
+	{
+		std::vector<HwInstanceNode> nodes( header.m_primCount );
+		checkOro( cuMemcpyDtoH(
+			nodes.data(), reinterpret_cast<size_t>( header.m_primNodes ), sizeof( HwInstanceNode ) * header.m_primCount ) );
+		for ( uint32_t i = 0; i < std::min<uint32_t>( header.m_primCount, buildInput.instanceCount ); ++i )
+		{
+			nodes[i].m_static   = 0;
+			nodes[i].m_identity = 0;
+			nodes[i].m_transform = transformHeaders[i];
+		}
+		checkOro( cuMemcpyHtoD(
+			reinterpret_cast<size_t>( header.m_primNodes ), nodes.data(), sizeof( HwInstanceNode ) * header.m_primCount ) );
+	}
+	else
+	{
+		std::vector<UserInstanceNode> nodes( header.m_primCount );
+		checkOro( cuMemcpyDtoH(
+			nodes.data(), reinterpret_cast<size_t>( header.m_primNodes ), sizeof( UserInstanceNode ) * header.m_primCount ) );
+		for ( uint32_t i = 0; i < std::min<uint32_t>( header.m_primCount, buildInput.instanceCount ); ++i )
+		{
+			nodes[i].m_static   = 0;
+			nodes[i].m_identity = 0;
+			nodes[i].m_transform = transformHeaders[i];
+		}
+		checkOro( cuMemcpyHtoD(
+			reinterpret_cast<size_t>( header.m_primNodes ), nodes.data(), sizeof( UserInstanceNode ) * header.m_primCount ) );
+	}
+
+	if ( stream != 0 ) checkOro( cudaStreamSynchronize( stream ) );
+}
 } // namespace
 
 Context::Context( const hiprtContextCreationInput& input )
@@ -533,26 +589,31 @@ void Context::buildScenes(
 			{
 				logInfo( "CustomBvhImport::buildScene\n" );
 				BvhImporter::build( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
+				patchSceneInstanceNodes( *this, buildInputs[i], reinterpret_cast<hiprtScene>( buffers[i] ), stream );
 			}
 			else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferFastBuild )
 			{
 				logInfo( "FastBuild::buildScene\n" );
 				LbvhBuilder::build( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
+				patchSceneInstanceNodes( *this, buildInputs[i], reinterpret_cast<hiprtScene>( buffers[i] ), stream );
 			}
 			else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferHighQualityBuild )
 			{
 				logInfo( "HighQualityBuild::buildScene\n" );
 				SbvhBuilder::build( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
+				patchSceneInstanceNodes( *this, buildInputs[i], reinterpret_cast<hiprtScene>( buffers[i] ), stream );
 			}
 			else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferBalancedBuild )
 			{
 				logInfo( "BalancedBuild::buildScene\n" );
 				PlocBuilder::build( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
+				patchSceneInstanceNodes( *this, buildInputs[i], reinterpret_cast<hiprtScene>( buffers[i] ), stream );
 			}
 			else
 			{
 				logWarn( "Unknow build option => FastBuild::buildScene used instead\n" );
 				LbvhBuilder::build( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
+				patchSceneInstanceNodes( *this, buildInputs[i], reinterpret_cast<hiprtScene>( buffers[i] ), stream );
 			}
 		}
 	}
