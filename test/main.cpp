@@ -1339,6 +1339,99 @@ TEST_F( hiprtTest, SceneTransformDebugSrt )
 	checkHiprt( hiprtDestroyContext( ctxt ) );
 }
 
+TEST_F( hiprtTest, SceneInterpolatedFrameDebugSrt )
+{
+	hiprtContext ctxt;
+	checkHiprt( hiprtCreateContext( HIPRT_API_VERSION, m_ctxtInput, ctxt ) );
+	checkHiprt( hiprtSetLogLevel( ctxt, hiprtLogLevelError | hiprtLogLevelWarn ) );
+
+	hiprtTriangleMeshPrimitive mesh;
+	mesh.triangleCount	= 2;
+	mesh.triangleStride = sizeof( uint3 );
+	malloc( reinterpret_cast<uint3*&>( mesh.triangleIndices ), mesh.triangleCount );
+	uint32_t idx[] = { 0, 1, 2, 0, 2, 3 };
+	copyHtoD( reinterpret_cast<uint3*>( mesh.triangleIndices ), reinterpret_cast<uint3*>( idx ), mesh.triangleCount );
+
+	mesh.vertexCount  = 4;
+	mesh.vertexStride = sizeof( float3 );
+	malloc( reinterpret_cast<float3*&>( mesh.vertices ), mesh.vertexCount );
+	constexpr float Offset = 0.25f;
+	float3 v[] = { { -Offset, -Offset, 0.0f }, { -Offset, Offset, 0.0f }, { Offset, Offset, 0.0f }, { Offset, -Offset, 0.0f } };
+	copyHtoD( reinterpret_cast<float3*>( mesh.vertices ), v, mesh.vertexCount );
+
+	hiprtGeometryBuildInput geomInput{};
+	geomInput.type					 = hiprtPrimitiveTypeTriangleMesh;
+	geomInput.primitive.triangleMesh = mesh;
+
+	size_t			  geomTempSize;
+	hiprtDevicePtr	  geomTemp;
+	hiprtBuildOptions options;
+	options.buildFlags = hiprtBuildFlagBitPreferFastBuild;
+	checkHiprt( hiprtGetGeometryBuildTemporaryBufferSize( ctxt, geomInput, options, geomTempSize ) );
+	malloc( reinterpret_cast<uint8_t*&>( geomTemp ), geomTempSize );
+
+	hiprtGeometry geom;
+	checkHiprt( hiprtCreateGeometry( ctxt, geomInput, options, geom ) );
+	checkHiprt( hiprtBuildGeometry( ctxt, hiprtBuildOperationBuild, geomInput, options, geomTemp, 0, geom ) );
+
+	hiprtInstance instance{};
+	instance.type	  = hiprtInstanceTypeGeometry;
+	instance.geometry = geom;
+
+	hiprtSceneBuildInput sceneInput{};
+	sceneInput.instanceCount			   = 1;
+	sceneInput.instanceTransformHeaders = nullptr;
+	sceneInput.instanceMasks			   = nullptr;
+	malloc( reinterpret_cast<hiprtInstance*&>( sceneInput.instances ), sceneInput.instanceCount );
+	copyHtoD( reinterpret_cast<hiprtInstance*>( sceneInput.instances ), &instance, sceneInput.instanceCount );
+
+	hiprtFrameSRT frame{};
+	frame.translation	  = { 0.0f, 0.0f, 0.0f };
+	frame.scale			  = { 0.5f, 0.5f, 0.5f };
+	frame.rotation		  = { 0.0f, 0.0f, 1.0f, 0.0f };
+	sceneInput.frameCount = 1;
+	sceneInput.frameType  = hiprtFrameTypeSRT;
+	malloc( reinterpret_cast<hiprtFrameSRT*&>( sceneInput.instanceFrames ), 1 );
+	copyHtoD( reinterpret_cast<hiprtFrameSRT*>( sceneInput.instanceFrames ), &frame, 1 );
+
+	size_t		   sceneTempSize;
+	hiprtDevicePtr sceneTemp;
+	checkHiprt( hiprtGetSceneBuildTemporaryBufferSize( ctxt, sceneInput, options, sceneTempSize ) );
+	malloc( reinterpret_cast<uint8_t*&>( sceneTemp ), sceneTempSize );
+
+	hiprtScene scene;
+	checkHiprt( hiprtCreateScene( ctxt, sceneInput, options, scene ) );
+	checkHiprt( hiprtBuildScene( ctxt, hiprtBuildOperationBuild, sceneInput, options, sceneTemp, 0, scene ) );
+
+	cudaFunction_t func;
+	buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "SceneInterpolatedFrameDebugKernel", func );
+
+	SceneTransformDebugData* dOut;
+	malloc( dOut, 1 );
+	void* args[] = { &scene, &dOut };
+	launchKernel( func, 1, 1, 1, 1, args );
+	waitForCompletion();
+
+	SceneTransformDebugData out{};
+	copyDtoH( &out, dOut, 1 );
+	EXPECT_NEAR( out.m_frameScale.x, 0.5f, 1.0e-5f );
+	EXPECT_NEAR( out.m_frameScale.y, 0.5f, 1.0e-5f );
+	EXPECT_NEAR( out.m_frameScale.z, 0.5f, 1.0e-5f );
+	EXPECT_EQ( out.m_frameCount, 1u );
+	EXPECT_EQ( out.m_isIdentity, 0u );
+
+	free( dOut );
+	free( sceneInput.instances );
+	free( sceneInput.instanceFrames );
+	free( mesh.triangleIndices );
+	free( mesh.vertices );
+	free( sceneTemp );
+	free( geomTemp );
+	checkHiprt( hiprtDestroyGeometry( ctxt, geom ) );
+	checkHiprt( hiprtDestroyScene( ctxt, scene ) );
+	checkHiprt( hiprtDestroyContext( ctxt ) );
+}
+
 TEST_F( hiprtTest, SceneWorldToObjectRayMatrixShear )
 {
 	hiprtContext ctxt;

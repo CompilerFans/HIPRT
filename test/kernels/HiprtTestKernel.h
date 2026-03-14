@@ -381,6 +381,19 @@ extern "C" __global__ void SceneTransformDebugKernel( hiprtScene scene, SceneTra
 	out[0].isIdentity = instanceNode.m_identity;
 }
 
+extern "C" __global__ void SceneInterpolatedFrameDebugKernel( hiprtScene scene, SceneTransformDebugData* out )
+{
+	hiprt::SceneHeader*		   sceneHeader	= reinterpret_cast<hiprt::SceneHeader*>( scene );
+	const hiprt::InstanceNode& instanceNode = sceneHeader->m_primNodes[0];
+	hiprt::Transform		   tr( sceneHeader->m_frames, instanceNode.m_transform.frameIndex, instanceNode.m_transform.frameCount );
+	hiprt::Frame			   frame = tr.interpolateFrames( 0.0f );
+	out[0].frameScale = frame.m_scale;
+	out[0].frameIndex = instanceNode.m_transform.frameIndex;
+	out[0].frameCount = instanceNode.m_transform.frameCount;
+	out[0].isStatic   = instanceNode.m_static;
+	out[0].isIdentity = frame.identity() ? 1u : 0u;
+}
+
 extern "C" __global__ void MotionBlurKernel( hiprtScene scene, uint8_t* image, uint2 resolution )
 {
 	const uint32_t x	 = blockIdx.x * blockDim.x + threadIdx.x;
