@@ -9,13 +9,6 @@ fi
 echo "// automatically generated, don't edit" > hiprt/cache/Kernels.h
 echo "// automatically generated, don't edit" > hiprt/cache/KernelArgs.h
 
-echo "// automatically generated, don't edit" > contrib/Orochi/ParallelPrimitives/cache/Kernels.h
-echo "// automatically generated, don't edit" > contrib/Orochi/ParallelPrimitives/cache/KernelArgs.h
-
-$PYTHON_BIN tools/stringify.py ./contrib/Orochi/ParallelPrimitives/RadixSortKernels.h  >> contrib/Orochi/ParallelPrimitives/cache/Kernels.h
-$PYTHON_BIN tools/genArgs.py ./contrib/Orochi/ParallelPrimitives/RadixSortKernels.h  >> contrib/Orochi/ParallelPrimitives/cache/KernelArgs.h
-$PYTHON_BIN tools/stringify.py ./contrib/Orochi/ParallelPrimitives/RadixSortConfigs.h  >> contrib/Orochi/ParallelPrimitives/cache/Kernels.h
-
 echo "#pragma once" >> hiprt/cache/Kernels.h
 echo "#pragma once" >> hiprt/cache/KernelArgs.h
 

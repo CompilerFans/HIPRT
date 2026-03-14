@@ -81,7 +81,6 @@ cmake --build build --config Release -j
 `contrib/Orochi` 当前仅保留对主仓库仍有价值的核心源码，例如：
 
 - `contrib/Orochi/Orochi`
-- `contrib/Orochi/ParallelPrimitives`
 
 如果后续新增代码，请不要再恢复这些旧路径，也不要重新引入：
 
