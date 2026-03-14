@@ -114,11 +114,19 @@ HIPRT_DEVICE HIPRT_INLINE Obb getNodeObb(
 	if ( nodeType != BoxType )
 	{
 		if constexpr ( is_same<PrimitiveNode, TrianglePacketNode>::value )
-			return primNodes[nodeAddr].obb( typeToTriPairIndex( nodeType ), matrixIndex, nodeBox );
+		{
+			Obb obb = primNodes[nodeAddr].obb( typeToTriPairIndex( nodeType ), matrixIndex, nodeBox );
+			if ( !obb.aabb().valid() ) obb = Obb( matrixIndex ).grow( nodeBox );
+			return obb;
+		}
 		else if constexpr ( is_same<PrimitiveNode, InstanceNode>::value )
+		{
 			return primitives.fetchObb( primNodes[nodeAddr].m_primIndex, matrixIndex, nodeBox );
+		}
 		else
+		{
 			return Obb( matrixIndex ).grow( nodeBox );
+		}
 	}
 	else
 	{
@@ -255,30 +263,32 @@ __device__ void InitSceneData(
 	}
 }
 
-extern "C" __global__ void InitSceneData_InstanceList_SRTFrame(
-	size_t				   size,
-	InstanceList<SRTFrame> instanceList,
-	BoxNode*			   boxNodes,
-	InstanceNode*		   primNodes,
-	Instance*			   instances,
-	Frame*				   frames,
-	SceneHeader*		   sceneHeader )
+extern "C" __global__ void InitSceneData_InstanceList_hiprtFrameSRT(
+	size_t						size,
+	InstanceList<hiprtFrameSRT> instanceList,
+	BoxNode*					boxNodes,
+	InstanceNode*				primNodes,
+	Instance*					instances,
+	Frame*						frames,
+	SceneHeader*				sceneHeader )
 {
 	const uint32_t index = blockIdx.x * blockDim.x + threadIdx.x;
-	InitSceneData<InstanceList<SRTFrame>>( index, size, instanceList, boxNodes, primNodes, instances, frames, sceneHeader );
+	InitSceneData<InstanceList<hiprtFrameSRT>>(
+		index, size, instanceList, boxNodes, primNodes, instances, frames, sceneHeader );
 }
 
-extern "C" __global__ void InitSceneData_InstanceList_MatrixFrame(
-	size_t					  size,
-	InstanceList<MatrixFrame> instanceList,
-	BoxNode*				  boxNodes,
-	InstanceNode*			  primNodes,
-	Instance*				  instances,
-	Frame*					  frames,
-	SceneHeader*			  sceneHeader )
+extern "C" __global__ void InitSceneData_InstanceList_hiprtFrameMatrix(
+	size_t						   size,
+	InstanceList<hiprtFrameMatrix> instanceList,
+	BoxNode*					   boxNodes,
+	InstanceNode*				   primNodes,
+	Instance*					   instances,
+	Frame*						   frames,
+	SceneHeader*				   sceneHeader )
 {
 	uint32_t index = blockIdx.x * blockDim.x + threadIdx.x;
-	InitSceneData<InstanceList<MatrixFrame>>( index, size, instanceList, boxNodes, primNodes, instances, frames, sceneHeader );
+	InitSceneData<InstanceList<hiprtFrameMatrix>>(
+		index, size, instanceList, boxNodes, primNodes, instances, frames, sceneHeader );
 }
 
 template <typename PrimitiveContainer, typename PrimitiveNode>
@@ -287,13 +297,14 @@ SingletonConstruction( uint32_t index, PrimitiveContainer& primitives, BoxNode* 
 {
 	if ( index > 0 ) return;
 
-	uint32_t leafType;
-	if constexpr ( is_same<PrimitiveNode, TriangleNode>::value )
-		leafType = TriangleType;
-	else if constexpr ( is_same<PrimitiveNode, CustomNode>::value )
-		leafType = CustomType;
-	else if constexpr ( is_same<PrimitiveNode, InstanceNode>::value )
-		leafType = InstanceType;
+	const uint32_t leafType = []() {
+		if constexpr ( is_same<PrimitiveNode, TriangleNode>::value )
+			return TriangleType;
+		else if constexpr ( is_same<PrimitiveNode, CustomNode>::value )
+			return CustomType;
+		else if constexpr ( is_same<PrimitiveNode, InstanceNode>::value )
+			return InstanceType;
+	}();
 
 	primNodes[0] = primitives.fetchPrimNode( 0 );
 
@@ -329,32 +340,32 @@ SingletonConstruction_AabbList_CustomNode( AabbList primitives, BoxNode* boxNode
 	SingletonConstruction<AabbList, CustomNode>( index, primitives, boxNodes, primNodes );
 }
 
-extern "C" __global__ void SingletonConstruction_InstanceList_SRTFrame_UserInstanceNode(
-	InstanceList<SRTFrame> primitives, BoxNode* boxNodes, InstanceNode* primNodes )
+extern "C" __global__ void SingletonConstruction_InstanceList_hiprtFrameSRT_UserInstanceNode(
+	InstanceList<hiprtFrameSRT> primitives, BoxNode* boxNodes, InstanceNode* primNodes )
 {
 	const uint32_t index = threadIdx.x + blockIdx.x * blockDim.x;
-	SingletonConstruction<InstanceList<SRTFrame>, InstanceNode>( index, primitives, boxNodes, primNodes );
+	SingletonConstruction<InstanceList<hiprtFrameSRT>, InstanceNode>( index, primitives, boxNodes, primNodes );
 }
 
-extern "C" __global__ void SingletonConstruction_InstanceList_SRTFrame_HwInstanceNode(
-	InstanceList<SRTFrame> primitives, BoxNode* boxNodes, InstanceNode* primNodes )
+extern "C" __global__ void SingletonConstruction_InstanceList_hiprtFrameSRT_HwInstanceNode(
+	InstanceList<hiprtFrameSRT> primitives, BoxNode* boxNodes, InstanceNode* primNodes )
 {
 	const uint32_t index = threadIdx.x + blockIdx.x * blockDim.x;
-	SingletonConstruction<InstanceList<SRTFrame>, InstanceNode>( index, primitives, boxNodes, primNodes );
+	SingletonConstruction<InstanceList<hiprtFrameSRT>, InstanceNode>( index, primitives, boxNodes, primNodes );
 }
 
-extern "C" __global__ void SingletonConstruction_InstanceList_MatrixFrame_UserInstanceNode(
-	InstanceList<MatrixFrame> primitives, BoxNode* boxNodes, InstanceNode* primNodes )
+extern "C" __global__ void SingletonConstruction_InstanceList_hiprtFrameMatrix_UserInstanceNode(
+	InstanceList<hiprtFrameMatrix> primitives, BoxNode* boxNodes, InstanceNode* primNodes )
 {
 	const uint32_t index = threadIdx.x + blockIdx.x * blockDim.x;
-	SingletonConstruction<InstanceList<MatrixFrame>, InstanceNode>( index, primitives, boxNodes, primNodes );
+	SingletonConstruction<InstanceList<hiprtFrameMatrix>, InstanceNode>( index, primitives, boxNodes, primNodes );
 }
 
-extern "C" __global__ void SingletonConstruction_InstanceList_MatrixFrame_HwInstanceNode(
-	InstanceList<MatrixFrame> primitives, BoxNode* boxNodes, InstanceNode* primNodes )
+extern "C" __global__ void SingletonConstruction_InstanceList_hiprtFrameMatrix_HwInstanceNode(
+	InstanceList<hiprtFrameMatrix> primitives, BoxNode* boxNodes, InstanceNode* primNodes )
 {
 	const uint32_t index = threadIdx.x + blockIdx.x * blockDim.x;
-	SingletonConstruction<InstanceList<MatrixFrame>, InstanceNode>( index, primitives, boxNodes, primNodes );
+	SingletonConstruction<InstanceList<hiprtFrameMatrix>, InstanceNode>( index, primitives, boxNodes, primNodes );
 }
 
 extern "C" __global__ void PairTriangles( TriangleMesh mesh, uint2* pairIndices, uint32_t* pairCounter )
@@ -438,15 +449,15 @@ extern "C" __global__ void __launch_bounds__( BvhBuilderReductionBlockSize )
 }
 
 extern "C" __global__ void __launch_bounds__( BvhBuilderReductionBlockSize )
-	ComputeCentroidBox_InstanceList_SRTFrame( InstanceList<SRTFrame> primitives, Aabb* centroidBox )
+	ComputeCentroidBox_InstanceList_hiprtFrameSRT( InstanceList<hiprtFrameSRT> primitives, Aabb* centroidBox )
 {
-	ComputeCentroidBox<InstanceList<SRTFrame>>( primitives, centroidBox );
+	ComputeCentroidBox<InstanceList<hiprtFrameSRT>>( primitives, centroidBox );
 }
 
 extern "C" __global__ void __launch_bounds__( BvhBuilderReductionBlockSize )
-	ComputeCentroidBox_InstanceList_MatrixFrame( InstanceList<MatrixFrame> primitives, Aabb* centroidBox )
+	ComputeCentroidBox_InstanceList_hiprtFrameMatrix( InstanceList<hiprtFrameMatrix> primitives, Aabb* centroidBox )
 {
-	ComputeCentroidBox<InstanceList<MatrixFrame>>( primitives, centroidBox );
+	ComputeCentroidBox<InstanceList<hiprtFrameMatrix>>( primitives, centroidBox );
 }
 
 template <typename PrimitiveContainer>
@@ -481,32 +492,32 @@ extern "C" __global__ void __launch_bounds__( BvhBuilderReductionBlockSize )
 }
 
 extern "C" __global__ void __launch_bounds__( BvhBuilderReductionBlockSize )
-	ComputeBox_InstanceList_SRTFrame( InstanceList<SRTFrame> primitives, Aabb* box )
+	ComputeBox_InstanceList_hiprtFrameSRT( InstanceList<hiprtFrameSRT> primitives, Aabb* box )
 {
-	ComputeBox<InstanceList<SRTFrame>>( primitives, box );
+	ComputeBox<InstanceList<hiprtFrameSRT>>( primitives, box );
 }
 
 extern "C" __global__ void __launch_bounds__( BvhBuilderReductionBlockSize )
-	ComputeBox_InstanceList_MatrixFrame( InstanceList<MatrixFrame> primitives, Aabb* box )
+	ComputeBox_InstanceList_hiprtFrameMatrix( InstanceList<hiprtFrameMatrix> primitives, Aabb* box )
 {
-	ComputeBox<InstanceList<MatrixFrame>>( primitives, box );
+	ComputeBox<InstanceList<hiprtFrameMatrix>>( primitives, box );
 }
 
 template <typename PrimitiveContainer>
 __device__ void
 ComputeMortonCodes( PrimitiveContainer& primitives, Aabb* centroidBox, uint32_t* mortonCodeKeys, uint32_t* mortonCodeValues )
 {
-	Aabb box = *centroidBox;
+	const Aabb box = *centroidBox;
 
 	const uint32_t index = blockIdx.x * blockDim.x + threadIdx.x;
 
 	if ( index < primitives.getCount() )
 	{
-		float3 boxExtent		= box.extent();
-		float3 center			= primitives.fetchCenter( index );
-		float3 normalizedCenter = ( center - box.m_min ) / boxExtent;
-		mortonCodeKeys[index]	= computeExtendedMortonCode( normalizedCenter, boxExtent );
-		mortonCodeValues[index] = index;
+		const float3 boxExtent		  = box.extent();
+		const float3 center			  = primitives.fetchCenter( index );
+		const float3 normalizedCenter = ( center - box.m_min ) / boxExtent;
+		mortonCodeKeys[index]		  = computeExtendedMortonCode( normalizedCenter, boxExtent );
+		mortonCodeValues[index]		  = index;
 	}
 }
 
@@ -522,16 +533,16 @@ ComputeMortonCodes_AabbList( AabbList primitives, Aabb* centroidBox, uint32_t* m
 	ComputeMortonCodes<AabbList>( primitives, centroidBox, mortonCodeKeys, mortonCodeValues );
 }
 
-extern "C" __global__ void ComputeMortonCodes_InstanceList_SRTFrame(
-	InstanceList<SRTFrame> primitives, Aabb* centroidBox, uint32_t* mortonCodeKeys, uint32_t* mortonCodeValues )
+extern "C" __global__ void ComputeMortonCodes_InstanceList_hiprtFrameSRT(
+	InstanceList<hiprtFrameSRT> primitives, Aabb* centroidBox, uint32_t* mortonCodeKeys, uint32_t* mortonCodeValues )
 {
-	ComputeMortonCodes<InstanceList<SRTFrame>>( primitives, centroidBox, mortonCodeKeys, mortonCodeValues );
+	ComputeMortonCodes<InstanceList<hiprtFrameSRT>>( primitives, centroidBox, mortonCodeKeys, mortonCodeValues );
 }
 
-extern "C" __global__ void ComputeMortonCodes_InstanceList_MatrixFrame(
-	InstanceList<MatrixFrame> primitives, Aabb* centroidBox, uint32_t* mortonCodeKeys, uint32_t* mortonCodeValues )
+extern "C" __global__ void ComputeMortonCodes_InstanceList_hiprtFrameMatrix(
+	InstanceList<hiprtFrameMatrix> primitives, Aabb* centroidBox, uint32_t* mortonCodeKeys, uint32_t* mortonCodeValues )
 {
-	ComputeMortonCodes<InstanceList<MatrixFrame>>( primitives, centroidBox, mortonCodeKeys, mortonCodeValues );
+	ComputeMortonCodes<InstanceList<hiprtFrameMatrix>>( primitives, centroidBox, mortonCodeKeys, mortonCodeValues );
 }
 
 template <typename PrimitiveContainer, typename PrimitiveNode, typename Header>
@@ -637,7 +648,7 @@ __device__ void ResetCountersAndUpdateLeaves(
 			primNodes[index].m_mask		   = primitives.fetchMask( primIndex );
 			if ( transform.frameCount == 1 )
 				primNodes[index].m_identity =
-					primitives.copyInvTransformMatrix( transform.frameIndex, primNodes[index].m_matrix ) ? 1 : 0;
+					primitives.computeInvTransformMatrix( transform.frameIndex, primNodes[index].m_matrix ) ? 1 : 0;
 			else
 				primNodes[index].m_identity = 0;
 		}
@@ -662,26 +673,26 @@ extern "C" __global__ void ResetCountersAndUpdateLeaves_AabbList_CustomNode(
 	ResetCountersAndUpdateLeaves( header, primitives, boxNodes, primNodes );
 }
 
-extern "C" __global__ void ResetCountersAndUpdateLeaves_InstanceList_MatrixFrame_UserInstanceNode(
-	const SceneHeader* header, InstanceList<MatrixFrame> primitives, BoxNode* boxNodes, UserInstanceNode* primNodes )
+extern "C" __global__ void ResetCountersAndUpdateLeaves_InstanceList_hiprtFrameMatrix_UserInstanceNode(
+	const SceneHeader* header, InstanceList<hiprtFrameMatrix> primitives, BoxNode* boxNodes, UserInstanceNode* primNodes )
 {
 	ResetCountersAndUpdateLeaves( header, primitives, boxNodes, primNodes );
 }
 
-extern "C" __global__ void ResetCountersAndUpdateLeaves_InstanceList_MatrixFrame_HwInstanceNode(
-	const SceneHeader* header, InstanceList<MatrixFrame> primitives, BoxNode* boxNodes, HwInstanceNode* primNodes )
+extern "C" __global__ void ResetCountersAndUpdateLeaves_InstanceList_hiprtFrameMatrix_HwInstanceNode(
+	const SceneHeader* header, InstanceList<hiprtFrameMatrix> primitives, BoxNode* boxNodes, HwInstanceNode* primNodes )
 {
 	ResetCountersAndUpdateLeaves( header, primitives, boxNodes, primNodes );
 }
 
-extern "C" __global__ void ResetCountersAndUpdateLeaves_InstanceList_SRTFrame_UserInstanceNode(
-	const SceneHeader* header, InstanceList<SRTFrame> primitives, BoxNode* boxNodes, UserInstanceNode* primNodes )
+extern "C" __global__ void ResetCountersAndUpdateLeaves_InstanceList_hiprtFrameSRT_UserInstanceNode(
+	const SceneHeader* header, InstanceList<hiprtFrameSRT> primitives, BoxNode* boxNodes, UserInstanceNode* primNodes )
 {
 	ResetCountersAndUpdateLeaves( header, primitives, boxNodes, primNodes );
 }
 
-extern "C" __global__ void ResetCountersAndUpdateLeaves_InstanceList_SRTFrame_HwInstanceNode(
-	const SceneHeader* header, InstanceList<SRTFrame> primitives, BoxNode* boxNodes, HwInstanceNode* primNodes )
+extern "C" __global__ void ResetCountersAndUpdateLeaves_InstanceList_hiprtFrameSRT_HwInstanceNode(
+	const SceneHeader* header, InstanceList<hiprtFrameSRT> primitives, BoxNode* boxNodes, HwInstanceNode* primNodes )
 {
 	ResetCountersAndUpdateLeaves( header, primitives, boxNodes, primNodes );
 }
@@ -775,26 +786,26 @@ FitBounds_AabbList_CustomNode( GeomHeader* header, AabbList primitives, BoxNode*
 	FitBounds( header, primitives, boxNodes, primNodes );
 }
 
-extern "C" __global__ void FitBounds_InstanceList_SRTFrame_UserInstanceNode(
-	SceneHeader* header, InstanceList<SRTFrame> primitives, BoxNode* boxNodes, InstanceNode* primNodes )
+extern "C" __global__ void FitBounds_InstanceList_hiprtFrameSRT_UserInstanceNode(
+	SceneHeader* header, InstanceList<hiprtFrameSRT> primitives, BoxNode* boxNodes, InstanceNode* primNodes )
 {
 	FitBounds( header, primitives, boxNodes, primNodes );
 }
 
-extern "C" __global__ void FitBounds_InstanceList_SRTFrame_HwInstanceNode(
-	SceneHeader* header, InstanceList<SRTFrame> primitives, BoxNode* boxNodes, InstanceNode* primNodes )
+extern "C" __global__ void FitBounds_InstanceList_hiprtFrameSRT_HwInstanceNode(
+	SceneHeader* header, InstanceList<hiprtFrameSRT> primitives, BoxNode* boxNodes, InstanceNode* primNodes )
 {
 	FitBounds( header, primitives, boxNodes, primNodes );
 }
 
-extern "C" __global__ void FitBounds_InstanceList_MatrixFrame_UserInstanceNode(
-	SceneHeader* header, InstanceList<MatrixFrame> primitives, BoxNode* boxNodes, InstanceNode* primNodes )
+extern "C" __global__ void FitBounds_InstanceList_hiprtFrameMatrix_UserInstanceNode(
+	SceneHeader* header, InstanceList<hiprtFrameMatrix> primitives, BoxNode* boxNodes, InstanceNode* primNodes )
 {
 	FitBounds( header, primitives, boxNodes, primNodes );
 }
 
-extern "C" __global__ void FitBounds_InstanceList_MatrixFrame_HwInstanceNode(
-	SceneHeader* header, InstanceList<MatrixFrame> primitives, BoxNode* boxNodes, InstanceNode* primNodes )
+extern "C" __global__ void FitBounds_InstanceList_hiprtFrameMatrix_HwInstanceNode(
+	SceneHeader* header, InstanceList<hiprtFrameMatrix> primitives, BoxNode* boxNodes, InstanceNode* primNodes )
 {
 	FitBounds( header, primitives, boxNodes, primNodes );
 }
@@ -925,46 +936,46 @@ extern "C" __global__ void FitOrientedBounds_AabbList_CustomNode(
 	FitOrientedBounds( header, primitives, boxNodes, primNodes, kdops, updateCounters );
 }
 
-extern "C" __global__ void FitOrientedBounds_InstanceList_SRTFrame_UserInstanceNode(
-	SceneHeader*		   header,
-	InstanceList<SRTFrame> primitives,
-	Box8Node*			   boxNodes,
-	InstanceNode*		   primNodes,
-	Kdop*				   kdops,
-	uint32_t*			   updateCounters )
+extern "C" __global__ void FitOrientedBounds_InstanceList_hiprtFrameSRT_UserInstanceNode(
+	SceneHeader*				header,
+	InstanceList<hiprtFrameSRT> primitives,
+	Box8Node*					boxNodes,
+	InstanceNode*				primNodes,
+	Kdop*						kdops,
+	uint32_t*					updateCounters )
 {
 	FitOrientedBounds( header, primitives, boxNodes, primNodes, kdops, updateCounters );
 }
 
-extern "C" __global__ void FitOrientedBounds_InstanceList_SRTFrame_HwInstanceNode(
-	SceneHeader*		   header,
-	InstanceList<SRTFrame> primitives,
-	Box8Node*			   boxNodes,
-	InstanceNode*		   primNodes,
-	Kdop*				   kdops,
-	uint32_t*			   updateCounters )
+extern "C" __global__ void FitOrientedBounds_InstanceList_hiprtFrameSRT_HwInstanceNode(
+	SceneHeader*				header,
+	InstanceList<hiprtFrameSRT> primitives,
+	Box8Node*					boxNodes,
+	InstanceNode*				primNodes,
+	Kdop*						kdops,
+	uint32_t*					updateCounters )
 {
 	FitOrientedBounds( header, primitives, boxNodes, primNodes, kdops, updateCounters );
 }
 
-extern "C" __global__ void FitOrientedBounds_InstanceList_MatrixFrame_UserInstanceNode(
-	SceneHeader*			  header,
-	InstanceList<MatrixFrame> primitives,
-	Box8Node*				  boxNodes,
-	InstanceNode*			  primNodes,
-	Kdop*					  kdops,
-	uint32_t*				  updateCounters )
+extern "C" __global__ void FitOrientedBounds_InstanceList_hiprtFrameMatrix_UserInstanceNode(
+	SceneHeader*				   header,
+	InstanceList<hiprtFrameMatrix> primitives,
+	Box8Node*					   boxNodes,
+	InstanceNode*				   primNodes,
+	Kdop*						   kdops,
+	uint32_t*					   updateCounters )
 {
 	FitOrientedBounds( header, primitives, boxNodes, primNodes, kdops, updateCounters );
 }
 
-extern "C" __global__ void FitOrientedBounds_InstanceList_MatrixFrame_HwInstanceNode(
-	SceneHeader*			  header,
-	InstanceList<MatrixFrame> primitives,
-	Box8Node*				  boxNodes,
-	InstanceNode*			  primNodes,
-	Kdop*					  kdops,
-	uint32_t*				  updateCounters )
+extern "C" __global__ void FitOrientedBounds_InstanceList_hiprtFrameMatrix_HwInstanceNode(
+	SceneHeader*				   header,
+	InstanceList<hiprtFrameMatrix> primitives,
+	Box8Node*					   boxNodes,
+	InstanceNode*				   primNodes,
+	Kdop*						   kdops,
+	uint32_t*					   updateCounters )
 {
 	FitOrientedBounds( header, primitives, boxNodes, primNodes, kdops, updateCounters );
 }
@@ -1463,6 +1474,7 @@ __device__ void PackLeaves(
 	}
 }
 
+// assuming that triangle packets are AMD specific, there are no warp syncs
 template <>
 __device__ void PackLeaves<TriangleMesh, TrianglePacketNode, GeomHeader>(
 	uint32_t			index,
@@ -1750,6 +1762,7 @@ __device__ void PackLeaves<TriangleMesh, TrianglePacketNode, GeomHeader>(
 	}
 }
 
+// assuming that triangle packets are AMD specific, there are no warp syncs
 __device__ void PackLeavesWarp(
 	uint32_t			index,
 	uint32_t			taskCount,
@@ -1809,15 +1822,13 @@ __device__ void PackLeavesWarp(
 			}
 
 			// find new vertices
-			const uint32_t sublaneVertIndex = laneIndex % LanesPerLeafPacketTask;
-			const uint32_t subwarpVertIndex = laneIndex / LanesPerLeafPacketTask;
-			const bool	   valid			= sublaneVertIndex < 3 || pairIndices.x != pairIndices.y;
+			const bool valid = sublaneIndex < 3 || pairIndices.x != pairIndices.y;
 
 			bool	 contains = false;
 			uint32_t vertexIndexInPacket{};
 			for ( uint32_t k = 0; k < packet.m_vertCount; ++k )
 			{
-				if ( triPacketCache[subwarpIndex].m_vertexIndices[k] == ( &indices.x )[sublaneVertIndex] )
+				if ( triPacketCache[subwarpIndex].m_vertexIndices[k] == ( &indices.x )[sublaneIndex] )
 				{
 					vertexIndexInPacket = k;
 					contains			= true;
@@ -1826,7 +1837,7 @@ __device__ void PackLeavesWarp(
 			}
 
 			const uint32_t newVertMask =
-				( hiprt::ballot( !contains && valid ) >> ( LanesPerLeafPacketTask * subwarpVertIndex ) ) & 0xf;
+				( hiprt::ballot( !contains && valid ) >> ( LanesPerLeafPacketTask * subwarpIndex ) ) & 0xf;
 			const uint32_t oldVertCount = packet.m_vertCount;
 			const uint32_t newVertCount = __popc( newVertMask );
 
@@ -1836,21 +1847,21 @@ __device__ void PackLeavesWarp(
 			// store new vertices
 			if ( !contains )
 			{
-				const uint32_t vertexMask = ( 1 << sublaneVertIndex ) - 1;
+				const uint32_t vertexMask = ( 1 << sublaneIndex ) - 1;
 				vertexIndexInPacket		  = oldVertCount + __popc( newVertMask & vertexMask );
-				triPacketCache[subwarpIndex].m_vertexIndices[vertexIndexInPacket] = ( &indices.x )[sublaneVertIndex];
+				triPacketCache[subwarpIndex].m_vertexIndices[vertexIndexInPacket] = ( &indices.x )[sublaneIndex];
 			}
 
 			rangeOffset++;
+
+			// not sure why but this fence is needed on linux
+			__threadfence_block();
 		}
-		sync_warp();
 		__threadfence_block();
 
 		// count packets
 		if ( taskIndex < taskCount && packet.m_triPairCount > 0 ) primNodeCount++;
-		sync_warp();
 	}
-	sync_warp();
 
 	const uint32_t primNodeBase =
 		warpOffset( sublaneIndex == LanesPerLeafPacketTask - 1 ? primNodeCount : 0u, &header->m_primNodeCount );
@@ -1861,11 +1872,9 @@ __device__ void PackLeavesWarp(
 	uint32_t leafIndex		 = 0;
 
 	rangeOffset = rangeBase;
-	sync_warp();
 
 	while ( hiprt::ballot( taskIndex < taskCount && rangeOffset < rangeBase + rangeSize ) )
 	{
-		sync_warp();
 		TrianglePacketData packet{};
 
 		while ( rangeOffset < rangeBase + rangeSize && packet.m_triPairCount < MaxTrianglePairsPerTrianglePacket )
@@ -1896,15 +1905,13 @@ __device__ void PackLeavesWarp(
 			}
 
 			// find new vertices
-			const uint32_t sublaneVertIndex = laneIndex % LanesPerLeafPacketTask;
-			const uint32_t subwarpVertIndex = laneIndex / LanesPerLeafPacketTask;
-			const bool	   valid			= sublaneVertIndex < 3 || pairIndices.x != pairIndices.y;
+			const bool valid = sublaneIndex < 3 || pairIndices.x != pairIndices.y;
 
 			bool	 contains = false;
 			uint32_t vertexIndexInPacket{};
 			for ( uint32_t k = 0; k < packet.m_vertCount; ++k )
 			{
-				if ( triPacketCache[subwarpIndex].m_vertexIndices[k] == ( &indices.x )[sublaneVertIndex] )
+				if ( triPacketCache[subwarpIndex].m_vertexIndices[k] == ( &indices.x )[sublaneIndex] )
 				{
 					vertexIndexInPacket = k;
 					contains			= true;
@@ -1912,7 +1919,8 @@ __device__ void PackLeavesWarp(
 				}
 			}
 
-			const uint32_t newVertMask	= ( hiprt::ballot( !contains && valid ) >> ( 4 * subwarpVertIndex ) ) & 0xf;
+			const uint32_t newVertMask =
+				( hiprt::ballot( !contains && valid ) >> ( LanesPerLeafPacketTask * subwarpIndex ) ) & 0xf;
 			const uint32_t oldVertCount = packet.m_vertCount;
 			const uint32_t newVertCount = __popc( newVertMask );
 
@@ -1933,17 +1941,17 @@ __device__ void PackLeavesWarp(
 			// store new vertices
 			if ( !contains )
 			{
-				const uint32_t vertexMask = ( 1 << sublaneVertIndex ) - 1;
+				const uint32_t vertexMask = ( 1 << sublaneIndex ) - 1;
 				vertexIndexInPacket		  = oldVertCount + __popc( newVertMask & vertexMask );
-				triPacketCache[subwarpIndex].m_vertexIndices[vertexIndexInPacket] = ( &indices.x )[sublaneVertIndex];
+				triPacketCache[subwarpIndex].m_vertexIndices[vertexIndexInPacket] = ( &indices.x )[sublaneIndex];
 			}
 
 			// shuffle vertex indices in packet
 			uint4 vertexIndicesInPacket;
-			vertexIndicesInPacket.x = shfl( vertexIndexInPacket, subwarpVertIndex * LanesPerLeafPacketTask + 0 );
-			vertexIndicesInPacket.y = shfl( vertexIndexInPacket, subwarpVertIndex * LanesPerLeafPacketTask + 1 );
-			vertexIndicesInPacket.z = shfl( vertexIndexInPacket, subwarpVertIndex * LanesPerLeafPacketTask + 2 );
-			vertexIndicesInPacket.w = shfl( vertexIndexInPacket, subwarpVertIndex * LanesPerLeafPacketTask + 3 );
+			vertexIndicesInPacket.x = shfl( vertexIndexInPacket, subwarpIndex * LanesPerLeafPacketTask + 0 );
+			vertexIndicesInPacket.y = shfl( vertexIndexInPacket, subwarpIndex * LanesPerLeafPacketTask + 1 );
+			vertexIndicesInPacket.z = shfl( vertexIndexInPacket, subwarpIndex * LanesPerLeafPacketTask + 2 );
+			vertexIndicesInPacket.w = shfl( vertexIndexInPacket, subwarpIndex * LanesPerLeafPacketTask + 3 );
 
 			uint3 triIndices0 = make_uint3( vertexIndicesInPacket );
 			uint3 triIndices1{};
@@ -1964,7 +1972,6 @@ __device__ void PackLeavesWarp(
 			// otherwise triIndices1 are not correcly written to the final packet
 			__threadfence_block();
 		}
-		sync_warp();
 		__threadfence_block();
 
 		// build packets
@@ -1996,7 +2003,6 @@ __device__ void PackLeavesWarp(
 				if ( halfLaneIndex < broadcastPacket.m_vertCount )
 					halfLaneVertexIndex = triPacketCache[broadcastSubwarpIndex].m_vertexIndices[halfLaneIndex];
 			}
-			sync_warp();
 
 			// reuse shared memory
 			TrianglePacketNode& triPacketNode =
@@ -2006,7 +2012,6 @@ __device__ void PackLeavesWarp(
 				triPacketNode.m_data[halfLaneIndex + 0 * 16] = 0;
 				triPacketNode.m_data[halfLaneIndex + 1 * 16] = 0;
 			}
-			sync_warp();
 
 			// build two packets at once
 			if ( halfWarpIndex == 0 || secondValid )
@@ -2037,7 +2042,6 @@ __device__ void PackLeavesWarp(
 					triPacketNode.writeVertex<true>( halfLaneIndex, vertex );
 				}
 			}
-			sync_warp();
 
 			// write packet
 			if ( ( halfWarpIndex == 0 || secondValid ) )
@@ -2047,13 +2051,10 @@ __device__ void PackLeavesWarp(
 				primNodes[broadcastPrimNodeOffset].m_data[halfLaneIndex + 1 * 16] =
 					triPacketNode.m_data[halfLaneIndex + 1 * 16];
 			}
-			sync_warp();
 		}
-		sync_warp();
 
 		if ( taskIndex < taskCount && packet.m_triPairCount > 0 ) primNodeOffset++;
 	}
-	sync_warp();
 
 	// patch children
 	if ( taskIndex < taskCount )
@@ -2120,57 +2121,57 @@ extern "C" __global__ void PackLeaves_AabbList_CustomNode(
 	PackLeaves( index, taskCount, header, references, boxNodes, primNodes, primitives, taskQueue, referenceIndices );
 }
 
-extern "C" __global__ void PackLeaves_InstanceList_SRTFrame_UserInstanceNode(
-	uint32_t			   taskCount,
-	SceneHeader*		   header,
-	ReferenceNode*		   references,
-	BoxNode*			   boxNodes,
-	InstanceNode*		   primNodes,
-	InstanceList<SRTFrame> primitives,
-	uint3*				   taskQueue,
-	uint32_t*			   referenceIndices )
+extern "C" __global__ void PackLeaves_InstanceList_hiprtFrameSRT_UserInstanceNode(
+	uint32_t					taskCount,
+	SceneHeader*				header,
+	ReferenceNode*				references,
+	BoxNode*					boxNodes,
+	InstanceNode*				primNodes,
+	InstanceList<hiprtFrameSRT> primitives,
+	uint3*						taskQueue,
+	uint32_t*					referenceIndices )
 {
 	const uint32_t index = threadIdx.x + blockIdx.x * blockDim.x;
 	PackLeaves( index, taskCount, header, references, boxNodes, primNodes, primitives, taskQueue, referenceIndices );
 }
 
-extern "C" __global__ void PackLeaves_InstanceList_SRTFrame_HwInstanceNode(
-	uint32_t			   taskCount,
-	SceneHeader*		   header,
-	ReferenceNode*		   references,
-	BoxNode*			   boxNodes,
-	InstanceNode*		   primNodes,
-	InstanceList<SRTFrame> primitives,
-	uint3*				   taskQueue,
-	uint32_t*			   referenceIndices )
+extern "C" __global__ void PackLeaves_InstanceList_hiprtFrameSRT_HwInstanceNode(
+	uint32_t					taskCount,
+	SceneHeader*				header,
+	ReferenceNode*				references,
+	BoxNode*					boxNodes,
+	InstanceNode*				primNodes,
+	InstanceList<hiprtFrameSRT> primitives,
+	uint3*						taskQueue,
+	uint32_t*					referenceIndices )
 {
 	const uint32_t index = threadIdx.x + blockIdx.x * blockDim.x;
 	PackLeaves( index, taskCount, header, references, boxNodes, primNodes, primitives, taskQueue, referenceIndices );
 }
 
-extern "C" __global__ void PackLeaves_InstanceList_MatrixFrame_UserInstanceNode(
-	uint32_t				  taskCount,
-	SceneHeader*			  header,
-	ReferenceNode*			  references,
-	BoxNode*				  boxNodes,
-	InstanceNode*			  primNodes,
-	InstanceList<MatrixFrame> primitives,
-	uint3*					  taskQueue,
-	uint32_t*				  referenceIndices )
+extern "C" __global__ void PackLeaves_InstanceList_hiprtFrameMatrix_UserInstanceNode(
+	uint32_t					   taskCount,
+	SceneHeader*				   header,
+	ReferenceNode*				   references,
+	BoxNode*					   boxNodes,
+	InstanceNode*				   primNodes,
+	InstanceList<hiprtFrameMatrix> primitives,
+	uint3*						   taskQueue,
+	uint32_t*					   referenceIndices )
 {
 	const uint32_t index = threadIdx.x + blockIdx.x * blockDim.x;
 	PackLeaves( index, taskCount, header, references, boxNodes, primNodes, primitives, taskQueue, referenceIndices );
 }
 
-extern "C" __global__ void PackLeaves_InstanceList_MatrixFrame_HwInstanceNode(
-	uint32_t				  taskCount,
-	SceneHeader*			  header,
-	ReferenceNode*			  references,
-	BoxNode*				  boxNodes,
-	InstanceNode*			  primNodes,
-	InstanceList<MatrixFrame> primitives,
-	uint3*					  taskQueue,
-	uint32_t*				  referenceIndices )
+extern "C" __global__ void PackLeaves_InstanceList_hiprtFrameMatrix_HwInstanceNode(
+	uint32_t					   taskCount,
+	SceneHeader*				   header,
+	ReferenceNode*				   references,
+	BoxNode*					   boxNodes,
+	InstanceNode*				   primNodes,
+	InstanceList<hiprtFrameMatrix> primitives,
+	uint3*						   taskQueue,
+	uint32_t*					   referenceIndices )
 {
 	const uint32_t index = threadIdx.x + blockIdx.x * blockDim.x;
 	PackLeaves( index, taskCount, header, references, boxNodes, primNodes, primitives, taskQueue, referenceIndices );
@@ -2204,13 +2205,13 @@ extern "C" __global__ void PatchApiNodes_AabbList( uint32_t nodeCount, ApiNode* 
 	PatchApiNodes<CustomType>( index, nodeCount, apiNodes );
 }
 
-extern "C" __global__ void PatchApiNodes_InstanceList_SRTFrame( uint32_t nodeCount, ApiNode* apiNodes )
+extern "C" __global__ void PatchApiNodes_InstanceList_hiprtFrameSRT( uint32_t nodeCount, ApiNode* apiNodes )
 {
 	const uint32_t index = threadIdx.x + blockIdx.x * blockDim.x;
 	PatchApiNodes<InstanceType>( index, nodeCount, apiNodes );
 }
 
-extern "C" __global__ void PatchApiNodes_InstanceList_MatrixFrame( uint32_t nodeCount, ApiNode* apiNodes )
+extern "C" __global__ void PatchApiNodes_InstanceList_hiprtFrameMatrix( uint32_t nodeCount, ApiNode* apiNodes )
 {
 	const uint32_t index = threadIdx.x + blockIdx.x * blockDim.x;
 	PatchApiNodes<InstanceType>( index, nodeCount, apiNodes );

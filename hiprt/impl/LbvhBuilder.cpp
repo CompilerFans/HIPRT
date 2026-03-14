@@ -140,7 +140,7 @@ void LbvhBuilder::build(
 	switch ( buildInput.frameType )
 	{
 	case hiprtFrameTypeSRT: {
-		InstanceList<SRTFrame> list( buildInput );
+		InstanceList<hiprtFrameSRT> list( buildInput );
 		if ( context.getRtip() >= 31 )
 			build<Box8Node, HwInstanceNode>(
 				context, list, buildOptions, hiprtInvalidValue, temporaryMemoryArena, stream, storageMemoryArena );
@@ -150,7 +150,7 @@ void LbvhBuilder::build(
 		break;
 	}
 	case hiprtFrameTypeMatrix: {
-		InstanceList<MatrixFrame> list( buildInput );
+		InstanceList<hiprtFrameMatrix> list( buildInput );
 		if ( context.getRtip() >= 31 )
 			build<Box8Node, HwInstanceNode>(
 				context, list, buildOptions, hiprtInvalidValue, temporaryMemoryArena, stream, storageMemoryArena );
@@ -212,7 +212,7 @@ void LbvhBuilder::update(
 	switch ( buildInput.frameType )
 	{
 	case hiprtFrameTypeSRT: {
-		InstanceList<SRTFrame> list( buildInput );
+		InstanceList<hiprtFrameSRT> list( buildInput );
 		if ( context.getRtip() >= 31 )
 			update<Box8Node, HwInstanceNode>( context, list, buildOptions, stream, storageMemoryArena );
 		else
@@ -220,7 +220,7 @@ void LbvhBuilder::update(
 		break;
 	}
 	case hiprtFrameTypeMatrix: {
-		InstanceList<MatrixFrame> list( buildInput );
+		InstanceList<hiprtFrameMatrix> list( buildInput );
 		if ( context.getRtip() >= 31 )
 			update<Box8Node, HwInstanceNode>( context, list, buildOptions, stream, storageMemoryArena );
 		else

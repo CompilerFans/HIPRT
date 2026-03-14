@@ -116,6 +116,7 @@ Linux helper scripts:
 - Use references instead of pointers if possible.
 - Use bit-fields instead of explicit bit masking if possible.
 - Use `nullptr` instead of `NULL` or zero.
+- Use `using` instead of `typedef`.
 - Use C++-style casts (e.g., `static_cast`) instead of C-style cast.
 - Add `const` for references and pointers if they are not being changed.
 - Add `constexpr` for variables and functions if they can be constant in compile time (do not use `#define` if possible).

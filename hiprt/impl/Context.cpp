@@ -198,12 +198,12 @@ Context::createGeometries( const std::vector<hiprtGeometryBuildInput>& buildInpu
 	return geometries;
 }
 
-void Context::destroyGeometries( const std::vector<hiprtGeometry> geometries )
+void Context::destroyGeometries( const std::vector<hiprtGeometry>& geometries )
 {
 	// checkOro( cuCtxSetCurrent( m_ctxt ) );
 
 	std::lock_guard<std::mutex> lockMutex( m_poolMutex );
-	for ( hiprtGeometry geometry : geometries )
+	for ( const hiprtGeometry geometry : geometries )
 	{
 		auto head = std::find_if(
 			m_poolHeads.begin(), m_poolHeads.end(), [&]( const std::pair<std::pair<cudaDeviceptr, size_t>, uint32_t>& h ) {
@@ -519,12 +519,12 @@ Context::createScenes( const std::vector<hiprtSceneBuildInput>& buildInputs, con
 	return scenes;
 }
 
-void Context::destroyScenes( const std::vector<hiprtScene> scenes )
+void Context::destroyScenes( const std::vector<hiprtScene>& scenes )
 {
 	// checkOro( cuCtxSetCurrent( m_ctxt ) );
 
 	std::lock_guard<std::mutex> lockMutex( m_poolMutex );
-	for ( hiprtScene scene : scenes )
+	for ( const hiprtScene scene : scenes )
 	{
 		auto head = std::find_if(
 			m_poolHeads.begin(), m_poolHeads.end(), [&]( const std::pair<std::pair<cudaDeviceptr, size_t>, uint32_t>& h ) {
