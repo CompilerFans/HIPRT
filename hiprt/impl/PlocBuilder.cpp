@@ -36,7 +36,7 @@ size_t PlocBuilder::getTemporaryBufferSize( const size_t count )
 	return RoundUp( sizeof( Aabb ), DefaultAlignment ) + 4 * RoundUp( sizeof( uint32_t ) * count, DefaultAlignment ) +
 		   RoundUp( count * sizeof( ScratchNode ), DefaultAlignment ) +
 		   RoundUp( count * sizeof( ReferenceNode ), DefaultAlignment ) + RoundUp( sizeof( uint32_t ), DefaultAlignment ) +
-		   RoundUp( getRadixSortPairsTemporaryStorageSize( count ), DefaultAlignment );
+		   RoundUp( RadixSort::getTemporaryStorageSize( count ), DefaultAlignment );
 }
 
 size_t PlocBuilder::getTemporaryBufferSize(

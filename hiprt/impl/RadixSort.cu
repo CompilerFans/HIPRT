@@ -55,7 +55,7 @@ class ScopedDevice final
 };
 } // namespace
 
-size_t getRadixSortPairsTemporaryStorageSize( size_t count )
+size_t RadixSort::getTemporaryStorageSize( size_t count )
 {
 	size_t requiredBytes = 0;
 	checkOro( cub::DeviceRadixSort::SortPairs(
@@ -73,8 +73,7 @@ size_t getRadixSortPairsTemporaryStorageSize( size_t count )
 	return requiredBytes;
 }
 
-void radixSortPairs(
-	int				device,
+void RadixSort::sort(
 	void*			temporaryStorage,
 	size_t			temporaryStorageSize,
 	uint32_t*		inputKeys,
@@ -82,9 +81,9 @@ void radixSortPairs(
 	uint32_t*		outputKeys,
 	uint32_t*		outputValues,
 	size_t			count,
-	cudaStream_t	stream ) noexcept
+	cudaStream_t	stream ) const noexcept
 {
-	ScopedDevice scopedDevice( device );
+	ScopedDevice scopedDevice( m_device );
 
 	checkOro( cub::DeviceRadixSort::SortPairs(
 		temporaryStorage,

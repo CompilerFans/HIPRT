@@ -31,17 +31,25 @@
 namespace hiprt
 {
 
-size_t getRadixSortPairsTemporaryStorageSize( size_t count );
+class RadixSort final
+{
+  public:
+	explicit RadixSort( int device ) : m_device( device ) {}
 
-void radixSortPairs(
-	int				device,
-	void*			temporaryStorage,
-	size_t			temporaryStorageSize,
-	uint32_t*		inputKeys,
-	uint32_t*		inputValues,
-	uint32_t*		outputKeys,
-	uint32_t*		outputValues,
-	size_t			count,
-	cudaStream_t	stream ) noexcept;
+	static size_t getTemporaryStorageSize( size_t count );
+
+	void sort(
+		void*			temporaryStorage,
+		size_t			temporaryStorageSize,
+		uint32_t*		inputKeys,
+		uint32_t*		inputValues,
+		uint32_t*		outputKeys,
+		uint32_t*		outputValues,
+		size_t			count,
+		cudaStream_t	stream ) const noexcept;
+
+  private:
+	int m_device = 0;
+};
 
 } // namespace hiprt

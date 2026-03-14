@@ -172,7 +172,8 @@ void PlocBuilder::build(
 	uint32_t* mortonCodeValues[2];
 	mortonCodeValues[0] = reinterpret_cast<uint32_t*>( boxNodes ) + 2 * primitives.getCount();
 	mortonCodeValues[1] = reinterpret_cast<uint32_t*>( boxNodes ) + 3 * primitives.getCount();
-	const size_t radixSortTempStorageSize = getRadixSortPairsTemporaryStorageSize( primitives.getCount() );
+	RadixSort	 sort( context.getDevice() );
+	const size_t radixSortTempStorageSize = RadixSort::getTemporaryStorageSize( primitives.getCount() );
 	uint8_t*	 radixSortTempStorage = temporaryMemoryArena.allocate<uint8_t>( radixSortTempStorageSize );
 	Timer	  timer;
 
@@ -292,8 +293,7 @@ void PlocBuilder::build(
 
 	// STEP 4: Sort Morton codes
 	timer.measure( SortTime, [&]() {
-		radixSortPairs(
-			context.getDevice(),
+		sort.sort(
 			radixSortTempStorage,
 			radixSortTempStorageSize,
 			mortonCodeKeys[0],
