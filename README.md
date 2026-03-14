@@ -11,8 +11,22 @@ HIPRT 当前仓库保留 `HIPRT` 项目名称以及 `hiprt*` 公开 API 命名�
 快速构建：
 
 ```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release -j
+```
+
+推荐的加速构建环境：
+
+- 使用 `Ninja` 生成器
+- 安装 `ccache` 作为编译 launcher
+- 安装 `mold` 作为链接器
+
+当前 `CMakeLists.txt` 会在工具存在时自动启用 `ccache` 和 `mold`。如果需要关闭，可传入：
+
+```bash
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+  -DHIPRT_ENABLE_CCACHE=OFF \
+  -DHIPRT_ENABLE_MOLD=OFF
 ```
 
 一键脚本：
@@ -64,6 +78,8 @@ There are no currently failing non-performance unit tests in the present MACA ba
 
 Runtime kernel disk cache now follows the original policy again: enabled by default for `Release`, disabled by default for non-`Release` builds. You can still override it with `-DHIPRT_ENABLE_RUNTIME_KERNEL_CACHE=ON|OFF`, or force-disable it at runtime with `HIPRT_DISABLE_RUNTIME_KERNEL_CACHE=1`.
 
+The Linux unit-test helper scripts keep runtime kernel cache enabled by default for faster repeated test runs. To debug JIT/header changes, explicitly run with `HIPRT_DISABLE_RUNTIME_KERNEL_CACHE=1`.
+
 For the detailed Chinese status, update rules, and per-case support matrix, see `docs/maca-test-status-zh.md`.
 
 ## Cloning and Building 
@@ -76,16 +92,19 @@ For the detailed Chinese status, update rules, and per-case support matrix, see 
 Build with CMake only.
 
 &nbsp;&nbsp;&nbsp;Example on Windows:  
-&nbsp;&nbsp;&nbsp;5. `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release`  
+&nbsp;&nbsp;&nbsp;5. `cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release`  
 &nbsp;&nbsp;&nbsp;6. `cmake --build build --config Release`  
 
 &nbsp;&nbsp;&nbsp;Example on Linux:  
-&nbsp;&nbsp;&nbsp;5. `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release`  
+&nbsp;&nbsp;&nbsp;5. `cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release`  
 &nbsp;&nbsp;&nbsp;6. `cmake --build build --config Release -j`  
 
 ### Build Notes
 
 - `CUDAToolkit` is required. CMake configures the project in CUDA mode only.
+- `Ninja` is the recommended generator for faster incremental builds.
+- `ccache` is auto-enabled as the C++/CUDA compiler launcher when available. Disable with `-DHIPRT_ENABLE_CCACHE=OFF`.
+- `mold` is auto-enabled as the linker on supported Unix platforms when available. Disable with `-DHIPRT_ENABLE_MOLD=OFF`.
 - `CMAKE_CUDA_ARCHITECTURES` is cache-configurable. Example: `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_ARCHITECTURES=89`.
 - Unit tests are built by default. Disable them with `-DNO_UNITTEST=ON`.
 - Generated binaries are written to `dist/bin/<Config>/`.

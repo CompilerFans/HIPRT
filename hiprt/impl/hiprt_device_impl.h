@@ -980,12 +980,8 @@ HIPRT_DEVICE bool SceneTraversal<Stack, InstanceStack, TraversalType>::transform
 		}
 		else
 		{
-			const uint32_t instanceID = instanceNode.m_primIndex;
-			const float3	  origin	 = hiprtPointWorldToObject( ray.origin, reinterpret_cast<hiprtScene>( m_scene ), instanceID, m_time );
-			const float3	  target	 = hiprtPointWorldToObject(
-				ray.origin + ray.direction, reinterpret_cast<hiprtScene>( m_scene ), instanceID, m_time );
-			ray.origin				  = origin;
-			ray.direction			  = target - origin;
+			Transform tr( m_frames, instanceNode.m_transform.frameIndex, instanceNode.m_transform.frameCount );
+			ray = tr.transformRay( ray, m_time );
 		}
 		if constexpr ( Rtip < 31 ) invD = rcp( ray.direction );
 	}

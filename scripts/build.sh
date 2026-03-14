@@ -6,12 +6,19 @@ BUILD_DIR="${BUILD_DIR:-$ROOT_DIR/build}"
 BUILD_TYPE="${BUILD_TYPE:-Release}"
 CUDA_ARCHITECTURES="${CUDA_ARCHITECTURES:-}"
 BUILD_TESTS="${BUILD_TESTS:-ON}"
+if [[ -z "${CMAKE_GENERATOR:-}" ]] && command -v ninja >/dev/null 2>&1; then
+  CMAKE_GENERATOR="Ninja"
+fi
 
 cmake_args=(
   -S "$ROOT_DIR"
   -B "$BUILD_DIR"
   -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
 )
+
+if [[ -n "${CMAKE_GENERATOR:-}" ]]; then
+  cmake_args+=(-G "$CMAKE_GENERATOR")
+fi
 
 if [[ -n "$CUDA_ARCHITECTURES" ]]; then
   cmake_args+=(-DCMAKE_CUDA_ARCHITECTURES="$CUDA_ARCHITECTURES")

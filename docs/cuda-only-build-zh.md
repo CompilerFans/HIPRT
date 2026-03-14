@@ -35,7 +35,7 @@ cmake --build build --config Release -j
 
 - 指定架构：`-DCMAKE_CUDA_ARCHITECTURES=89`
 - 不编译单测：`-DNO_UNITTEST=ON`
-- 控制运行时 kernel 磁盘缓存：`-DHIPRT_ENABLE_RUNTIME_KERNEL_CACHE=ON|OFF`（当前默认策略：`Release` 为 `ON`，非 `Release` 为 `OFF`）
+- 控制运行时 kernel 磁盘缓存：`-DHIPRT_ENABLE_RUNTIME_KERNEL_CACHE=ON|OFF`（当前默认策略：`Release` 为 `ON`，非 `Release` 为 `OFF`；测试建议保持开启）
 
 构建产物默认输出到：
 
@@ -115,6 +115,11 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DHIPRT_ENABLE_RUNTIME_KERNEL_CACHE
 
 ```bash
 export HIPRT_DISABLE_RUNTIME_KERNEL_CACHE=1
+
+说明：
+
+- 常规 `Release` 测试建议保持 cache 开启，以减少重复 JIT 编译时间。
+- 只有在排查 JIT 头文件、运行时编译输入或 cache 失效问题时，才建议显式设置 `HIPRT_DISABLE_RUNTIME_KERNEL_CACHE=1`。
 ```
 
 ## 后续改动建议

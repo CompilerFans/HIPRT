@@ -18,12 +18,14 @@
 
 ## 已证实的事实
 
-### 1. runtime kernel disk cache 不应在调试阶段默认开启
+### 1. runtime kernel disk cache 在常规测试中应开启，调试阶段才建议关闭
 
 - 根级 `cache/` 会缓存 JIT 结果。
 - 只清 `scripts/cache/` 不足以让运行时内核重新编译。
+- 在常规 `Release` 测试中，开启 cache 可以显著减少重复 runtime compile 时间。
 - 在调试阶段，旧 cache 会掩盖头文件修改，导致“源码已改、运行行为未变”的假象。
-- 当前仓库已经恢复 runtime kernel disk cache 的原始默认策略：`Release` 为 `ON`，非 `Release` 为 `OFF`，并保留：
+- 当前仓库已经恢复 runtime kernel disk cache 的原始默认策略：`Release` 为 `ON`，非 `Release` 为 `OFF`。
+- 当前测试脚本默认保留 cache 开启，并保留：
   - CMake 开关：`HIPRT_ENABLE_RUNTIME_KERNEL_CACHE`
   - 运行时环境变量：`HIPRT_DISABLE_RUNTIME_KERNEL_CACHE=1`
 
