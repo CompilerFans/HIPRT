@@ -43,12 +43,6 @@ extern "C" __device__ float __ocml_native_recip_f32( float );
 using hip_float3 = float __attribute__( ( ext_vector_type( 3 ) ) );
 #endif
 
-// NVRTC does not provide placement new consistently for device compilation.
-#if defined( __CUDACC_RTC__ )
-HIPRT_DEVICE void* operator new( size_t size, void* ptr ) noexcept { return ptr; };
-HIPRT_DEVICE void* operator new[]( size_t size, void* ptr ) noexcept { return ptr; };
-#endif
-
 HIPRT_DEVICE bool intersectFunc(
 	uint32_t					geomType,
 	uint32_t					rayType,

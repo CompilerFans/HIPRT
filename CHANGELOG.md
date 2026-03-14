@@ -7,10 +7,10 @@
 2.4.c587aa7
 - H-PLOC and improved wide BVH conversion
 - CMake support
-- Configurable HIPRT path via a env. variable
+- Configurable library path via an env. variable
 - New gfx architectures supported 
-- hiprtBuildTraceKernel can return only the HIP module
-- HIP module caching and unloading (fixing a memory leak)
+- hiprtBuildTraceKernel can return only the compiled module
+- Module caching and unloading (fixing a memory leak)
 - Fixing matrix inversion and identity check
 - Fixing refit and other minor issues
 
@@ -24,7 +24,7 @@
 - Optimized BVH build speed
 
 2.1.c202dac (November 2023)
-- HIPRT binaries compiled with ROCm 5.7
+- Library binaries refreshed for the current backend toolchain
 - A fix for caching trace kernels
 - A fix for the custom function table compilation
 - A fix for the fast and balanced builders with custom streams
@@ -42,7 +42,7 @@
 - BVH memory optimization
 - SBVH speed optimization
 - Fixing hiprtBuildTraceKernels
-- Dynamic loading via HIPRTEW
+- Dynamic loading support
 - Traversal optimization
 
 2.0.0 (February 2023)
