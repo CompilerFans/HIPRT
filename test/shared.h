@@ -37,7 +37,7 @@ static constexpr bool UseDynamicStack = false;
 
 #if defined( __KERNELCC__ )
 typedef typename hiprt::conditional<UseDynamicStack, hiprtDynamicStack, hiprtGlobalStack>::type Stack;
-typedef hiprtEmptyInstanceStack																	InstanceStack;
+typedef hiprtPrivateInstanceStack																InstanceStack;
 #endif
 
 // #if !defined( __KERNELCC__ )

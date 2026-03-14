@@ -150,38 +150,27 @@
 
 ## 当前最关键的失败诊断
 
-### 10. `Transform::transformRay()` 的 device 结果与期望不一致
+### 10. `Transform::transformRay()` 诊断在当前工作树下已恢复
 
-以下诊断单测仍失败：
+以下诊断单测当前已通过：
 
 - `SceneInternalTransformRaySrt`
 
-现象：
-
-- device 侧 `Transform tr(...).transformRay(ray, 0.0f)` 返回的 ray 仍保持原始尺度
-- 按当前测试预期，它应当返回被 world-to-object 缩放后的 ray
-
 这说明：
 
-- 即便 `interpolateFrames()` 结果正确
-- `transformRay()` 的 device 路径仍然是当前高度可疑点
+- 至少在当前工作树下，`Transform::transformRay()` 不再是最直接的功能 blocker
+- 它仍然值得保留为回归测试，因为之前确实出现过错误结果
 
-### 11. `MatrixFrame::getMatrixFrameInv(frame)` 的 device 结果也可疑
+### 11. `MatrixFrame::getMatrixFrameInv(frame)` 诊断在当前工作树下已恢复
 
-以下诊断单测仍失败：
+以下诊断单测当前已通过：
 
 - `SceneInverseMatrixDebugSrt`
 
-现象：
-
-- 对 scale=`0.5`
-- device 侧 `MatrixFrame::getMatrixFrameInv(frame)` 的对角线仍返回 `1`
-- 预期应为 `2`
-
 这进一步说明：
 
-- 问题很可能就在 `Frame -> inverse matrix` 这一层
-- 或它在 device 编译路径下与 host 侧结果不一致
+- 这条诊断目前不再是主 blocker
+- 但它仍应保留为红灯回归基线，防止后续 scene transform 修正时倒退
 
 ### 12. recreate 后再次 render 仍然会触发 device trap
 
@@ -203,6 +192,19 @@
 
 这条现象与 `BvhUpdateCornellBox` 当前的失败形态一致，因此二者很可能共享根因。
 
+### 13. trace kernel rebuild / custom stack 仍有独立红灯
+
+以下诊断单测仍失败：
+
+- `SceneTraceKernelSingletonSrt`
+- `PrimaryRayKernelRecreateStableRegs`
+
+这说明：
+
+- custom/global stack 路径仍不稳定
+- recreate 后同一个 `PrimaryRayKernel` 的 runtime compile / load 结果不稳定
+- `PrimaryRayKernelRecreateStableRegs` 中第二次 build 后 `numRegs` 从 `82` 变为 `90`
+
 ## 已排除的错误方向
 
 截至当前，以下方向已不再是优先怀疑对象：
@@ -215,16 +217,16 @@
 
 ## 当前最优先分析顺序
 
-1. `MatrixFrame::getMatrixFrameInv(frame)` 的 device 结果为什么与 host 预期不同
-2. `Transform::transformRay()` 为什么在 device 侧没有体现缩放
+1. custom/global stack 路径为什么仍会在 `SceneTraceKernelSingletonSrt` 下 trap
+2. recreate 后同一 `PrimaryRayKernel` 的 runtime compile / load 为什么不稳定
 3. recreate 后再次 render 时，JIT module / context / scene buffer 生命周期是否仍有未清理状态
 4. `BvhUpdateCornellBox` 为什么在当前 scene node host-side patch 之后仍然失败
 5. 在上述问题修正后，再回归：
+   - `SceneTraceKernelSingletonSrt`
+   - `PrimaryRayKernelRecreateStableRegs`
    - `RecreateCornellBoxTwiceSameTransformNoRef`
    - `RecreateCornellBoxTwiceNoRef`
    - `BvhUpdateCornellBox`
-   - `SceneInternalTransformRaySrt`
-   - `SceneInverseMatrixDebugSrt`
 
 ## 与当前状态文档的关系
 

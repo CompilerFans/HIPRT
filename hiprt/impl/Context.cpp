@@ -816,7 +816,7 @@ std::vector<hiprtScene> Context::compactScenes( const std::vector<hiprtScene>& s
 
 hiprtFuncTable Context::createFuncTable( uint32_t numGeomTypes, uint32_t numRayTypes )
 {
-	// checkOro( cuCtxSetCurrent( m_ctxt ) );
+	checkOro( cuCtxSetCurrent( m_ctxt ) );
 
 	uint8_t* ptr = nullptr;
 	checkOro( cudaMalloc(
@@ -836,7 +836,7 @@ hiprtFuncTable Context::createFuncTable( uint32_t numGeomTypes, uint32_t numRayT
 
 void Context::setFuncTable( hiprtFuncTable funcTable, uint32_t geomType, uint32_t rayType, hiprtFuncDataSet set )
 {
-	// checkOro( cuCtxSetCurrent( m_ctxt ) );
+	checkOro( cuCtxSetCurrent( m_ctxt ) );
 
 	hiprtFuncTableHeader header;
 	checkOro( cuMemcpyDtoH( &header, static_cast<uintptr_t>(reinterpret_cast<size_t>( funcTable )), sizeof( hiprtFuncTableHeader ) ) );
@@ -848,13 +848,13 @@ void Context::setFuncTable( hiprtFuncTable funcTable, uint32_t geomType, uint32_
 
 void Context::destroyFuncTable( hiprtFuncTable funcTable )
 {
-	// checkOro( cuCtxSetCurrent( m_ctxt ) );
+	checkOro( cuCtxSetCurrent( m_ctxt ) );
 	checkOro( cudaFree( reinterpret_cast<void *>( funcTable ) ) );
 }
 
 void Context::createGlobalStackBuffer( const hiprtGlobalStackBufferInput& input, hiprtGlobalStackBuffer& stackBufferOut )
 {
-	// checkOro( cuCtxSetCurrent( m_ctxt ) );
+	checkOro( cuCtxSetCurrent( m_ctxt ) );
 
 	const size_t stackEntrySize =
 		input.entryType == hiprtStackEntryTypeInstance ? sizeof( hiprtInstanceStackEntry ) : sizeof( uint32_t );
@@ -874,7 +874,8 @@ void Context::createGlobalStackBuffer( const hiprtGlobalStackBufferInput& input,
 	}
 	else
 	{
-		size_t				   size = input.stackSize * input.threadCount * stackEntrySize;
+		const uint32_t		   stackStride = getWarpSize();
+		size_t				   size		   = input.stackSize * input.threadCount * stackStride * stackEntrySize;
 		hiprtGlobalStackBuffer stackBuffer{ input.stackSize, input.threadCount, nullptr };
 		checkOro( cudaMalloc( reinterpret_cast<void **>( &stackBuffer.stackData ), size ) );
 		stackBufferOut = stackBuffer;
@@ -883,7 +884,7 @@ void Context::createGlobalStackBuffer( const hiprtGlobalStackBufferInput& input,
 
 void Context::destroyGlobalStackBuffer( hiprtGlobalStackBuffer stackBuffer )
 {
-	// checkOro( cuCtxSetCurrent( m_ctxt ) );
+	checkOro( cuCtxSetCurrent( m_ctxt ) );
 	checkOro( cudaFree( reinterpret_cast<void *>( stackBuffer.stackData ) ) );
 }
 
@@ -1010,7 +1011,7 @@ void Context::buildKernels(
 	CUmodule&							 module,
 	bool								 cache )
 {
-	// checkOro( cuCtxSetCurrent( m_ctxt ) );
+	checkOro( cuCtxSetCurrent( m_ctxt ) );
 	m_compiler.buildKernels(
 		*this,
 		funcNames,

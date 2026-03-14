@@ -47,7 +47,7 @@ For a concise Chinese description of the current build and migration boundaries,
 
 ## Current MACA Test Status
 
-As of **March 14, 2026**, the current MACA + cu-bridge migration branch passes `55 / 60` non-performance unit tests, or about `91.7%`, based on serial reruns in the current workspace.
+As of **March 14, 2026**, the current MACA + cu-bridge migration branch passes `54 / 59` non-performance unit tests, or about `91.5%`, based on serial reruns in the current workspace.
 
 Supported cases currently include:
 - Core build / geometry cases such as `CudaEnabled`, `MinimumCornellBox`, `Compaction`, `BoundingBox`, `CustomBvhImport`, `BvhIoApi`
@@ -55,13 +55,14 @@ Supported cases currently include:
 - Motion and rebuild/update coverage such as `MotionBlur`, `MotionBlurMatrix`, `MotionBlurSlerp`, `Rebuild`, `Update`, `PlocFallback`
 - Diagnostic scene-build checks such as `SceneAabbSingletonSrt`, `SceneAabbSingletonMatrixShear`, `SceneSingletonSrtNodeUsesTransformHeader`
 - Direct transform and traversal diagnostics such as `SceneWorldToObjectRaySrt`, `SceneWorldToObjectRayMatrixShear`, `SceneTransformDebugSrt`, `SceneInterpolatedFrameDebugSrt`, `SceneManualClosestHitSingletonSrt`, `GeomClosestHitScaledRay`
+- Focused transform diagnostics that currently pass such as `SceneInternalTransformRaySrt` and `SceneInverseMatrixDebugSrt`
 - Lifecycle diagnostics such as `RecreateCornellBoxTwiceBuildOnly` and `RenderCornellBoxTwiceSameSceneNoRef`
 - Recovered transformed-scene cases such as `TranslateCornellBox`, `ScaleCornellBox`, `RotateCornellBox`, `Shear`, `SceneIntersectionSingleton`, `SceneIntersection`, `SceneIntersectionMlas`
 - Object-scene rendering cases such as `BvhFastCornellBox`, `BvhHighQCornellBox`, `ShadowRayCornellBox`, `AoRayCornellBox`, `AoRayEmbreeCornellBox`, `UvsCornellBox`, `PrimIdsCornellBox`, `HitDistCornellBox`, `NormalsCornellBox`, `BvhBalancedCornellBox`, `PrimaryRayCornellBox`
 
 Known unsupported or not-yet-converged cases currently include:
-- Focused transform diagnostics: `SceneInternalTransformRaySrt`, `SceneInverseMatrixDebugSrt`
-- Recreate lifecycle diagnostics: `RecreateCornellBoxTwiceNoRef`, `RecreateCornellBoxTwiceSameTransformNoRef`
+- Custom/global stack diagnostic: `SceneTraceKernelSingletonSrt`
+- Recreate lifecycle diagnostics: `PrimaryRayKernelRecreateStableRegs`, `RecreateCornellBoxTwiceNoRef`, `RecreateCornellBoxTwiceSameTransformNoRef`
 - Scene update correctness case: `BvhUpdateCornellBox`
 
 Runtime kernel disk cache is currently disabled by default during the MACA migration. It can be enabled with `-DHIPRT_ENABLE_RUNTIME_KERNEL_CACHE=ON`, or force-disabled at runtime with `HIPRT_DISABLE_RUNTIME_KERNEL_CACHE=1`.

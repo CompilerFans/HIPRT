@@ -690,12 +690,14 @@ hiprtError hiprtTest::buildTraceKernels(
 	options.push_back( "--use_fast_math" );
 
 	std::vector<std::string> headersData( includeNamesData.size() );
+	std::vector<std::string> includeNameStrings( includeNamesData.size() );
 	std::vector<const char*> headers;
 	std::vector<const char*> includeNames;
 	for ( size_t i = 0; i < includeNamesData.size(); i++ )
 	{
 		readSourceCode( getRootDir() / includeNamesData[i], headersData[i] );
-		includeNames.push_back( includeNamesData[i].string().c_str() );
+		includeNameStrings[i] = includeNamesData[i].string();
+		includeNames.push_back( includeNameStrings[i].c_str() );
 		headers.push_back( headersData[i].c_str() );
 	}
 
