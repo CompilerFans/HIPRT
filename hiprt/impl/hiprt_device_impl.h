@@ -136,7 +136,7 @@ HIPRT_DEVICE GlobalStack<StackEntry, DynamicAssignment>::GlobalStack(
 	{
 		const uint32_t warpsPerBlock	= hiprt::DivideRoundUp( blockDim.x * blockDim.y, Stride );
 		const uint32_t activeWarps		= globalStackBuffer.stackCount >> LogStride;
-		const uint32_t firstThreadIndex = __ffsll( static_cast<unsigned long long>( hiprt::ballot( true ) ) ) - 1;
+		const uint32_t firstThreadIndex = hiprt::laneMaskFirstSet( hiprt::ballot( true ) );
 
 		uint32_t  warpHash			= InvalidValue;
 		uint32_t  warpHashCandidate = ( warpIndex + ( blockIdx.x + blockIdx.y * gridDim.x ) * warpsPerBlock ) % activeWarps;
@@ -175,7 +175,7 @@ HIPRT_DEVICE GlobalStack<StackEntry, DynamicAssignment>::~GlobalStack()
 		__threadfence();
 		const uint32_t threadIndex		= threadIdx.x + threadIdx.y * blockDim.x;
 		const uint32_t laneIndex		= threadIndex & ( Stride - 1 );
-		const uint32_t firstThreadIndex = __ffsll( static_cast<unsigned long long>( hiprt::ballot( true ) ) ) - 1;
+		const uint32_t firstThreadIndex = hiprt::laneMaskFirstSet( hiprt::ballot( true ) );
 		if ( laneIndex == firstThreadIndex ) atomicExch( m_globalStackLock, 0 );
 	}
 }

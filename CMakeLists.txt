@@ -11,18 +11,27 @@ set(CMAKE_CUDA_ARCHITECTURES "89;86;80;75" CACHE STRING "CUDA architectures to b
 
 option(NO_UNITTEST "Don't build unit tests" OFF)
 option(HIPRT_ENABLE_RUNTIME_KERNEL_CACHE "Enable on-disk cache for runtime-compiled kernels" OFF)
+set(HIPRT_WARP_SIZE_OVERRIDE "" CACHE STRING "Override HIPRT device warp size; empty uses platform defaults")
+
+if(HIPRT_WARP_SIZE_OVERRIDE AND NOT HIPRT_WARP_SIZE_OVERRIDE MATCHES "^(32|64)$")
+	message(FATAL_ERROR "HIPRT_WARP_SIZE_OVERRIDE must be empty, 32, or 64")
+endif()
 
 list(GET CUDAToolkit_INCLUDE_DIRS 0 CUDAToolkit_PRIMARY_INCLUDE_DIR)
 string(REPLACE "\\" "\\\\" HIPRT_CUDA_INCLUDE_DIR_ESCAPED "${CUDAToolkit_PRIMARY_INCLUDE_DIR}")
 
 add_definitions(-DGTEST_HAS_TR1_TUPLE=0)
 add_definitions(-DHIPRT_PUBLIC_REPO)
+if(HIPRT_WARP_SIZE_OVERRIDE)
+	add_definitions(-DHIPRT_WARP_SIZE=${HIPRT_WARP_SIZE_OVERRIDE})
+endif()
 
 message(STATUS "Configuring HIPRT with CUDA backend only")
 message(STATUS "CUDA toolkit version: ${CUDAToolkit_VERSION}")
 message(STATUS "CUDA architectures: ${CMAKE_CUDA_ARCHITECTURES}")
 message(STATUS "Disable unit tests: ${NO_UNITTEST}")
 message(STATUS "Runtime kernel disk cache: ${HIPRT_ENABLE_RUNTIME_KERNEL_CACHE}")
+message(STATUS "HIPRT warp size override: ${HIPRT_WARP_SIZE_OVERRIDE}")
 
 if(WIN32)
 	add_definitions(-D__WINDOWS__)

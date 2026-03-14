@@ -166,17 +166,23 @@ constexpr uint32_t MaxInstanceLevels		 = 4u;
 constexpr uint32_t DefaultAlignment			 = 64u;
 constexpr uint32_t NoRotationIndex			 = 127u;
 constexpr uint32_t InstanceIDBits			 = 24u;
+using LaneMask								 = uint64_t;
 
 #ifdef __KERNELCC__
 #ifndef HIPRT_RTIP
 #define HIPRT_RTIP 0
 #endif
 
+#ifndef HIPRT_WARP_SIZE
 #if defined( __MACACC__ )
-constexpr uint32_t WarpSize = 64;
+#define HIPRT_WARP_SIZE 64
 #else
-constexpr uint32_t WarpSize = 32;
+#define HIPRT_WARP_SIZE 32
 #endif
+#endif
+
+HIPRT_STATIC_ASSERT( HIPRT_WARP_SIZE == 32 || HIPRT_WARP_SIZE == 64 );
+constexpr uint32_t WarpSize = HIPRT_WARP_SIZE;
 
 constexpr uint32_t Rtip = HIPRT_RTIP;
 
@@ -226,12 +232,102 @@ HIPRT_HOST_DEVICE HIPRT_INLINE uint32_t clz( uint32_t value )
 #endif
 }
 
+HIPRT_HOST_DEVICE HIPRT_INLINE uint32_t clzll( uint64_t value )
+{
+#if defined( __CUDA_ARCH__ )
+	return __clzll( static_cast<unsigned long long>( value ) );
+#else
+	uint32_t count = 0;
+	for ( uint64_t mask = 1ull << 63; mask && !( value & mask ); mask >>= 1 )
+		++count;
+	return value == 0 ? 64 : count;
+#endif
+}
+
+HIPRT_HOST_DEVICE constexpr LaneMask laneMaskBit( uint32_t lane )
+{
+	if ( lane >= 64 ) return 0ull;
+	return 1ull << lane;
+}
+
+HIPRT_HOST_DEVICE constexpr LaneMask laneMaskPrefix( uint32_t lane )
+{
+	return lane == 0 ? 0ull : ( lane >= 64 ? ~0ull : ( laneMaskBit( lane ) - 1ull ) );
+}
+
+HIPRT_HOST_DEVICE constexpr LaneMask laneMaskRange( uint32_t count, uint32_t offset = 0 )
+{
+	if ( count == 0 || offset >= 64 ) return 0ull;
+
+	const uint32_t clampedCount = count < ( 64u - offset ) ? count : ( 64u - offset );
+	if ( clampedCount == 64 ) return ~0ull;
+	return ( ( 1ull << clampedCount ) - 1ull ) << offset;
+}
+
+HIPRT_HOST_DEVICE constexpr LaneMask subLaneMask( uint32_t subgroupSize, uint32_t subgroupIndex )
+{
+	return laneMaskRange( subgroupSize, subgroupSize * subgroupIndex );
+}
+
+HIPRT_HOST_DEVICE HIPRT_INLINE uint32_t laneMaskPopCount( LaneMask mask )
+{
+#if defined( __CUDA_ARCH__ )
+	return __popcll( static_cast<unsigned long long>( mask ) );
+#else
+	uint32_t count = 0;
+	while ( mask )
+	{
+		mask &= mask - 1ull;
+		++count;
+	}
+	return count;
+#endif
+}
+
+HIPRT_HOST_DEVICE HIPRT_INLINE uint32_t laneMaskFirstSet( LaneMask mask )
+{
+	if ( mask == 0 ) return InvalidValue;
+
+#if defined( __CUDA_ARCH__ )
+	return static_cast<uint32_t>( __ffsll( static_cast<unsigned long long>( mask ) ) - 1 );
+#else
+	uint32_t lane = 0;
+	while ( ( mask & 1ull ) == 0 )
+	{
+		mask >>= 1;
+		++lane;
+	}
+	return lane;
+#endif
+}
+
+HIPRT_HOST_DEVICE HIPRT_INLINE uint32_t laneMaskLastSet( LaneMask mask )
+{
+	return mask == 0 ? InvalidValue : 63u - clzll( mask );
+}
+
+HIPRT_HOST_DEVICE HIPRT_INLINE uint32_t laneMaskLowerCount( LaneMask mask, uint32_t lane )
+{
+	return laneMaskPopCount( mask & laneMaskPrefix( lane ) );
+}
+
+HIPRT_HOST_DEVICE constexpr LaneMask laneMaskClear( LaneMask mask, uint32_t lane ) { return mask & ~laneMaskBit( lane ); }
+
 #ifdef __KERNELCC__
+HIPRT_INLINE HIPRT_DEVICE LaneMask activeMask()
+{
+#ifdef __CUDACC__
+	return static_cast<LaneMask>( __activemask() );
+#else
+	return __ballot( 1 );
+#endif
+}
+
 template <typename T>
 HIPRT_INLINE HIPRT_DEVICE T shfl( T var, int srcLane )
 {
 #ifdef __CUDACC__
-	return __shfl_sync( __activemask(), var, srcLane );
+	return __shfl_sync( activeMask(), var, srcLane );
 #else
 	return __shfl( var, srcLane );
 #endif
@@ -241,7 +337,7 @@ template <typename T>
 HIPRT_INLINE HIPRT_DEVICE T shfl_up( T var, int srcLane )
 {
 #ifdef __CUDACC__
-	return __shfl_up_sync( __activemask(), var, srcLane );
+	return __shfl_up_sync( activeMask(), var, srcLane );
 #else
 	return __shfl_up( var, srcLane );
 #endif
@@ -251,7 +347,7 @@ template <typename T>
 HIPRT_INLINE HIPRT_DEVICE T shfl_down( T var, int srcLane )
 {
 #ifdef __CUDACC__
-	return __shfl_down_sync( __activemask(), var, srcLane );
+	return __shfl_down_sync( activeMask(), var, srcLane );
 #else
 	return __shfl_down( var, srcLane );
 #endif
@@ -261,16 +357,16 @@ template <typename T>
 HIPRT_INLINE HIPRT_DEVICE T shfl_xor( T var, int srcLane )
 {
 #ifdef __CUDACC__
-	return __shfl_xor_sync( __activemask(), var, srcLane );
+	return __shfl_xor_sync( activeMask(), var, srcLane );
 #else
 	return __shfl_xor( var, srcLane );
 #endif
 }
 
-HIPRT_INLINE HIPRT_DEVICE uint64_t ballot( int predicate )
+HIPRT_INLINE HIPRT_DEVICE LaneMask ballot( int predicate )
 {
 #ifdef __CUDACC__
-	return static_cast<uint64_t>( __ballot_sync( __activemask(), predicate ) );
+	return static_cast<LaneMask>( __ballot_sync( activeMask(), predicate ) );
 #else
 	return __ballot( predicate );
 #endif
@@ -279,7 +375,7 @@ HIPRT_INLINE HIPRT_DEVICE uint64_t ballot( int predicate )
 HIPRT_INLINE HIPRT_DEVICE uint32_t any( int predicate )
 {
 #ifdef __CUDACC__
-	return __any_sync( __activemask(), predicate );
+	return __any_sync( activeMask(), predicate );
 #else
 	return __any( predicate );
 #endif
@@ -287,7 +383,7 @@ HIPRT_INLINE HIPRT_DEVICE uint32_t any( int predicate )
 HIPRT_INLINE HIPRT_DEVICE uint32_t all( int predicate )
 {
 #ifdef __CUDACC__
-	return __all_sync( __activemask(), predicate );
+	return __all_sync( activeMask(), predicate );
 #else
 	return __all( predicate );
 #endif
