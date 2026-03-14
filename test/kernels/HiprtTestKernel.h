@@ -301,6 +301,25 @@ extern "C" __global__ void SceneClosestHitKernel( hiprtScene scene, uint32_t ray
 	hits[index] = tr.getNextHit();
 }
 
+extern "C" __global__ void SceneManualClosestHitKernel( hiprtScene scene, uint32_t rayCount, hiprtRay* rays, hiprtHit* hits )
+{
+	const uint32_t index = blockIdx.x * blockDim.x + threadIdx.x;
+	if ( index >= rayCount ) return;
+
+	hiprt::SceneHeader*		   sceneHeader	= reinterpret_cast<hiprt::SceneHeader*>( scene );
+	const hiprt::InstanceNode& instanceNode = sceneHeader->m_primNodes[0];
+	hiprtRay				   localRay	   = rays[index];
+
+	const float3 origin = hiprtPointWorldToObject( localRay.origin, scene, 0 );
+	const float3 target = hiprtPointWorldToObject( localRay.origin + localRay.direction, scene, 0 );
+	localRay.origin	   = origin;
+	localRay.direction = target - origin;
+
+	hiprtGeometry geom = reinterpret_cast<hiprtGeometry>( instanceNode.m_geometry );
+	hiprtGeomTraversalClosest tr( geom, localRay );
+	hits[index] = tr.getNextHit();
+}
+
 extern "C" __global__ void SceneIntersectionKernel( hiprtScene scene, uint8_t* image, hiprtFuncTable table, uint2 resolution )
 {
 	const uint32_t x	 = blockIdx.x * blockDim.x + threadIdx.x;

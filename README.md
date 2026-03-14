@@ -47,20 +47,21 @@ For a concise Chinese description of the current build and migration boundaries,
 
 ## Current MACA Test Status
 
-As of **March 14, 2026**, the current MACA + cu-bridge migration branch passes `38 / 48` non-performance unit tests, or about `79.2%`, based on serial reruns in the current workspace.
+As of **March 14, 2026**, the current MACA + cu-bridge migration branch passes `40 / 51` non-performance unit tests, or about `78.4%`, based on serial reruns in the current workspace.
 
 Supported cases currently include:
 - Core build / geometry cases such as `CudaEnabled`, `MinimumCornellBox`, `Compaction`, `BoundingBox`, `CustomBvhImport`, `BvhIoApi`
 - Intersection and custom-function cases such as `MeshIntersection`, `MeshIntersectionNonIndexed`, `PairTriangles`, `Cutout`, `CustomIntersection`
 - Motion and rebuild/update coverage such as `MotionBlur`, `MotionBlurMatrix`, `MotionBlurSlerp`, `Rebuild`, `Update`, `PlocFallback`
 - Diagnostic scene-build checks such as `SceneAabbSingletonSrt`, `SceneAabbSingletonMatrixShear`, `SceneSingletonSrtNodeUsesTransformHeader`
-- Direct transform and traversal diagnostics such as `SceneWorldToObjectRaySrt`, `SceneWorldToObjectRayMatrixShear`, `SceneTransformDebugSrt`, `GeomClosestHitScaledRay`
+- Direct transform and traversal diagnostics such as `SceneWorldToObjectRaySrt`, `SceneWorldToObjectRayMatrixShear`, `SceneTransformDebugSrt`, `SceneInterpolatedFrameDebugSrt`, `SceneManualClosestHitSingletonSrt`, `GeomClosestHitScaledRay`
 - Object-scene rendering cases such as `BvhFastCornellBox`, `BvhHighQCornellBox`, `ShadowRayCornellBox`, `AoRayCornellBox`, `AoRayEmbreeCornellBox`, `UvsCornellBox`, `PrimIdsCornellBox`, `HitDistCornellBox`, `NormalsCornellBox`, `BvhBalancedCornellBox`, `PrimaryRayCornellBox`
 
 Known unsupported or not-yet-converged cases currently include:
 - Transform-sensitive scene cases: `TranslateCornellBox`, `ScaleCornellBox`, `RotateCornellBox`, `Shear`
 - Scene traversal correctness cases: `SceneIntersectionSingleton`, `SceneIntersection`, `SceneIntersectionMlas`
 - Focused traversal diagnostics: `SceneClosestHitSingletonSrt`, `SceneInternalTransformRaySrt`
+- Inverse-matrix diagnostic: `SceneInverseMatrixDebugSrt`
 - Scene update correctness case: `BvhUpdateCornellBox`
 
 Runtime kernel disk cache is currently disabled by default during the MACA migration. It can be enabled with `-DHIPRT_ENABLE_RUNTIME_KERNEL_CACHE=ON`, or force-disabled at runtime with `HIPRT_DISABLE_RUNTIME_KERNEL_CACHE=1`.

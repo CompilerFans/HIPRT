@@ -104,9 +104,29 @@
 
 因此，剩余问题**不在 geometry traversal / triangle hit 这一层**。
 
+### 8. helper 变换 + geometry traversal 组合也是正确的
+
+以下诊断单测已通过：
+
+- `SceneManualClosestHitSingletonSrt`
+
+它证明：
+
+- 从 scene 中取出 instance geometry
+- 先通过 helper 路径把 world ray 变到 object/local space
+- 再直接执行 `hiprtGeomTraversalClosest`
+
+这一整条组合路径是正确的。
+
+因此，剩余问题进一步收敛为：
+
+- `hiprtSceneTraversalClosest` 自身的 instance traversal / control flow
+  或
+- 它内部使用的 `Transform::transformRay()`
+
 ## 当前最关键的失败诊断
 
-### 8. scene traversal 仍然在单实例最小场景下 miss
+### 9. scene traversal 仍然在单实例最小场景下 miss
 
 以下诊断单测仍失败：
 
@@ -124,7 +144,7 @@
   或
 - scene traversal 内部的 ray / t / stack / node 处理
 
-### 9. `Transform::transformRay()` 的 device 结果与期望不一致
+### 10. `Transform::transformRay()` 的 device 结果与期望不一致
 
 以下诊断单测仍失败：
 
@@ -140,7 +160,7 @@
 - 即便 `interpolateFrames()` 结果正确
 - `transformRay()` 的 device 路径仍然是当前高度可疑点
 
-### 10. `MatrixFrame::getMatrixFrameInv(frame)` 的 device 结果也可疑
+### 11. `MatrixFrame::getMatrixFrameInv(frame)` 的 device 结果也可疑
 
 以下诊断单测仍失败：
 
@@ -171,7 +191,7 @@
 
 1. `MatrixFrame::getMatrixFrameInv(frame)` 的 device 结果为什么与 host 预期不同
 2. `Transform::transformRay()` 为什么在 device 侧没有体现缩放
-3. scene traversal 使用 dynamic instance transform 时，ray / t / stack 的衔接是否有额外错误
+3. scene traversal 使用 dynamic instance transform 时，ray / t / stack / node 的衔接是否有额外错误
 4. 在上述问题修正后，再回归：
    - `SceneClosestHitSingletonSrt`
    - `SceneIntersectionSingleton`

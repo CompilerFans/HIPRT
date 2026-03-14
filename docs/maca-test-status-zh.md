@@ -32,9 +32,9 @@
 
 ## 当前结果概览
 
-- 总通过率：`38 / 48`，约 `79.2%`
+- 总通过率：`40 / 51`，约 `78.4%`
 - `ObjTestCases`：`11 / 15` 通过
-- `hiprtTest`：`27 / 33` 通过
+- `hiprtTest`：`29 / 36` 通过
 
 ## 当前支持的 case
 
@@ -80,6 +80,8 @@
 - `SceneWorldToObjectRaySrt`
 - `SceneWorldToObjectRayMatrixShear`
 - `SceneTransformDebugSrt`
+- `SceneInterpolatedFrameDebugSrt`
+- `SceneManualClosestHitSingletonSrt`
 - `GeomClosestHitScaledRay`
 
 ## 当前未支持 / 未收敛的 case
@@ -110,6 +112,8 @@
 
 - `hiprtTest.SceneInternalTransformRaySrt`
   现象：device 侧 `Transform::transformRay()` 仍返回未缩放的 ray
+- `hiprtTest.SceneInverseMatrixDebugSrt`
+  现象：device 侧 inverse matrix 对角线仍为 `1`，预期为 `2`
 
 ### Update 路径
 
@@ -141,7 +145,8 @@
   2. `hiprtPointWorldToObject()` 的 SRT 路径正确
   3. `hiprtPointWorldToObject()` 的 matrix shear 路径正确
   4. `hiprtGeomTraversalClosest` 在对应 local ray 上正确
-  5. 剩余问题集中在 scene traversal / internal transformRay 路径，而不是 scene AABB 构建
+  5. `SceneManualClosestHitSingletonSrt` 已通过，说明 helper 形式的 scene world-to-object + geometry traversal 组合正确
+  6. 剩余问题集中在 scene traversal / internal transformRay 路径，而不是 scene AABB 构建
 - 当前剩余问题已经集中到：
   1. instance transform / scene traversal 正确性
   2. scene update 正确性
@@ -158,3 +163,4 @@
 8. `BvhUpdateCornellBox`
 9. `SceneClosestHitSingletonSrt`
 10. `SceneInternalTransformRaySrt`
+11. `SceneInverseMatrixDebugSrt`
