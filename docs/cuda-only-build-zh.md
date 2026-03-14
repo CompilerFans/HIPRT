@@ -72,6 +72,16 @@ cmake --build build --config Release -j
 - `test/bitcodes/*`
 - 历史 `HIPRTEW` 测试目标
 - HIP runtime loader 路径表
+- `contrib/Orochi/contrib/hipew`
+- `contrib/Orochi/Test`
+- `contrib/Orochi/UnitTest`
+- `contrib/Orochi/scripts`
+- `contrib/Orochi/tools`
+
+`contrib/Orochi` 当前仅保留对主仓库仍有价值的核心源码，例如：
+
+- `contrib/Orochi/Orochi`
+- `contrib/Orochi/ParallelPrimitives`
 
 如果后续新增代码，请不要再恢复这些旧路径，也不要重新引入：
 

@@ -17,6 +17,7 @@ This is the main repository for the source code for HIPRT.
 - The public project name remains `HIPRT`, and public API names such as `hiprtCreateContext` are intentionally preserved.
 - The backend is now CUDA-only. AMD HIP runtime, ROCm toolchains, `hipcc`, runtime loader paths, and legacy precompiled-bitcode build flows are not part of the build anymore.
 - `hiprtew.h` is kept as a compatibility header, but it now calls linked HIPRT APIs directly instead of resolving symbols at runtime.
+- The vendored `contrib/Orochi` subtree has been trimmed to the pieces still needed by the current build. Historical HIP loader code, Orochi tests, and Orochi helper scripts are no longer kept in the repository.
 
 For a concise Chinese description of the current build and migration boundaries, see `docs/cuda-only-build-zh.md`.
 
