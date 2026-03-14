@@ -167,8 +167,8 @@ void LbvhBuilder::build(
 	mortonCodeValues[0] = reinterpret_cast<uint32_t*>( taskQueue ) + 1 * primitives.getCount();
 	mortonCodeKeys[1]	= reinterpret_cast<uint32_t*>( boxNodes ) + 0 * primitives.getCount();
 	mortonCodeValues[1] = reinterpret_cast<uint32_t*>( boxNodes ) + 1 * primitives.getCount();
-	uint8_t* radixSortTempStorage =
-		temporaryMemoryArena.allocate<uint8_t>( getRadixSortPairsTemporaryStorageSize( primitives.getCount() ) );
+	const size_t radixSortTempStorageSize = getRadixSortPairsTemporaryStorageSize( primitives.getCount() );
+	uint8_t*	 radixSortTempStorage = temporaryMemoryArena.allocate<uint8_t>( radixSortTempStorageSize );
 
 	uint32_t* updateCounters = reinterpret_cast<uint32_t*>( boxNodes ) + 2 * primitives.getCount();
 	Timer	  timer;
@@ -293,7 +293,7 @@ void LbvhBuilder::build(
 		radixSortPairs(
 			context.getDevice(),
 			radixSortTempStorage,
-			getRadixSortPairsTemporaryStorageSize( primitives.getCount() ),
+			radixSortTempStorageSize,
 			mortonCodeKeys[0],
 			mortonCodeValues[0],
 			mortonCodeKeys[1],
