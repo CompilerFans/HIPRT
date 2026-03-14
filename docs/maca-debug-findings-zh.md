@@ -172,38 +172,32 @@
 - 这条诊断目前不再是主 blocker
 - 但它仍应保留为红灯回归基线，防止后续 scene transform 修正时倒退
 
-### 12. recreate 后再次 render 仍然会触发 device trap
+### 12. recreate 后再次 render 问题在当前工作树下已恢复
 
-以下新增诊断单测已经形成了一个很小的切片：
+以下新增诊断单测当前已通过：
 
 - `RecreateCornellBoxTwiceBuildOnly`：通过
 - `RenderCornellBoxTwiceSameSceneNoRef`：通过
-- `RecreateCornellBoxTwiceNoRef`：失败
-- `RecreateCornellBoxTwiceSameTransformNoRef`：失败
+- `RecreateCornellBoxTwiceNoRef`：通过
+- `RecreateCornellBoxTwiceSameTransformNoRef`：通过
 
-这说明当前剩余的功能性生命周期问题不是：
+当前结论：
 
-- “重复 build” 本身
-- “同一 scene 连续 render 两次” 本身
+- recreate + render 路径在当前工作树下已恢复
+- 这组测试应继续保留，防止后续再次出现生命周期回归
 
-而是：
+### 13. trace kernel rebuild / custom stack 问题在当前工作树下已恢复
 
-- “一个 scene destroy 之后，再 create 新 scene，再 render” 这条组合路径
-
-这条现象与 `BvhUpdateCornellBox` 当前的失败形态一致，因此二者很可能共享根因。
-
-### 13. trace kernel rebuild / custom stack 仍有独立红灯
-
-以下诊断单测仍失败：
+以下诊断单测当前已通过：
 
 - `SceneTraceKernelSingletonSrt`
 - `PrimaryRayKernelRecreateStableRegs`
 
-这说明：
+当前结论：
 
-- custom/global stack 路径仍不稳定
-- recreate 后同一个 `PrimaryRayKernel` 的 runtime compile / load 结果不稳定
-- `PrimaryRayKernelRecreateStableRegs` 中第二次 build 后 `numRegs` 从 `82` 变为 `90`
+- custom/global stack 路径在有效 launch 配置下已恢复
+- recreate 后同一个 `PrimaryRayKernel` 的 runtime compile / load 已恢复稳定
+- 这两条测试应继续保留，作为回归守卫
 
 ## 已排除的错误方向
 
@@ -217,11 +211,8 @@
 
 ## 当前最优先分析顺序
 
-1. custom/global stack 路径为什么仍会在 `SceneTraceKernelSingletonSrt` 下 trap
-2. recreate 后同一 `PrimaryRayKernel` 的 runtime compile / load 为什么不稳定
-3. recreate 后再次 render 时，JIT module / context / scene buffer 生命周期是否仍有未清理状态
-4. `BvhUpdateCornellBox` 为什么在当前 scene node host-side patch 之后仍然失败
-5. 在上述问题修正后，再回归：
+1. 保持当前诊断测试为回归门禁
+2. 如后续出现 regressions，优先重放：
    - `SceneTraceKernelSingletonSrt`
    - `PrimaryRayKernelRecreateStableRegs`
    - `RecreateCornellBoxTwiceSameTransformNoRef`

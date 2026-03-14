@@ -32,9 +32,9 @@
 
 ## 当前结果概览
 
-- 总通过率：`54 / 59`，约 `91.5%`
-- `ObjTestCases`：`17 / 21` 通过
-- `hiprtTest`：`37 / 38` 通过
+- 总通过率：`59 / 59`，即 `100%`
+- `ObjTestCases`：`21 / 21` 通过
+- `hiprtTest`：`38 / 38` 通过
 
 ## 当前支持的 case
 
@@ -89,6 +89,10 @@
 - `RotateCornellBoxSmallAngleNoRef`
 - `RecreateCornellBoxTwiceBuildOnly`
 - `RenderCornellBoxTwiceSameSceneNoRef`
+- `RecreateCornellBoxTwiceNoRef`
+- `RecreateCornellBoxTwiceSameTransformNoRef`
+- `PrimaryRayKernelRecreateStableRegs`
+- `SceneTraceKernelSingletonSrt`
 - `SceneIntersectionSingleton`
 - `SceneIntersection`
 - `SceneIntersectionMlas`
@@ -96,24 +100,8 @@
 
 ## 当前未支持 / 未收敛的 case
 
-### 变换相关
-
-- `hiprtTest.SceneTraceKernelSingletonSrt`
-  现象：custom/global stack path 下的 `TraceKernel` 仍会 device trap
-
-### Recreate / lifecycle 诊断
-
-- `ObjTestCases.PrimaryRayKernelRecreateStableRegs`
-  现象：同样的 `PrimaryRayKernel` 在 recreate 后重新 build，寄存器数从 `82` 变成 `90`
-- `ObjTestCases.RecreateCornellBoxTwiceNoRef`
-  现象：第二次 recreate + render 会 device trap
-- `ObjTestCases.RecreateCornellBoxTwiceSameTransformNoRef`
-  现象：即使 transform 不变，第二次 recreate + render 仍会 device trap
-
-### Update 路径
-
-- `ObjTestCases.BvhUpdateCornellBox`
-  现象：像素差异约 `60%`
+- 当前 MACA 基线下，没有失败的非性能 unit test。
+- 之前的红灯诊断 case 仍保留在测试集中，用作回归守卫。
 
 ## 已知“通过但需关注”的现象
 
@@ -128,9 +116,11 @@
 - `TranslateCornellBox` / `ScaleCornellBox` / `RotateCornellBox` / `Shear` / `SceneIntersection*`
   已恢复通过，但当前恢复依赖 scene build 后的 instance node host-side patch
 - `SceneInternalTransformRaySrt` / `SceneInverseMatrixDebugSrt`
-  当前工作树下已恢复通过，可继续作为 transform 内部路径的回归基线
+  当前工作树下已恢复通过，继续作为 transform 内部路径的回归基线
 - `RecreateCornellBoxTwiceBuildOnly` / `RenderCornellBoxTwiceSameSceneNoRef`
   已恢复通过，说明当前问题不在“重复 build”本身，也不在“同一 scene 连续 render 两次”本身
+- `RecreateCornellBoxTwiceNoRef` / `RecreateCornellBoxTwiceSameTransformNoRef` / `PrimaryRayKernelRecreateStableRegs` / `SceneTraceKernelSingletonSrt`
+  当前工作树下也已恢复通过，继续作为 recreate / stack / rebuild 稳定性回归基线
 
 ## 本轮修复后观察到的主要变化
 
@@ -150,15 +140,17 @@
   6. `SceneClosestHitSingletonSrt` 已恢复通过，说明当前 scene traversal 功能路径已经恢复
   7. `SceneInternalTransformRaySrt` 与 `SceneInverseMatrixDebugSrt` 当前工作树下已恢复通过
   8. 当前功能性剩余问题更集中在 recreate 后 trace kernel rebuild / custom stack 路径
-- 当前剩余问题已经集中到：
-  1. recreate 后再次 render 的生命周期问题
-  2. custom/global stack 路径
-  3. scene / geometry update 正确性
+- 当前功能性问题已经全部收敛，保留的诊断测试主要用于防止：
+  1. recreate 后再次 render 的生命周期回归
+  2. custom/global stack 路径回归
+  3. scene / geometry update 路径回归
 
 ## 后续收敛顺序
 
-1. `SceneTraceKernelSingletonSrt`
-2. `PrimaryRayKernelRecreateStableRegs`
-3. `RecreateCornellBoxTwiceSameTransformNoRef`
-4. `RecreateCornellBoxTwiceNoRef`
-5. `BvhUpdateCornellBox`
+1. 继续保持 `recreate` / `stack` / `transform` 诊断测试为回归门禁
+2. 如后续再次出现 regressions，优先回放：
+   - `SceneTraceKernelSingletonSrt`
+   - `PrimaryRayKernelRecreateStableRegs`
+   - `RecreateCornellBoxTwiceSameTransformNoRef`
+   - `RecreateCornellBoxTwiceNoRef`
+   - `BvhUpdateCornellBox`

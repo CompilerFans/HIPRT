@@ -106,7 +106,7 @@ class hiprtTest : public ::testing::Test
 	bool readSourceCode(
 		const std::filesystem::path&					  srcPath,
 		std::string&									  src,
-		std::optional<std::vector<std::filesystem::path>> includes = std::nullopt );
+		std::vector<std::filesystem::path>*			  includes = nullptr );
 
 	void validateAndWriteImage(
 		const std::filesystem::path& imgPath, uint8_t* data, std::optional<std::filesystem::path> refFilename = std::nullopt );
