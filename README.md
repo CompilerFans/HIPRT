@@ -45,6 +45,23 @@ This is the main repository for the source code for HIPRT.
 
 For a concise Chinese description of the current build and migration boundaries, see `docs/cuda-only-build-zh.md`.
 
+## Current MACA Test Status
+
+As of **March 14, 2026**, the current MACA + cu-bridge migration branch passes `31 / 39` non-performance unit tests, or about `79.5%`, based on serial reruns in the current workspace.
+
+Supported cases currently include:
+- Core build / geometry cases such as `CudaEnabled`, `MinimumCornellBox`, `Compaction`, `BoundingBox`, `CustomBvhImport`, `BvhIoApi`
+- Intersection and custom-function cases such as `MeshIntersection`, `MeshIntersectionNonIndexed`, `PairTriangles`, `Cutout`, `CustomIntersection`
+- Motion and rebuild/update coverage such as `MotionBlur`, `MotionBlurMatrix`, `MotionBlurSlerp`, `Rebuild`, `Update`, `PlocFallback`
+- Object-scene rendering cases such as `BvhFastCornellBox`, `BvhHighQCornellBox`, `ShadowRayCornellBox`, `AoRayCornellBox`, `AoRayEmbreeCornellBox`, `UvsCornellBox`, `PrimIdsCornellBox`, `HitDistCornellBox`, `NormalsCornellBox`, `BvhBalancedCornellBox`, `PrimaryRayCornellBox`
+
+Known unsupported or not-yet-converged cases currently include:
+- Transform-sensitive scene cases: `TranslateCornellBox`, `ScaleCornellBox`, `RotateCornellBox`, `Shear`
+- Scene traversal correctness cases: `SceneIntersectionSingleton`, `SceneIntersection`, `SceneIntersectionMlas`
+- Scene update correctness case: `BvhUpdateCornellBox`
+
+For the detailed Chinese status, update rules, and per-case support matrix, see `docs/maca-test-status-zh.md`.
+
 ## Cloning and Building 
 
 1. `git clone https://github.com/GPUOpen-LibrariesAndSDKs/HIPRT.git`
