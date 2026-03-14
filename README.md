@@ -47,12 +47,13 @@ For a concise Chinese description of the current build and migration boundaries,
 
 ## Current MACA Test Status
 
-As of **March 14, 2026**, the current MACA + cu-bridge migration branch passes `31 / 39` non-performance unit tests, or about `79.5%`, based on serial reruns in the current workspace.
+As of **March 14, 2026**, the current MACA + cu-bridge migration branch passes `34 / 42` non-performance unit tests, or about `81.0%`, based on serial reruns in the current workspace.
 
 Supported cases currently include:
 - Core build / geometry cases such as `CudaEnabled`, `MinimumCornellBox`, `Compaction`, `BoundingBox`, `CustomBvhImport`, `BvhIoApi`
 - Intersection and custom-function cases such as `MeshIntersection`, `MeshIntersectionNonIndexed`, `PairTriangles`, `Cutout`, `CustomIntersection`
 - Motion and rebuild/update coverage such as `MotionBlur`, `MotionBlurMatrix`, `MotionBlurSlerp`, `Rebuild`, `Update`, `PlocFallback`
+- Diagnostic scene-build checks such as `SceneAabbSingletonSrt`, `SceneAabbSingletonMatrixShear`, `SceneSingletonSrtNodeUsesTransformHeader`
 - Object-scene rendering cases such as `BvhFastCornellBox`, `BvhHighQCornellBox`, `ShadowRayCornellBox`, `AoRayCornellBox`, `AoRayEmbreeCornellBox`, `UvsCornellBox`, `PrimIdsCornellBox`, `HitDistCornellBox`, `NormalsCornellBox`, `BvhBalancedCornellBox`, `PrimaryRayCornellBox`
 
 Known unsupported or not-yet-converged cases currently include:
@@ -60,7 +61,7 @@ Known unsupported or not-yet-converged cases currently include:
 - Scene traversal correctness cases: `SceneIntersectionSingleton`, `SceneIntersection`, `SceneIntersectionMlas`
 - Scene update correctness case: `BvhUpdateCornellBox`
 
-For development and debugging, runtime kernel disk cache can be disabled with `-DHIPRT_ENABLE_RUNTIME_KERNEL_CACHE=OFF` or at runtime with `HIPRT_DISABLE_RUNTIME_KERNEL_CACHE=1`.
+Runtime kernel disk cache is currently disabled by default during the MACA migration. It can be enabled with `-DHIPRT_ENABLE_RUNTIME_KERNEL_CACHE=ON`, or force-disabled at runtime with `HIPRT_DISABLE_RUNTIME_KERNEL_CACHE=1`.
 
 For the detailed Chinese status, update rules, and per-case support matrix, see `docs/maca-test-status-zh.md`.
 

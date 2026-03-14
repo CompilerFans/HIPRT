@@ -30,9 +30,9 @@
 
 ## 当前结果概览
 
-- 总通过率：`31 / 39`，约 `79.5%`
+- 总通过率：`34 / 42`，约 `81.0%`
 - `ObjTestCases`：`11 / 15` 通过
-- `hiprtTest`：`20 / 24` 通过
+- `hiprtTest`：`23 / 27` 通过
 
 ## 当前支持的 case
 
@@ -72,6 +72,9 @@
 - `PlocFallback`
 - `TraceKernel`
 - `BatchConstruction`
+- `SceneAabbSingletonSrt`
+- `SceneAabbSingletonMatrixShear`
+- `SceneSingletonSrtNodeUsesTransformHeader`
 
 ## 当前未支持 / 未收敛的 case
 
@@ -116,6 +119,10 @@
 - wave64 相关 bitmask 问题得到一轮系统性修正后，基础几何 / BVH 构建路径从设备非法访存收敛到可运行状态。
 - `MinimumCornellBox`、`Compaction`、`BoundingBox`、`CustomBvhImport`、`BvhIoApi`、`MeshIntersection*`、`PairTriangles`、`Cutout`、`CustomIntersection` 等基础 case 已恢复。
 - `BatchCornellBox` 通过对单对象 `*Geometries/*Scenes` API 的兼容回退恢复。
+- 新增的 3 条诊断单测已经证明：
+  1. 单实例 SRT scene AABB 构建正确
+  2. 单实例 matrix shear scene AABB 构建正确
+  3. 单实例 SRT scene 的 frame / transform header 已正确写入 scene header 与 instance node
 - 当前剩余问题已经集中到：
   1. instance transform / scene traversal 正确性
   2. scene update 正确性

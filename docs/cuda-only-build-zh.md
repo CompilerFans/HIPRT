@@ -35,7 +35,7 @@ cmake --build build --config Release -j
 
 - 指定架构：`-DCMAKE_CUDA_ARCHITECTURES=89`
 - 不编译单测：`-DNO_UNITTEST=ON`
-- 控制运行时 kernel 磁盘缓存：`-DHIPRT_ENABLE_RUNTIME_KERNEL_CACHE=OFF`
+- 控制运行时 kernel 磁盘缓存：`-DHIPRT_ENABLE_RUNTIME_KERNEL_CACHE=ON|OFF`（当前默认 `OFF`）
 
 构建产物默认输出到：
 

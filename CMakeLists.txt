@@ -10,11 +10,7 @@ set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_ARCHITECTURES "89;86;80;75" CACHE STRING "CUDA architectures to build")
 
 option(NO_UNITTEST "Don't build unit tests" OFF)
-set(hiprt_runtime_kernel_cache_default ON)
-if(NOT CMAKE_BUILD_TYPE STREQUAL "Release")
-	set(hiprt_runtime_kernel_cache_default OFF)
-endif()
-option(HIPRT_ENABLE_RUNTIME_KERNEL_CACHE "Enable on-disk cache for runtime-compiled kernels" ${hiprt_runtime_kernel_cache_default})
+option(HIPRT_ENABLE_RUNTIME_KERNEL_CACHE "Enable on-disk cache for runtime-compiled kernels" OFF)
 
 list(GET CUDAToolkit_INCLUDE_DIRS 0 CUDAToolkit_PRIMARY_INCLUDE_DIR)
 string(REPLACE "\\" "\\\\" HIPRT_CUDA_INCLUDE_DIR_ESCAPED "${CUDAToolkit_PRIMARY_INCLUDE_DIR}")
