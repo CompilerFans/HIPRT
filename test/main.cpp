@@ -2214,7 +2214,7 @@ TEST_F( hiprtTest, SceneTraceKernelSingletonSrt )
 	checkHiprt( hiprtBuildScene( ctxt, hiprtBuildOperationBuild, sceneInput, options, sceneTemp, 0, scene ) );
 
 	constexpr uint32_t sharedStackSize	  = 1u;
-	constexpr uint32_t blockWidth		  = 1u;
+	constexpr uint32_t blockWidth		  = 64u;
 	constexpr uint32_t blockHeight		  = 1u;
 	constexpr uint32_t blockSize		  = blockWidth * blockHeight;
 	std::string		   blockSizeDef		  = "-DBLOCK_SIZE=" + std::to_string( blockSize );
@@ -2224,13 +2224,19 @@ TEST_F( hiprtTest, SceneTraceKernelSingletonSrt )
 	cudaFunction_t func;
 	buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "TraceKernel", func, opts );
 
-	std::array<hiprtRay, 2> rays{};
+	std::array<hiprtRay, 64> rays{};
 	rays[0].origin	  = { 0.0f, 0.0f, -1.0f };
 	rays[0].direction = { 0.0f, 0.0f, 1.0f };
 	rays[0].maxT	  = 1000.0f;
 	rays[1].origin	  = { 0.2f, 0.0f, -1.0f };
 	rays[1].direction = { 0.0f, 0.0f, 1.0f };
 	rays[1].maxT	  = 1000.0f;
+	for ( size_t i = 2; i < rays.size(); ++i )
+	{
+		rays[i].origin	  = rays[1].origin;
+		rays[i].direction = rays[1].direction;
+		rays[i].maxT	  = rays[1].maxT;
+	}
 
 	hiprtRay* dRays;
 	hiprtHit* dHits;
@@ -2250,7 +2256,7 @@ TEST_F( hiprtTest, SceneTraceKernelSingletonSrt )
 	launchKernel( func, rayCount, 1, blockWidth, blockHeight, args );
 	waitForCompletion();
 
-	std::array<hiprtHit, 2> hits{};
+	std::array<hiprtHit, 64> hits{};
 	copyDtoH( hits.data(), dHits, hits.size() );
 	EXPECT_TRUE( hits[0].hasHit() );
 	EXPECT_FALSE( hits[1].hasHit() );
