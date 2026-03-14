@@ -342,35 +342,18 @@ class Transform
 		return f;
 	}
 
-		HIPRT_HOST_DEVICE hiprtRay transformRay( const hiprtRay& ray, float time ) const
-		{
-			hiprtRay outRay;
-			Frame	 frame = interpolateFrames( time );
-			if ( frame.identity() ) return ray;
-			MatrixFrame matrix = MatrixFrame::getMatrixFrameInv( frame );
-			outRay.origin = {
-				matrix.m_matrix[0][0] * ray.origin.x + matrix.m_matrix[0][1] * ray.origin.y +
-					matrix.m_matrix[0][2] * ray.origin.z + matrix.m_matrix[0][3],
-				matrix.m_matrix[1][0] * ray.origin.x + matrix.m_matrix[1][1] * ray.origin.y +
-					matrix.m_matrix[1][2] * ray.origin.z + matrix.m_matrix[1][3],
-				matrix.m_matrix[2][0] * ray.origin.x + matrix.m_matrix[2][1] * ray.origin.y +
-					matrix.m_matrix[2][2] * ray.origin.z + matrix.m_matrix[2][3] };
-
-			const float3 target = {
-				matrix.m_matrix[0][0] * ( ray.origin.x + ray.direction.x ) +
-					matrix.m_matrix[0][1] * ( ray.origin.y + ray.direction.y ) +
-					matrix.m_matrix[0][2] * ( ray.origin.z + ray.direction.z ) + matrix.m_matrix[0][3],
-				matrix.m_matrix[1][0] * ( ray.origin.x + ray.direction.x ) +
-					matrix.m_matrix[1][1] * ( ray.origin.y + ray.direction.y ) +
-					matrix.m_matrix[1][2] * ( ray.origin.z + ray.direction.z ) + matrix.m_matrix[1][3],
-				matrix.m_matrix[2][0] * ( ray.origin.x + ray.direction.x ) +
-					matrix.m_matrix[2][1] * ( ray.origin.y + ray.direction.y ) +
-					matrix.m_matrix[2][2] * ( ray.origin.z + ray.direction.z ) + matrix.m_matrix[2][3] };
-			outRay.direction = target - outRay.origin;
-			outRay.minT		 = ray.minT;
-			outRay.maxT		 = ray.maxT;
-			return outRay;
-		}
+	HIPRT_HOST_DEVICE hiprtRay transformRay( const hiprtRay& ray, float time ) const
+	{
+		hiprtRay outRay;
+		Frame	 frame = interpolateFrames( time );
+		if ( frame.identity() ) return ray;
+		outRay.origin	 = frame.invTransform( ray.origin );
+		outRay.direction = frame.invTransform( ray.origin + ray.direction );
+		outRay.direction = outRay.direction - outRay.origin;
+		outRay.minT		 = ray.minT;
+		outRay.maxT		 = ray.maxT;
+		return outRay;
+	}
 
 	HIPRT_HOST_DEVICE float3 transformNormal( const float3& normal, float time ) const
 	{

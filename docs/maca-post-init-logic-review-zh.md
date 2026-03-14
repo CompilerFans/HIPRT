@@ -63,6 +63,7 @@ cd /data/HIPRT/scripts
 3. scene build 后 host-side `patchSceneInstanceNodes()`
 4. `BvhNode::init()` 中单帧 instance 的原始静态 matrix / 动态 transform 分支
 5. `hiprt_device_impl` 中 scene dynamic transform 分支使用 `Transform tr(...).transformRay(...)`
+6. `Transform::transformRay()` 恢复为 `frame.invTransform(...)` 的原始实现
 
 ### 3.4 当前最值得恢复或改成显式开关
 
@@ -72,7 +73,7 @@ cd /data/HIPRT/scripts
 
 ### 3.5 仍待继续分析
 
-1. `Transform::transformRay()` 是否需要继续保留当前基于 `MatrixFrame::getMatrixFrameInv()` 的实现
+1. geometry 单对象 batch 路径的根因仍需继续分析
 
 ## 4. 分项结论
 
@@ -239,8 +240,8 @@ cd /data/HIPRT/scripts
 
 ### 当前判断
 
-- 结论：**仍待继续分析**
-- 原因：当前还没有单独把 `Transform.h` 中的实现回归到 `maca_init` 后再做一轮验证
+- 结论：**当前已验证可恢复原始逻辑**
+- 原因：把 `Transform.h` 回归到 `maca_init` 的 `frame.invTransform(...)` 实现后，scene / transform / motion blur 覆盖仍然通过
 
 ### 关键源码点
 
@@ -250,8 +251,33 @@ cd /data/HIPRT/scripts
 ### 当前状态
 
 - `maca_init` 时，`Transform::transformRay()` 直接使用 `frame.invTransform(...)`
-- 当前工作树中，尽管 `hiprt_device_impl` 已回归到直接调用 `Transform tr(...).transformRay(...)`，但 `Transform.h` 内部实现本身还没有回归
-- 下一轮分析应直接在 `Transform.h` 上做回归实验
+- 当前已直接恢复到这条实现
+
+### 本轮验证
+
+执行：
+
+```bash
+--gtest_filter=hiprtTest.SceneAabbSingletonSrt:hiprtTest.SceneAabbSingletonMatrixShear:hiprtTest.SceneSingletonSrtNodeUsesTransformHeader:hiprtTest.SceneWorldToObjectRaySrt:hiprtTest.SceneInternalTransformRaySrt:hiprtTest.SceneTransformDebugSrt:hiprtTest.SceneInterpolatedFrameDebugSrt:hiprtTest.SceneInverseMatrixDebugSrt:hiprtTest.SceneWorldToObjectRayMatrixShear:hiprtTest.SceneClosestHitSingletonSrt:hiprtTest.SceneClosestHitSingletonSrtRecreate:hiprtTest.SceneManualClosestHitSingletonSrt:hiprtTest.SceneTraceKernelSingletonSrt:hiprtTest.SceneIntersectionSingleton:hiprtTest.SceneIntersection:hiprtTest.SceneIntersectionMlas:ObjTestCases.TranslateCornellBox:ObjTestCases.ScaleCornellBox:ObjTestCases.RotateCornellBox:hiprtTest.Shear
+```
+
+结果：
+
+- `20 / 20` 通过
+
+再执行：
+
+```bash
+--gtest_filter=hiprtTest.MotionBlur:hiprtTest.MotionBlurMatrix:hiprtTest.MotionBlurSlerp
+```
+
+结果：
+
+- `3 / 3` 通过
+
+结论：
+
+- `Transform::transformRay()` 当前已可恢复到 `maca_init` 原始实现
 
 ## 4.5 runtime kernel disk cache 调试时显式关闭
 
