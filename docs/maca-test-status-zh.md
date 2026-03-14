@@ -2,6 +2,8 @@
 
 本文档记录 HIPRT 在 **MACA + cu-bridge** 环境下的当前测试状态，并作为后续迁移与收敛工作的基线。
 
+调试层面的阶段性结论见：`docs/maca-debug-findings-zh.md`
+
 ## 测试来源
 
 - 本次状态基线来自本地串行回归结果：
