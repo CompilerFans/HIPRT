@@ -24,7 +24,7 @@
 
 #pragma once
 #include <hiprt/hiprt_types.h>
-#include <hiprt/impl/Aabb.h>
+#include <hiprt/impl/Transform.h>
 #include <hiprt/impl/Triangle.h>
 
 namespace hiprt
@@ -131,21 +131,14 @@ HIPRT_HOST_DEVICE HIPRT_INLINE float ulp( float x ) { return fabs( x - as_float(
 
 HIPRT_HOST_DEVICE HIPRT_INLINE float3 subDown( float3 a, float3 b )
 {
-	float3 d = ( a - b );
+	const float3 d = ( a - b );
 	return d - float3{ ulp( d.x ), ulp( d.y ), ulp( d.z ) };
 }
 
 HIPRT_HOST_DEVICE HIPRT_INLINE float3 subUp( float3 a, float3 b )
 {
-	float3 d = ( a - b );
+	const float3 d = ( a - b );
 	return d + float3{ ulp( d.x ), ulp( d.y ), ulp( d.z ) };
-}
-
-HIPRT_HOST_DEVICE HIPRT_INLINE bool copyInvTransformMatrix( const Frame& frame, float ( &matrix )[3][4] )
-{
-	const MatrixFrame invMatrixFrame = MatrixFrame::getMatrixFrameInv( frame );
-	memcpy( &matrix[0][0], &invMatrixFrame.m_matrix[0][0], sizeof( float ) * 12 );
-	return frame.identity();
 }
 
 // 128B
@@ -309,8 +302,8 @@ HIPRT_HOST_DEVICE void initChildInfo(
 	const uint32_t childRange,
 	Node&		   node )
 {
-	float3 extent = subUp( nodeBox.m_max, nodeBox.m_min );
-	float3 origin = nodeBox.m_min;
+	const float3 extent = subUp( nodeBox.m_max, nodeBox.m_min );
+	const float3 origin = nodeBox.m_min;
 
 	uint3 exponent;
 	exponent.x = ( as_uint( extent.x ) + 0x7fffff ) >> 23;
@@ -377,8 +370,8 @@ initChildInfos( const uint32_t* childIndices, const Aabb* childBoxes, const uint
 	for ( uint32_t i = 0; i < Node::BranchingFactor; ++i )
 		nodeBox.grow( childBoxes[i] );
 
-	float3 extent = subUp( nodeBox.m_max, nodeBox.m_min );
-	float3 origin = nodeBox.m_min;
+	const float3 extent = subUp( nodeBox.m_max, nodeBox.m_min );
+	const float3 origin = nodeBox.m_min;
 
 	uint3 exponent;
 	exponent.x = ( as_uint( extent.x ) + 0x7fffff ) >> 23;
@@ -1118,14 +1111,15 @@ struct InstanceNodeBase
 	HIPRT_HOST_DEVICE hiprtRay transformRay( const hiprtRay& ray ) const
 	{
 		hiprtRay	 outRay;
-		const float3 o	   = ray.origin;
-		const float3 d	   = ray.direction;
-		outRay.origin.x	   = m_matrix[0][0] * o.x + m_matrix[0][1] * o.y + m_matrix[0][2] * o.z + m_matrix[0][3];
-		outRay.origin.y	   = m_matrix[1][0] * o.x + m_matrix[1][1] * o.y + m_matrix[1][2] * o.z + m_matrix[1][3];
-		outRay.origin.z	   = m_matrix[2][0] * o.x + m_matrix[2][1] * o.y + m_matrix[2][2] * o.z + m_matrix[2][3];
-		outRay.direction.x = m_matrix[0][0] * d.x + m_matrix[0][1] * d.y + m_matrix[0][2] * d.z;
-		outRay.direction.y = m_matrix[1][0] * d.x + m_matrix[1][1] * d.y + m_matrix[1][2] * d.z;
-		outRay.direction.z = m_matrix[2][0] * d.x + m_matrix[2][1] * d.y + m_matrix[2][2] * d.z;
+		const float3 o	= ray.origin;
+		const float3 d	= ray.direction;
+		outRay.origin.x = dot( { m_matrix[0][0], m_matrix[0][1], m_matrix[0][2] }, o );
+		outRay.origin.y = dot( { m_matrix[1][0], m_matrix[1][1], m_matrix[1][2] }, o );
+		outRay.origin.z = dot( { m_matrix[2][0], m_matrix[2][1], m_matrix[2][2] }, o );
+		outRay.origin += { m_matrix[0][3], m_matrix[1][3], m_matrix[2][3] };
+		outRay.direction.x = dot( { m_matrix[0][0], m_matrix[0][1], m_matrix[0][2] }, d );
+		outRay.direction.y = dot( { m_matrix[1][0], m_matrix[1][1], m_matrix[1][2] }, d );
+		outRay.direction.z = dot( { m_matrix[2][0], m_matrix[2][1], m_matrix[2][2] }, d );
 		outRay.minT		   = ray.minT;
 		outRay.maxT		   = ray.maxT;
 		return outRay;
@@ -1167,10 +1161,15 @@ struct alignas( 64 ) UserInstanceNode : public InstanceNodeBase
 		else
 			m_geometry = reinterpret_cast<GeomHeader*>( instance.geometry );
 
-		// Keep instance transforms on the generic frame path until the static matrix path is validated.
-		m_static   = 0;
-		m_identity = 0;
-		m_transform = transform;
+		if ( transform.frameCount == 1 )
+		{
+			m_identity = computeInvTransformMatrix( frame, m_matrix ) ? 1 : 0;
+		}
+		else
+		{
+			m_identity	= 0;
+			m_transform = transform;
+		}
 	}
 
 	uint32_t m_mask = FullRayMask;
@@ -1214,10 +1213,15 @@ struct alignas( 128 ) HwInstanceNode : public InstanceNodeBase
 		else
 			m_geometry = reinterpret_cast<GeomHeader*>( instance.geometry );
 
-		// Keep instance transforms on the generic frame path until the static matrix path is validated.
-		m_static   = 0;
-		m_identity = 0;
-		m_transform = transform;
+		if ( transform.frameCount == 1 )
+		{
+			m_identity = computeInvTransformMatrix( frame, m_matrix ) ? 1 : 0;
+		}
+		else
+		{
+			m_identity	= 0;
+			m_transform = transform;
+		}
 
 		m_disableBoxSort	 = 0;
 		m_childCountMinusOne = childCount - 1;
@@ -1261,7 +1265,7 @@ struct alignas( 32 ) ScratchNode
 
 	HIPRT_HOST_DEVICE void setChildFatLeafFlag( uint32_t i ) { ( &m_childIndex0 )[i] |= FatLeafBit; }
 
-	HIPRT_HOST_DEVICE uint32_t operator[]( uint32_t i ) { return ( &m_childIndex0 )[i]; }
+	HIPRT_HOST_DEVICE uint32_t operator[]( uint32_t i ) const { return ( &m_childIndex0 )[i]; }
 
 	Aabb	 m_box;
 	uint32_t m_childIndex0;
@@ -1287,7 +1291,7 @@ struct alignas( 64 ) ApiNode
 
 	HIPRT_HOST_DEVICE void setChildFatLeafFlag( uint32_t i ) { m_childTypes[i] |= FatLeafBit; }
 
-	HIPRT_HOST_DEVICE uint32_t operator[]( uint32_t i ) { return getChildIndex( i ) | ( m_childTypes[i] & FatLeafBit ); }
+	HIPRT_HOST_DEVICE uint32_t operator[]( uint32_t i ) const { return getChildIndex( i ) | ( m_childTypes[i] & FatLeafBit ); }
 
 	Aabb	 m_box;
 	uint32_t m_childAddrs[2];
@@ -1301,7 +1305,7 @@ struct alignas( 32 ) ReferenceNode
 {
 	ReferenceNode() = default;
 	HIPRT_HOST_DEVICE	   ReferenceNode( uint32_t primIndex ) : m_primIndex( primIndex ) {}
-	HIPRT_HOST_DEVICE	   ReferenceNode( uint32_t primIndex, const Aabb& box ) : m_primIndex( primIndex ), m_box( box ) {}
+	HIPRT_HOST_DEVICE	   ReferenceNode( uint32_t primIndex, const Aabb& box ) : m_box( box ), m_primIndex( primIndex ) {}
 	HIPRT_HOST_DEVICE Aabb aabb() const { return m_box; };
 
 	Aabb	 m_box;

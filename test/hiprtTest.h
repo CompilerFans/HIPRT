@@ -150,7 +150,7 @@ class hiprtTest : public ::testing::Test
 	void memset( void* ptr, int val, size_t n ) { checkOro( cuMemsetD8( reinterpret_cast<size_t>( ptr ), val, n ) ); }
 
 	template <typename T>
-	void copyHtoD( T* dst, T* src, size_t n )
+	void copyHtoD( T* dst, const T* src, size_t n )
 	{
 		checkOro( cuMemcpyHtoD( reinterpret_cast<size_t>( dst ), src, sizeof( T ) * n ) );
 	}
@@ -169,7 +169,7 @@ class hiprtTest : public ::testing::Test
 	}
 
 	template <typename T>
-	void copyHtoDAsync( T* dst, T* src, size_t n, cudaStream_t stream )
+	void copyHtoDAsync( T* dst, const T* src, size_t n, cudaStream_t stream )
 	{
 		checkOro( cuMemcpyHtoDAsync( reinterpret_cast<size_t>( dst ), src, sizeof( T ) * n, stream ) );
 	}

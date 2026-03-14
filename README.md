@@ -22,6 +22,18 @@ cmake --build build --config Release -j
 ./scripts/build_and_test.sh
 ```
 
+默认行为：
+
+- 生成器：`Ninja`
+- 编译缓存：优先使用 `ccache`
+- 链接器：优先使用 `mold`（通过 `mold` 所在目录注入链接搜索前缀）
+
+如需关闭，可用环境变量覆盖：
+
+```bash
+GENERATOR="Unix Makefiles" USE_CCACHE=OFF USE_MOLD=OFF ./scripts/build.sh
+```
+
 如需更完整的中文改造说明，请查看 `docs/cuda-only-build-zh.md`。
 
 ## About 
