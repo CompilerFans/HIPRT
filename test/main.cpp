@@ -309,6 +309,96 @@ TEST_F( ObjTestCases, RotateCornellBox )
 	deleteScene( m_scene );
 }
 
+TEST_F( ObjTestCases, RotateCornellBoxSmallAngleNoRef )
+{
+	constexpr uint32_t Option	  = VisualizeColor;
+	const std::string  kernelName = "PrimaryRayKernel_" + std::to_string( Option );
+
+	hiprtFrameSRT transform;
+	transform.translation = { 0.0f, 0.0f, -3.0f };
+	transform.scale		  = { 1.0f, 1.0f, 1.0f };
+	transform.rotation	  = { 0.0f, 1.0f, 0.0f, 0.1f };
+
+	Camera camera = createCamera<TestCasesType::TestCornellBox>();
+	setupScene( camera, getRootDir() / "test/common/meshes/cornellbox/cornellBox.obj", false, transform );
+	render( std::nullopt, getRootDir() / "test/kernels/PrimaryRayKernel.h", kernelName, std::nullopt );
+	deleteScene( m_scene );
+}
+
+TEST_F( ObjTestCases, RecreateCornellBoxTwiceNoRef )
+{
+	constexpr uint32_t Option	  = VisualizeColor;
+	const std::string  kernelName = "PrimaryRayKernel_" + std::to_string( Option );
+	Camera			   camera	  = createCamera<TestCasesType::TestCornellBox>();
+
+	hiprtFrameSRT transform;
+	transform.translation = { 0.0f, 0.0f, -3.0f };
+	transform.scale		  = { 1.0f, 1.0f, 1.0f };
+	transform.rotation	  = { 0.0f, 1.0f, 0.0f, 0.0f };
+
+	setupScene( camera, getRootDir() / "test/common/meshes/cornellbox/cornellBox.obj", false, transform );
+	render( std::nullopt, getRootDir() / "test/kernels/PrimaryRayKernel.h", kernelName, std::nullopt );
+	deleteScene( m_scene );
+
+	transform.rotation = { 0.0f, 1.0f, 0.0f, 0.1f };
+	setupScene( camera, getRootDir() / "test/common/meshes/cornellbox/cornellBox.obj", false, transform );
+	render( std::nullopt, getRootDir() / "test/kernels/PrimaryRayKernel.h", kernelName, std::nullopt );
+	deleteScene( m_scene );
+}
+
+TEST_F( ObjTestCases, RecreateCornellBoxTwiceSameTransformNoRef )
+{
+	constexpr uint32_t Option	  = VisualizeColor;
+	const std::string  kernelName = "PrimaryRayKernel_" + std::to_string( Option );
+	Camera			   camera	  = createCamera<TestCasesType::TestCornellBox>();
+
+	hiprtFrameSRT transform;
+	transform.translation = { 0.0f, 0.0f, -3.0f };
+	transform.scale		  = { 1.0f, 1.0f, 1.0f };
+	transform.rotation	  = { 0.0f, 1.0f, 0.0f, 0.1f };
+
+	setupScene( camera, getRootDir() / "test/common/meshes/cornellbox/cornellBox.obj", false, transform );
+	render( std::nullopt, getRootDir() / "test/kernels/PrimaryRayKernel.h", kernelName, std::nullopt );
+	deleteScene( m_scene );
+
+	setupScene( camera, getRootDir() / "test/common/meshes/cornellbox/cornellBox.obj", false, transform );
+	render( std::nullopt, getRootDir() / "test/kernels/PrimaryRayKernel.h", kernelName, std::nullopt );
+	deleteScene( m_scene );
+}
+
+TEST_F( ObjTestCases, RecreateCornellBoxTwiceBuildOnly )
+{
+	Camera camera = createCamera<TestCasesType::TestCornellBox>();
+
+	hiprtFrameSRT transform;
+	transform.translation = { 0.0f, 0.0f, -3.0f };
+	transform.scale		  = { 1.0f, 1.0f, 1.0f };
+	transform.rotation	  = { 0.0f, 1.0f, 0.0f, 0.1f };
+
+	setupScene( camera, getRootDir() / "test/common/meshes/cornellbox/cornellBox.obj", false, transform, hiprtBuildFlagBitPreferFastBuild );
+	deleteScene( m_scene );
+
+	setupScene( camera, getRootDir() / "test/common/meshes/cornellbox/cornellBox.obj", false, transform, hiprtBuildFlagBitPreferFastBuild );
+	deleteScene( m_scene );
+}
+
+TEST_F( ObjTestCases, RenderCornellBoxTwiceSameSceneNoRef )
+{
+	constexpr uint32_t Option	  = VisualizeColor;
+	const std::string  kernelName = "PrimaryRayKernel_" + std::to_string( Option );
+	Camera			   camera	  = createCamera<TestCasesType::TestCornellBox>();
+
+	hiprtFrameSRT transform;
+	transform.translation = { 0.0f, 0.0f, -3.0f };
+	transform.scale		  = { 1.0f, 1.0f, 1.0f };
+	transform.rotation	  = { 0.0f, 1.0f, 0.0f, 0.1f };
+
+	setupScene( camera, getRootDir() / "test/common/meshes/cornellbox/cornellBox.obj", false, transform, hiprtBuildFlagBitPreferFastBuild );
+	render( std::nullopt, getRootDir() / "test/kernels/PrimaryRayKernel.h", kernelName, std::nullopt );
+	render( std::nullopt, getRootDir() / "test/kernels/PrimaryRayKernel.h", kernelName, std::nullopt );
+	deleteScene( m_scene );
+}
+
 TEST_F( ObjTestCases, BvhFastCornellBox )
 {
 	constexpr uint32_t Option	  = VisualizeColor;

@@ -1021,6 +1021,7 @@ void ObjTestCases::createScene(
 	}
 
 	uint32_t threadCount = std::min( std::thread::hardware_concurrency(), 16u );
+	if ( m_ctxtInput.deviceType != hiprtDeviceNVIDIA ) threadCount = 1;
 	if ( ( bvhBuildFlag & 3 ) == hiprtBuildFlagBitCustomBvhImport ) threadCount = 1;
 	std::vector<std::thread>			  threads( threadCount );
 	std::vector<std::chrono::nanoseconds> bvhBuildTimes( threadCount );
@@ -1280,11 +1281,31 @@ void ObjTestCases::setupScene(
 
 void ObjTestCases::deleteScene( SceneData& scene )
 {
-
 	checkHiprt( hiprtDestroyScene( scene.m_ctx, scene.m_scene ) );
 	checkHiprt(
 		hiprtDestroyGeometries( scene.m_ctx, static_cast<uint32_t>( scene.m_geometries.size() ), scene.m_geometries.data() ) );
+
+	for ( void* ptr : scene.m_garbageCollector )
+		free( ptr );
+
 	checkHiprt( hiprtDestroyContext( scene.m_ctx ) );
+
+	scene.m_bufMaterialIndices	 = nullptr;
+	scene.m_bufMatIdsPerInstance = nullptr;
+	scene.m_bufMaterials		 = nullptr;
+	scene.m_vertices			 = nullptr;
+	scene.m_vertexOffsets		 = nullptr;
+	scene.m_normals				 = nullptr;
+	scene.m_normalOffsets		 = nullptr;
+	scene.m_indices				 = nullptr;
+	scene.m_indexOffsets		 = nullptr;
+	scene.m_lights				 = nullptr;
+	scene.m_numOfLights			 = nullptr;
+	scene.m_scene				 = nullptr;
+	scene.m_ctx					 = nullptr;
+	scene.m_geometries.clear();
+	scene.m_instances.clear();
+	scene.m_garbageCollector.clear();
 }
 
 void ObjTestCases::render(

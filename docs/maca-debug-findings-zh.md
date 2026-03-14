@@ -144,6 +144,7 @@
 
 因此，当前功能性失败已经不再集中在 scene traversal 主路径，而是缩小为：
 
+- recreate 后再次 render 的生命周期组合路径
 - scene / geometry update
 - transform 内部实现诊断
 
@@ -182,6 +183,26 @@
 - 问题很可能就在 `Frame -> inverse matrix` 这一层
 - 或它在 device 编译路径下与 host 侧结果不一致
 
+### 12. recreate 后再次 render 仍然会触发 device trap
+
+以下新增诊断单测已经形成了一个很小的切片：
+
+- `RecreateCornellBoxTwiceBuildOnly`：通过
+- `RenderCornellBoxTwiceSameSceneNoRef`：通过
+- `RecreateCornellBoxTwiceNoRef`：失败
+- `RecreateCornellBoxTwiceSameTransformNoRef`：失败
+
+这说明当前剩余的功能性生命周期问题不是：
+
+- “重复 build” 本身
+- “同一 scene 连续 render 两次” 本身
+
+而是：
+
+- “一个 scene destroy 之后，再 create 新 scene，再 render” 这条组合路径
+
+这条现象与 `BvhUpdateCornellBox` 当前的失败形态一致，因此二者很可能共享根因。
+
 ## 已排除的错误方向
 
 截至当前，以下方向已不再是优先怀疑对象：
@@ -196,8 +217,11 @@
 
 1. `MatrixFrame::getMatrixFrameInv(frame)` 的 device 结果为什么与 host 预期不同
 2. `Transform::transformRay()` 为什么在 device 侧没有体现缩放
-3. `BvhUpdateCornellBox` 为什么在当前 scene node host-side patch 之后仍然失败
-4. 在上述问题修正后，再回归：
+3. recreate 后再次 render 时，JIT module / context / scene buffer 生命周期是否仍有未清理状态
+4. `BvhUpdateCornellBox` 为什么在当前 scene node host-side patch 之后仍然失败
+5. 在上述问题修正后，再回归：
+   - `RecreateCornellBoxTwiceSameTransformNoRef`
+   - `RecreateCornellBoxTwiceNoRef`
    - `BvhUpdateCornellBox`
    - `SceneInternalTransformRaySrt`
    - `SceneInverseMatrixDebugSrt`

@@ -50,8 +50,15 @@ bool getRuntimeKernelDiskCacheEnabled()
 
 Compiler::~Compiler()
 {
+	clear();
+}
+
+void Compiler::clear()
+{
 	for ( auto& module : m_moduleCache )
 		checkOro( cuModuleUnload( module.second ) );
+	m_moduleCache.clear();
+	m_kernelCache.clear();
 }
 
 Kernel Compiler::getKernel(

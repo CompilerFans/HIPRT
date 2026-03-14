@@ -32,9 +32,9 @@
 
 ## 当前结果概览
 
-- 总通过率：`48 / 51`，约 `94.1%`
-- `ObjTestCases`：`14 / 15` 通过
-- `hiprtTest`：`34 / 36` 通过
+- 总通过率：`55 / 60`，约 `91.7%`
+- `ObjTestCases`：`17 / 20` 通过
+- `hiprtTest`：`38 / 40` 通过
 
 ## 当前支持的 case
 
@@ -84,6 +84,9 @@
 - `SceneClosestHitSingletonSrt`
 - `SceneManualClosestHitSingletonSrt`
 - `GeomClosestHitScaledRay`
+- `RotateCornellBoxSmallAngleNoRef`
+- `RecreateCornellBoxTwiceBuildOnly`
+- `RenderCornellBoxTwiceSameSceneNoRef`
 - `SceneIntersectionSingleton`
 - `SceneIntersection`
 - `SceneIntersectionMlas`
@@ -97,6 +100,13 @@
   现象：device 侧 `Transform::transformRay()` 仍返回未缩放的 ray
 - `hiprtTest.SceneInverseMatrixDebugSrt`
   现象：device 侧 inverse matrix 对角线仍为 `1`，预期为 `2`
+
+### Recreate / lifecycle 诊断
+
+- `ObjTestCases.RecreateCornellBoxTwiceNoRef`
+  现象：第二次 recreate + render 会 device trap
+- `ObjTestCases.RecreateCornellBoxTwiceSameTransformNoRef`
+  现象：即使 transform 不变，第二次 recreate + render 仍会 device trap
 
 ### Update 路径
 
@@ -115,6 +125,8 @@
   当前是通过**单对象 API 不走 batch kernel** 的兼容策略打通的；多对象 batch 构建仍以 `BatchConstruction` 为主验证
 - `TranslateCornellBox` / `ScaleCornellBox` / `RotateCornellBox` / `Shear` / `SceneIntersection*`
   已恢复通过，但当前恢复依赖 scene build 后的 instance node host-side patch
+- `RecreateCornellBoxTwiceBuildOnly` / `RenderCornellBoxTwiceSameSceneNoRef`
+  已恢复通过，说明当前问题不在“重复 build”本身，也不在“同一 scene 连续 render 两次”本身
 
 ## 本轮修复后观察到的主要变化
 
@@ -135,10 +147,13 @@
   7. 仍保留的失败诊断集中在 `Transform::transformRay()` / inverse matrix 的 device 内部实现
 - 当前剩余问题已经集中到：
   1. transform 内部实现诊断
-  2. scene / geometry update 正确性
+  2. recreate 后再次 render 的生命周期问题
+  3. scene / geometry update 正确性
 
 ## 后续收敛顺序
 
-1. `BvhUpdateCornellBox`
-2. `SceneInternalTransformRaySrt`
-3. `SceneInverseMatrixDebugSrt`
+1. `RecreateCornellBoxTwiceSameTransformNoRef`
+2. `RecreateCornellBoxTwiceNoRef`
+3. `BvhUpdateCornellBox`
+4. `SceneInternalTransformRaySrt`
+5. `SceneInverseMatrixDebugSrt`

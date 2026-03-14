@@ -75,6 +75,8 @@ class Compiler
 		bool								 extended,
 		bool								 cache );
 
+	void clear();
+
 	void setCacheDir( const std::filesystem::path& path );
 
 	bool isRtip31Supported() const { return false; }

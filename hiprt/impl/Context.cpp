@@ -122,8 +122,12 @@ Context::~Context()
 {
 	if ( m_ctxt == nullptr ) return;
 
+	cuCtxSetCurrent( m_ctxt );
+	m_compiler.clear();
+	cuCtxSetCurrent( nullptr );
+
 	CUdevice cuDevice = 0;
-	if ( cuCtxGetDevice( &cuDevice ) == CUDA_SUCCESS )
+	if ( cuDeviceGet( &cuDevice, m_device ) == CUDA_SUCCESS )
 	{
 		cuDevicePrimaryCtxRelease( cuDevice );
 	}
