@@ -1815,6 +1815,7 @@ HIPRT_DEVICE hiprtFrameMatrix hiprtGetWorldToObjectFrameMatrix( hiprtScene scene
 
 // very unoptimized (hopefully correct) transform functions
 // it is implemented via the matrix frame (instead of srt) to account for shear
+
 HIPRT_DEVICE float3 hiprtPointObjectToWorld( float3 point, hiprtScene scene, uint32_t instanceID, float time )
 {
 	hiprtFrameMatrix   hiprtMatrix = hiprtGetObjectToWorldFrameMatrix( scene, instanceID, time );

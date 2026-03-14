@@ -30,9 +30,9 @@
 
 ## 当前结果概览
 
-- 总通过率：`34 / 42`，约 `81.0%`
+- 总通过率：`38 / 48`，约 `79.2%`
 - `ObjTestCases`：`11 / 15` 通过
-- `hiprtTest`：`23 / 27` 通过
+- `hiprtTest`：`27 / 33` 通过
 
 ## 当前支持的 case
 
@@ -75,6 +75,10 @@
 - `SceneAabbSingletonSrt`
 - `SceneAabbSingletonMatrixShear`
 - `SceneSingletonSrtNodeUsesTransformHeader`
+- `SceneWorldToObjectRaySrt`
+- `SceneWorldToObjectRayMatrixShear`
+- `SceneTransformDebugSrt`
+- `GeomClosestHitScaledRay`
 
 ## 当前未支持 / 未收敛的 case
 
@@ -97,6 +101,13 @@
   现象：像素差异约 `10%`
 - `hiprtTest.SceneIntersectionMlas`
   现象：像素差异约 `30%`
+- `hiprtTest.SceneClosestHitSingletonSrt`
+  现象：单实例 SRT scene 下中心射线仍 miss，geometry 对照组可 hit
+
+### Transform 内部路径诊断
+
+- `hiprtTest.SceneInternalTransformRaySrt`
+  现象：device 侧 `Transform::transformRay()` 仍返回未缩放的 ray
 
 ### Update 路径
 
@@ -123,6 +134,12 @@
   1. 单实例 SRT scene AABB 构建正确
   2. 单实例 matrix shear scene AABB 构建正确
   3. 单实例 SRT scene 的 frame / transform header 已正确写入 scene header 与 instance node
+- 新增的 ray / traversal 诊断已经进一步证明：
+  1. 单实例 SRT scene AABB 构建正确
+  2. `hiprtPointWorldToObject()` 的 SRT 路径正确
+  3. `hiprtPointWorldToObject()` 的 matrix shear 路径正确
+  4. `hiprtGeomTraversalClosest` 在对应 local ray 上正确
+  5. 剩余问题集中在 scene traversal / internal transformRay 路径，而不是 scene AABB 构建
 - 当前剩余问题已经集中到：
   1. instance transform / scene traversal 正确性
   2. scene update 正确性
@@ -137,3 +154,5 @@
 6. `RotateCornellBox`
 7. `Shear`
 8. `BvhUpdateCornellBox`
+9. `SceneClosestHitSingletonSrt`
+10. `SceneInternalTransformRaySrt`
