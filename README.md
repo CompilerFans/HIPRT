@@ -12,6 +12,14 @@ HIP RT library is developed and maintained by ARR, [Advanced Rendering Research 
 
 This is the main repository for the source code for HIPRT.
 
+## Current Status
+
+- The public project name remains `HIPRT`, and public API names such as `hiprtCreateContext` are intentionally preserved.
+- The backend is now CUDA-only. AMD HIP runtime, ROCm toolchains, `hipcc`, runtime loader paths, and legacy precompiled-bitcode build flows are not part of the build anymore.
+- `hiprtew.h` is kept as a compatibility header, but it now calls linked HIPRT APIs directly instead of resolving symbols at runtime.
+
+For a concise Chinese description of the current build and migration boundaries, see `docs/cuda-only-build-zh.md`.
+
 ## Cloning and Building 
 
 1. `git clone https://github.com/GPUOpen-LibrariesAndSDKs/HIPRT.git`
@@ -29,6 +37,12 @@ Build with CMake only.
 &nbsp;&nbsp;&nbsp;5. `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release`  
 &nbsp;&nbsp;&nbsp;6. `cmake --build build --config Release -j`  
 
+### Build Notes
+
+- `CUDAToolkit` is required. CMake configures the project in CUDA mode only.
+- `CMAKE_CUDA_ARCHITECTURES` is cache-configurable. Example: `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_ARCHITECTURES=89`.
+- Unit tests are built by default. Disable them with `-DNO_UNITTEST=ON`.
+- Generated binaries are written to `dist/bin/<Config>/`.
 
 ## Running Unit Tests
 
@@ -38,6 +52,10 @@ There are three types of tests.
 3. PerformanceTestCases - tests with complex mesh to test performance features.
 
 Example: `..\dist\bin\Release\unittest64.exe --width=512 --height=512 --referencePath=.\references\ --gtest_filter=hiprt*:Obj*" `
+
+Linux helper scripts:
+- `cd scripts && ./unittest.sh`
+- `cd scripts && ./unittest_perf.sh`
 
 ## Developing HIPRT
 

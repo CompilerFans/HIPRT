@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-set(CMAKE_CUDA_ARCHITECTURES "89;86;80;75")
+set(CMAKE_CUDA_ARCHITECTURES "89;86;80;75" CACHE STRING "CUDA architectures to build")
 
 option(NO_UNITTEST "Don't build unit tests" OFF)
 
@@ -16,6 +16,11 @@ string(REPLACE "\\" "\\\\" HIPRT_CUDA_INCLUDE_DIR_ESCAPED "${CUDAToolkit_PRIMARY
 
 add_definitions(-DGTEST_HAS_TR1_TUPLE=0)
 add_definitions(-DHIPRT_PUBLIC_REPO)
+
+message(STATUS "Configuring HIPRT with CUDA backend only")
+message(STATUS "CUDA toolkit version: ${CUDAToolkit_VERSION}")
+message(STATUS "CUDA architectures: ${CMAKE_CUDA_ARCHITECTURES}")
+message(STATUS "Disable unit tests: ${NO_UNITTEST}")
 
 if(WIN32)
 	add_definitions(-D__WINDOWS__)
