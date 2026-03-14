@@ -62,7 +62,7 @@ Supported cases currently include:
 
 There are no currently failing non-performance unit tests in the present MACA baseline. The recreate, stack, and transform diagnostics are still kept in the suite as regression guards.
 
-Runtime kernel disk cache is currently disabled by default during the MACA migration. It can be enabled with `-DHIPRT_ENABLE_RUNTIME_KERNEL_CACHE=ON`, or force-disabled at runtime with `HIPRT_DISABLE_RUNTIME_KERNEL_CACHE=1`.
+Runtime kernel disk cache now follows the original policy again: enabled by default for `Release`, disabled by default for non-`Release` builds. You can still override it with `-DHIPRT_ENABLE_RUNTIME_KERNEL_CACHE=ON|OFF`, or force-disable it at runtime with `HIPRT_DISABLE_RUNTIME_KERNEL_CACHE=1`.
 
 For the detailed Chinese status, update rules, and per-case support matrix, see `docs/maca-test-status-zh.md`.
 
