@@ -35,6 +35,7 @@ cmake --build build --config Release -j
 
 - 指定架构：`-DCMAKE_CUDA_ARCHITECTURES=89`
 - 不编译单测：`-DNO_UNITTEST=ON`
+- 控制运行时 kernel 磁盘缓存：`-DHIPRT_ENABLE_RUNTIME_KERNEL_CACHE=OFF`
 
 构建产物默认输出到：
 
@@ -102,6 +103,18 @@ cd scripts
 
 ```bash
 ../dist/bin/Release/unittest64 --width=512 --height=512 --referencePath=../test/references/ --gtest_filter=hiprtTest.CudaEnabled:hiprtTest.MinimumCornellBox:ObjTestCases.PrimaryRayCornellBox
+```
+
+开发 / 调试阶段建议关闭运行时 kernel 磁盘缓存，避免旧的 JIT 结果掩盖头文件修改：
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DHIPRT_ENABLE_RUNTIME_KERNEL_CACHE=OFF
+```
+
+也可以在运行时通过环境变量强制关闭：
+
+```bash
+export HIPRT_DISABLE_RUNTIME_KERNEL_CACHE=1
 ```
 
 ## 后续改动建议

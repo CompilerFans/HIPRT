@@ -60,6 +60,8 @@ Known unsupported or not-yet-converged cases currently include:
 - Scene traversal correctness cases: `SceneIntersectionSingleton`, `SceneIntersection`, `SceneIntersectionMlas`
 - Scene update correctness case: `BvhUpdateCornellBox`
 
+For development and debugging, runtime kernel disk cache can be disabled with `-DHIPRT_ENABLE_RUNTIME_KERNEL_CACHE=OFF` or at runtime with `HIPRT_DISABLE_RUNTIME_KERNEL_CACHE=1`.
+
 For the detailed Chinese status, update rules, and per-case support matrix, see `docs/maca-test-status-zh.md`.
 
 ## Cloning and Building 

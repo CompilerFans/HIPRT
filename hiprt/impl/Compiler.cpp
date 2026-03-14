@@ -32,6 +32,22 @@
 
 namespace hiprt
 {
+namespace
+{
+bool getRuntimeKernelDiskCacheEnabled()
+{
+	const std::string disableCache = Utility::getEnvVariable( "HIPRT_DISABLE_RUNTIME_KERNEL_CACHE" );
+	if ( !disableCache.empty() && disableCache != "0" && disableCache != "false" && disableCache != "FALSE" )
+		return false;
+
+#if defined( HIPRT_RUNTIME_KERNEL_CACHE_DEFAULT )
+	return HIPRT_RUNTIME_KERNEL_CACHE_DEFAULT != 0;
+#else
+	return true;
+#endif
+}
+} // namespace
+
 Compiler::~Compiler()
 {
 	for ( auto& module : m_moduleCache )
@@ -135,7 +151,8 @@ void Compiler::buildKernels(
 	bool								 extended,
 	bool								 cache )
 {
-	if ( !std::filesystem::exists( m_cacheDirectory ) && !std::filesystem::create_directory( m_cacheDirectory ) )
+	const bool useDiskCache = cache && getRuntimeKernelDiskCacheEnabled();
+	if ( useDiskCache && !std::filesystem::exists( m_cacheDirectory ) && !std::filesystem::create_directory( m_cacheDirectory ) )
 		throw std::runtime_error( "Cannot create cache directory" );
 
 	std::lock_guard<std::mutex> lock( m_moduleMutex );
@@ -151,7 +168,7 @@ void Compiler::buildKernels(
 
 		nvrtcProgram prog = nullptr;
 		std::string	 binary;
-		if ( upToDate && cache )
+		if ( upToDate && useDiskCache )
 		{
 			binary = loadCacheFileToBinary( cacheName );
 		}
@@ -178,7 +195,7 @@ void Compiler::buildKernels(
 			checkOrortc( nvrtcGetPTX( prog, binary.data() ) );
 			checkOrortc( nvrtcDestroyProgram( &prog ) );
 
-			if ( cache ) cacheBinaryToFile( binary, cacheName );
+			if ( useDiskCache ) cacheBinaryToFile( binary, cacheName );
 		}
 
 		checkOro( cuModuleLoadData( &module, binary.data() ) );

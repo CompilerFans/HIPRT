@@ -10,6 +10,11 @@ set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_ARCHITECTURES "89;86;80;75" CACHE STRING "CUDA architectures to build")
 
 option(NO_UNITTEST "Don't build unit tests" OFF)
+set(hiprt_runtime_kernel_cache_default ON)
+if(NOT CMAKE_BUILD_TYPE STREQUAL "Release")
+	set(hiprt_runtime_kernel_cache_default OFF)
+endif()
+option(HIPRT_ENABLE_RUNTIME_KERNEL_CACHE "Enable on-disk cache for runtime-compiled kernels" ${hiprt_runtime_kernel_cache_default})
 
 list(GET CUDAToolkit_INCLUDE_DIRS 0 CUDAToolkit_PRIMARY_INCLUDE_DIR)
 string(REPLACE "\\" "\\\\" HIPRT_CUDA_INCLUDE_DIR_ESCAPED "${CUDAToolkit_PRIMARY_INCLUDE_DIR}")
@@ -21,6 +26,7 @@ message(STATUS "Configuring HIPRT with CUDA backend only")
 message(STATUS "CUDA toolkit version: ${CUDAToolkit_VERSION}")
 message(STATUS "CUDA architectures: ${CMAKE_CUDA_ARCHITECTURES}")
 message(STATUS "Disable unit tests: ${NO_UNITTEST}")
+message(STATUS "Runtime kernel disk cache: ${HIPRT_ENABLE_RUNTIME_KERNEL_CACHE}")
 
 if(WIN32)
 	add_definitions(-D__WINDOWS__)
@@ -119,6 +125,7 @@ target_compile_definitions(${HIPRT_NAME} PRIVATE
 	HIPRT_EXPORTS
 	HIPRT_CUDA_INCLUDE_DIR="${HIPRT_CUDA_INCLUDE_DIR_ESCAPED}"
 	HIPRT_ROOT_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}"
+	HIPRT_RUNTIME_KERNEL_CACHE_DEFAULT=$<IF:$<BOOL:${HIPRT_ENABLE_RUNTIME_KERNEL_CACHE}>,1,0>
 )
 
 if(${CMAKE_BUILD_TYPE} STREQUAL "Debug")
