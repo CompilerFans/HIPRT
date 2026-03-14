@@ -26,6 +26,7 @@
 #include <cuda_profiler_api.h>
 #include <nvrtc.h>
 #include <test/hiprtTest.h>
+#include <test/CornellBox.h>
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <contrib/stbi/stbi_image_write.h>
 #define STB_IMAGE_IMPLEMENTATION
@@ -37,6 +38,7 @@
 #include <chrono>
 #include <thread>
 #include <algorithm>
+#include <numeric>
 
 CmdArguments g_parsedArgs;
 
@@ -736,6 +738,125 @@ hiprtError hiprtTest::buildTraceKernel(
 	ASSERT( functions.size() == 1 );
 	functionOut = *reinterpret_cast<cudaFunction_t*>( &functions.back() );
 	return e;
+}
+
+void hiprtTest::createCornellTriangleMeshPrimitive(
+	uint32_t triangleCount, hiprtTriangleMeshPrimitive& mesh, std::vector<void*>& garbageCollector )
+{
+	ASSERT( triangleCount > 0 && triangleCount <= CornellBoxTriangleCount );
+
+	mesh = {};
+	mesh.triangleCount	= triangleCount;
+	mesh.triangleStride = sizeof( uint3 );
+	malloc( reinterpret_cast<uint3*&>( mesh.triangleIndices ), mesh.triangleCount );
+	garbageCollector.push_back( const_cast<void*>( mesh.triangleIndices ) );
+
+	std::vector<uint32_t> indices( 3 * triangleCount );
+	std::iota( indices.begin(), indices.end(), 0u );
+	copyHtoD( reinterpret_cast<uint3*>( mesh.triangleIndices ), reinterpret_cast<uint3*>( indices.data() ), mesh.triangleCount );
+
+	mesh.vertexCount  = 3 * triangleCount;
+	mesh.vertexStride = sizeof( float3 );
+	malloc( reinterpret_cast<float3*&>( mesh.vertices ), mesh.vertexCount );
+	garbageCollector.push_back( const_cast<void*>( mesh.vertices ) );
+	copyHtoD( reinterpret_cast<float3*>( mesh.vertices ), const_cast<float3*>( cornellBoxVertices.data() ), mesh.vertexCount );
+}
+
+void hiprtTest::createIndexedQuadStripTriangleMeshPrimitive(
+	uint32_t quadCount, hiprtTriangleMeshPrimitive& mesh, std::vector<void*>& garbageCollector )
+{
+	ASSERT( quadCount > 0 );
+
+	mesh = {};
+	mesh.triangleCount	= 2 * quadCount;
+	mesh.triangleStride = sizeof( uint3 );
+
+	std::vector<uint3>  indices( mesh.triangleCount );
+	std::vector<float3> vertices( 2 * ( quadCount + 1 ) );
+
+	for ( uint32_t i = 0; i <= quadCount; ++i )
+	{
+		vertices[2 * i + 0] = { static_cast<float>( i ), 0.0f, 0.0f };
+		vertices[2 * i + 1] = { static_cast<float>( i ), 1.0f, 0.0f };
+	}
+
+	for ( uint32_t i = 0; i < quadCount; ++i )
+	{
+		const uint32_t v0 = 2 * i + 0;
+		const uint32_t v1 = 2 * i + 1;
+		const uint32_t v2 = 2 * i + 2;
+		const uint32_t v3 = 2 * i + 3;
+		indices[2 * i + 0] = { v0, v1, v2 };
+		indices[2 * i + 1] = { v2, v1, v3 };
+	}
+
+	malloc( reinterpret_cast<uint3*&>( mesh.triangleIndices ), mesh.triangleCount );
+	garbageCollector.push_back( const_cast<void*>( mesh.triangleIndices ) );
+	copyHtoD( reinterpret_cast<uint3*>( mesh.triangleIndices ), indices.data(), mesh.triangleCount );
+
+	mesh.vertexCount  = static_cast<uint32_t>( vertices.size() );
+	mesh.vertexStride = sizeof( float3 );
+	malloc( reinterpret_cast<float3*&>( mesh.vertices ), mesh.vertexCount );
+	garbageCollector.push_back( const_cast<void*>( mesh.vertices ) );
+	copyHtoD( reinterpret_cast<float3*>( mesh.vertices ), vertices.data(), vertices.size() );
+}
+
+void hiprtTest::attachSequentialTrianglePairs(
+	uint32_t pairCount, hiprtTriangleMeshPrimitive& mesh, std::vector<void*>& garbageCollector )
+{
+	ASSERT( pairCount > 0 );
+	ASSERT( 2 * pairCount <= mesh.triangleCount );
+
+	std::vector<uint2> pairIndices( pairCount );
+	for ( uint32_t i = 0; i < pairCount; ++i )
+		pairIndices[i] = { 2 * i + 0, 2 * i + 1 };
+
+	mesh.trianglePairCount = pairCount;
+	malloc( reinterpret_cast<uint2*&>( mesh.trianglePairIndices ), pairCount );
+	garbageCollector.push_back( const_cast<void*>( mesh.trianglePairIndices ) );
+	copyHtoD( reinterpret_cast<uint2*>( mesh.trianglePairIndices ), pairIndices.data(), pairIndices.size() );
+}
+
+void hiprtTest::destroyGarbage( std::vector<void*>& garbageCollector )
+{
+	for ( void* ptr : garbageCollector )
+		free( ptr );
+	garbageCollector.clear();
+}
+
+void hiprtTest::buildBatchGeometriesBuildOnly(
+	const std::vector<hiprtGeometryBuildInput>& geomInputs, const hiprtBuildOptions& options )
+{
+	hiprtContext ctxt;
+	checkHiprt( hiprtCreateContext( HIPRT_API_VERSION, m_ctxtInput, ctxt ) );
+	checkHiprt( hiprtSetLogLevel( ctxt, hiprtLogLevelError | hiprtLogLevelWarn ) );
+
+	hiprtDevicePtr tempGeomBuffer = nullptr;
+	size_t		   tempGeomSize   = 0;
+	checkHiprt( hiprtGetGeometriesBuildTemporaryBufferSize(
+		ctxt, static_cast<uint32_t>( geomInputs.size() ), geomInputs.data(), options, tempGeomSize ) );
+	if ( tempGeomSize > 0 ) malloc( reinterpret_cast<uint8_t*&>( tempGeomBuffer ), tempGeomSize );
+
+	std::vector<hiprtGeometry>	 geometries( geomInputs.size() );
+	std::vector<hiprtGeometry*> geomAddrs( geomInputs.size() );
+	for ( size_t i = 0; i < geometries.size(); ++i )
+		geomAddrs[i] = &geometries[i];
+
+	checkHiprt( hiprtCreateGeometries(
+		ctxt, static_cast<uint32_t>( geomInputs.size() ), geomInputs.data(), options, geomAddrs.data() ) );
+	checkHiprt( hiprtBuildGeometries(
+		ctxt,
+		hiprtBuildOperationBuild,
+		static_cast<uint32_t>( geomInputs.size() ),
+		geomInputs.data(),
+		options,
+		tempGeomBuffer,
+		0,
+		geometries.data() ) );
+
+	if ( tempGeomBuffer != nullptr ) free( tempGeomBuffer );
+	checkHiprt( hiprtDestroyGeometries( ctxt, static_cast<uint32_t>( geometries.size() ), geometries.data() ) );
+	checkHiprt( hiprtDestroyContext( ctxt ) );
 }
 
 void hiprtTest::validateAndWriteImage(

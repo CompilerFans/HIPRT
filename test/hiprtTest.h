@@ -135,6 +135,20 @@ class hiprtTest : public ::testing::Test
 		uint32_t									 numGeomTypes = 0u,
 		uint32_t									 numRayTypes  = 1u );
 
+	void createCornellTriangleMeshPrimitive(
+		uint32_t triangleCount, hiprtTriangleMeshPrimitive& mesh, std::vector<void*>& garbageCollector );
+
+	void createIndexedQuadStripTriangleMeshPrimitive(
+		uint32_t quadCount, hiprtTriangleMeshPrimitive& mesh, std::vector<void*>& garbageCollector );
+
+	void attachSequentialTrianglePairs(
+		uint32_t pairCount, hiprtTriangleMeshPrimitive& mesh, std::vector<void*>& garbageCollector );
+
+	void destroyGarbage( std::vector<void*>& garbageCollector );
+
+	void buildBatchGeometriesBuildOnly(
+		const std::vector<hiprtGeometryBuildInput>& geomInputs, const hiprtBuildOptions& options );
+
 	void launchKernel( cudaFunction_t func, uint32_t nx, uint32_t ny, void** args, uint32_t sharedMemoryBytes = 0 );
 	void launchKernel(
 		cudaFunction_t func, uint32_t nx, uint32_t ny, uint32_t tx, uint32_t ty, void** args, uint32_t sharedMemoryBytes = 0 );

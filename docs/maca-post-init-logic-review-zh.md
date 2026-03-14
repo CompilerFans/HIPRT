@@ -169,6 +169,13 @@ cd /data/HIPRT/scripts
 结论：
 
 - geometry 单对象 batch 回退**仍然必要**
+- 新增 batch 诊断测试进一步说明：
+  - `BatchGeometryCornellSweepBuildOnly`：`triangleCount=2/4/8/16` 通过，`32` 失败
+  - `BatchGeometryIndexedQuadStripSweepBuildOnly`：即使换成索引 mesh，边界仍然是 `32` 失败
+  - `BatchGeometryIndexedQuadStripPrePairedSweepBuildOnly`：预先提供 `trianglePairIndices` 后，`2/4/8/16/32` 全部通过
+- 这使当前最强工作假设变成：
+  - geometry batch 路径存在**未配对 triangle mesh** 相关的 latent OOB 或缺失预处理
+  - 这类问题可能在 CUDA 上因为 padding / UB / 对齐余量没有立刻崩，但在当前 MACA 环境下被稳定暴露
 
 #### scene 单对象 batch 路径
 

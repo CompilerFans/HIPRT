@@ -899,6 +899,103 @@ TEST_F( hiprtTest, BatchCornellBox )
 	checkHiprt( hiprtDestroyContext( ctxt ) );
 }
 
+TEST_F( hiprtTest, BatchGeometryCornellSweepBuildOnly )
+{
+	constexpr size_t GeomCount = 2;
+	const std::array<uint32_t, 5> triangleCounts = { 2u, 4u, 8u, 16u, 32u };
+
+	hiprtBuildOptions options{};
+	options.buildFlags			   = hiprtBuildFlagBitPreferFastBuild;
+	options.batchBuildMaxPrimCount = 64u;
+
+	for ( uint32_t triangleCount : triangleCounts )
+	{
+		std::cout << "BatchGeometryCornellSweepBuildOnly triangleCount=" << triangleCount << std::endl;
+
+		std::vector<std::vector<void*>> garbageCollectors( GeomCount );
+		std::vector<hiprtGeometryBuildInput> geomInputs( GeomCount );
+		for ( size_t i = 0; i < GeomCount; ++i )
+		{
+			hiprtTriangleMeshPrimitive mesh;
+			createCornellTriangleMeshPrimitive( triangleCount, mesh, garbageCollectors[i] );
+			geomInputs[i] = {};
+			geomInputs[i].type					 = hiprtPrimitiveTypeTriangleMesh;
+			geomInputs[i].primitive.triangleMesh = mesh;
+			geomInputs[i].geomType				 = 0;
+		}
+
+		buildBatchGeometriesBuildOnly( geomInputs, options );
+
+		for ( std::vector<void*>& garbageCollector : garbageCollectors )
+			destroyGarbage( garbageCollector );
+	}
+}
+
+TEST_F( hiprtTest, BatchGeometryIndexedQuadStripSweepBuildOnly )
+{
+	constexpr size_t GeomCount = 2;
+	const std::array<uint32_t, 5> quadCounts = { 1u, 2u, 4u, 8u, 16u };
+
+	hiprtBuildOptions options{};
+	options.buildFlags			   = hiprtBuildFlagBitPreferFastBuild;
+	options.batchBuildMaxPrimCount = 64u;
+
+	for ( uint32_t quadCount : quadCounts )
+	{
+		std::cout << "BatchGeometryIndexedQuadStripSweepBuildOnly triangleCount=" << ( 2 * quadCount ) << std::endl;
+
+		std::vector<std::vector<void*>> garbageCollectors( GeomCount );
+		std::vector<hiprtGeometryBuildInput> geomInputs( GeomCount );
+		for ( size_t i = 0; i < GeomCount; ++i )
+		{
+			hiprtTriangleMeshPrimitive mesh;
+			createIndexedQuadStripTriangleMeshPrimitive( quadCount, mesh, garbageCollectors[i] );
+			geomInputs[i] = {};
+			geomInputs[i].type					 = hiprtPrimitiveTypeTriangleMesh;
+			geomInputs[i].primitive.triangleMesh = mesh;
+			geomInputs[i].geomType				 = 0;
+		}
+
+		buildBatchGeometriesBuildOnly( geomInputs, options );
+
+		for ( std::vector<void*>& garbageCollector : garbageCollectors )
+			destroyGarbage( garbageCollector );
+	}
+}
+
+TEST_F( hiprtTest, BatchGeometryIndexedQuadStripPrePairedSweepBuildOnly )
+{
+	constexpr size_t GeomCount = 2;
+	const std::array<uint32_t, 5> quadCounts = { 1u, 2u, 4u, 8u, 16u };
+
+	hiprtBuildOptions options{};
+	options.buildFlags			   = hiprtBuildFlagBitPreferFastBuild;
+	options.batchBuildMaxPrimCount = 64u;
+
+	for ( uint32_t quadCount : quadCounts )
+	{
+		std::cout << "BatchGeometryIndexedQuadStripPrePairedSweepBuildOnly triangleCount=" << ( 2 * quadCount ) << std::endl;
+
+		std::vector<std::vector<void*>> garbageCollectors( GeomCount );
+		std::vector<hiprtGeometryBuildInput> geomInputs( GeomCount );
+		for ( size_t i = 0; i < GeomCount; ++i )
+		{
+			hiprtTriangleMeshPrimitive mesh;
+			createIndexedQuadStripTriangleMeshPrimitive( quadCount, mesh, garbageCollectors[i] );
+			attachSequentialTrianglePairs( quadCount, mesh, garbageCollectors[i] );
+			geomInputs[i] = {};
+			geomInputs[i].type					 = hiprtPrimitiveTypeTriangleMesh;
+			geomInputs[i].primitive.triangleMesh = mesh;
+			geomInputs[i].geomType				 = 0;
+		}
+
+		buildBatchGeometriesBuildOnly( geomInputs, options );
+
+		for ( std::vector<void*>& garbageCollector : garbageCollectors )
+			destroyGarbage( garbageCollector );
+	}
+}
+
 TEST_F( hiprtTest, SceneAabbSingletonSrt )
 {
 	hiprtContext ctxt;

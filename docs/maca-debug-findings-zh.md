@@ -44,9 +44,32 @@
 - 当前已对单对象 `*Geometries/*Scenes` 调用做兼容回退，不再走 batch kernel。
 - 这条策略已经让 `BatchCornellBox` 恢复通过。
 
+### 4. geometry batch 路径更像 latent OOB，而不是普遍的 batch 不可用
+
+新增诊断测试后，当前已经得到更具体的事实：
+
+- `BatchGeometryCornellSweepBuildOnly`
+  - `triangleCount=2/4/8/16` 通过
+  - `triangleCount=32` 在 `BatchBuild_hiprtGeometryBuildInput` 上触发 memory violation
+- `BatchGeometryIndexedQuadStripSweepBuildOnly`
+  - 即使换成**索引 mesh**，边界仍然是 `2/4/8/16` 通过，`32` 失败
+- `BatchGeometryIndexedQuadStripPrePairedSweepBuildOnly`
+  - 在**预先提供 `trianglePairIndices`** 后，`2/4/8/16/32` 全部通过
+
+这说明：
+
+- 问题不像“batch 几何内核整体不可用”
+- 更像是“未配对 triangle mesh 的 batch 几何路径”在规模到 `32` 左右时触发 latent OOB
+- 这类问题在 CUDA 上有可能因为 padding / UB / 对齐余量未立即崩溃，但在当前 MACA 环境下被更早暴露
+
+因此当前最优先方向是：
+
+- 检查 batch geometry kernel 是否缺少与普通 builder 等价的 triangle pairing / packet 预处理
+- 继续对比 host 侧分配大小与 device 侧实际写入大小，排查真实越界来源
+
 ## 变换 / scene 方向的已证实事实
 
-### 4. scene AABB 构建本身是正确的
+### 5. scene AABB 构建本身是正确的
 
 以下诊断单测已通过：
 
@@ -60,7 +83,7 @@
 
 因此，剩余问题**不在 scene build 的 AABB 生成本身**。
 
-### 5. scene header / instance node 的 frame 元数据写入是正确的
+### 6. scene header / instance node 的 frame 元数据写入是正确的
 
 以下诊断单测已通过：
 
@@ -78,7 +101,7 @@
 
 因此，剩余问题**不在 frame/header 元数据写入，也不在 `Transform` 的 frame 选择逻辑**。
 
-### 6. helper 形式的 world-to-object 变换是正确的
+### 7. helper 形式的 world-to-object 变换是正确的
 
 以下诊断单测已通过：
 
@@ -94,7 +117,7 @@
 
 因此，剩余问题**不在这组 helper API 的单层结果**。
 
-### 7. geometry traversal 本身是正确的
+### 8. geometry traversal 本身是正确的
 
 以下诊断单测已通过：
 
@@ -106,7 +129,7 @@
 
 因此，剩余问题**不在 geometry traversal / triangle hit 这一层**。
 
-### 8. helper 变换 + geometry traversal 组合也是正确的
+### 9. helper 变换 + geometry traversal 组合也是正确的
 
 以下诊断单测已通过：
 
@@ -126,7 +149,7 @@
   或
 - 它内部使用的 `Transform::transformRay()`
 
-### 9. 当前 scene traversal 功能路径已恢复
+### 10. 当前 scene traversal 功能路径已恢复
 
 以下 case 现已恢复通过：
 
@@ -152,7 +175,7 @@
 
 ## 当前最关键的失败诊断
 
-### 10. `Transform::transformRay()` 诊断在当前工作树下已恢复
+### 11. `Transform::transformRay()` 诊断在当前工作树下已恢复
 
 以下诊断单测当前已通过：
 
@@ -163,7 +186,7 @@
 - 至少在当前工作树下，`Transform::transformRay()` 不再是最直接的功能 blocker
 - 它仍然值得保留为回归测试，因为之前确实出现过错误结果
 
-### 11. `MatrixFrame::getMatrixFrameInv(frame)` 诊断在当前工作树下已恢复
+### 12. `MatrixFrame::getMatrixFrameInv(frame)` 诊断在当前工作树下已恢复
 
 以下诊断单测当前已通过：
 
@@ -174,7 +197,7 @@
 - 这条诊断目前不再是主 blocker
 - 但它仍应保留为红灯回归基线，防止后续 scene transform 修正时倒退
 
-### 12. recreate 后再次 render 问题在当前工作树下已恢复
+### 13. recreate 后再次 render 问题在当前工作树下已恢复
 
 以下新增诊断单测当前已通过：
 
@@ -188,7 +211,7 @@
 - recreate + render 路径在当前工作树下已恢复
 - 这组测试应继续保留，防止后续再次出现生命周期回归
 
-### 13. trace kernel rebuild / custom stack 问题在当前工作树下已恢复
+### 14. trace kernel rebuild / custom stack 问题在当前工作树下已恢复
 
 以下诊断单测当前已通过：
 
