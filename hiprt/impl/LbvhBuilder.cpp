@@ -38,7 +38,8 @@ size_t LbvhBuilder::getTemporaryBufferSize( const size_t count )
 {
 	return RoundUp( sizeof( Aabb ), DefaultAlignment ) + 4 * RoundUp( sizeof( uint32_t ) * count, DefaultAlignment ) +
 		   RoundUp( count * sizeof( ScratchNode ), DefaultAlignment ) +
-		   RoundUp( count * sizeof( ReferenceNode ), DefaultAlignment ) + RoundUp( sizeof( uint32_t ), DefaultAlignment );
+		   RoundUp( count * sizeof( ReferenceNode ), DefaultAlignment ) + RoundUp( sizeof( uint32_t ), DefaultAlignment ) +
+		   RoundUp( getRadixSortPairsTemporaryStorageSize( count ), DefaultAlignment );
 }
 
 size_t LbvhBuilder::getTemporaryBufferSize(

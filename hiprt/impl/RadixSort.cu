@@ -22,10 +22,10 @@
 //
 //////////////////////////////////////////////////////////////////////////////////////////
 
+#include <cub/device/device_radix_sort.cuh>
+
 #include <hiprt/impl/Error.h>
 #include <hiprt/impl/RadixSort.h>
-
-#include <cub/device/device_radix_sort.cuh>
 
 namespace hiprt
 {
@@ -55,58 +55,45 @@ class ScopedDevice final
 };
 } // namespace
 
-RadixSort::RadixSort( int device ) : m_device( device ) {}
-
-RadixSort::~RadixSort()
-{
-	if ( m_pairTempStorage == nullptr ) return;
-
-	int	 previousDevice = 0;
-	bool restoreDevice  = cudaGetDevice( &previousDevice ) == cudaSuccess && previousDevice != m_device;
-	if ( restoreDevice ) cudaSetDevice( m_device );
-	cudaFree( m_pairTempStorage );
-	if ( restoreDevice ) cudaSetDevice( previousDevice );
-}
-
-void RadixSort::reservePairTempStorage(
-	uint32_t* inputKeys,
-	uint32_t* inputValues,
-	uint32_t* outputKeys,
-	uint32_t* outputValues,
-	size_t	  size,
-	cudaStream_t stream )
+size_t getRadixSortPairsTemporaryStorageSize( size_t count )
 {
 	size_t requiredBytes = 0;
 	checkOro( cub::DeviceRadixSort::SortPairs(
-		nullptr, requiredBytes, inputKeys, outputKeys, inputValues, outputValues, static_cast<int>( size ), 0, 32, stream ) );
+		nullptr,
+		requiredBytes,
+		static_cast<const uint32_t*>( nullptr ),
+		static_cast<uint32_t*>( nullptr ),
+		static_cast<const uint32_t*>( nullptr ),
+		static_cast<uint32_t*>( nullptr ),
+		static_cast<int>( count ),
+		0,
+		32,
+		0 ) );
 
-	if ( requiredBytes <= m_pairTempStorageSize ) return;
-
-	if ( m_pairTempStorage != nullptr ) checkOro( cudaFree( m_pairTempStorage ) );
-	checkOro( cudaMalloc( &m_pairTempStorage, requiredBytes ) );
-	m_pairTempStorageSize = requiredBytes;
+	return requiredBytes;
 }
 
-void RadixSort::sort(
-	uint32_t* inputKeys,
-	uint32_t* inputValues,
-	uint32_t* outputKeys,
-	uint32_t* outputValues,
-	size_t	  size,
-	cudaStream_t stream ) noexcept
+void radixSortPairs(
+	int				device,
+	void*			temporaryStorage,
+	size_t			temporaryStorageSize,
+	uint32_t*		inputKeys,
+	uint32_t*		inputValues,
+	uint32_t*		outputKeys,
+	uint32_t*		outputValues,
+	size_t			count,
+	cudaStream_t	stream ) noexcept
 {
-	ScopedDevice scopedDevice( m_device );
-
-	reservePairTempStorage( inputKeys, inputValues, outputKeys, outputValues, size, stream );
+	ScopedDevice scopedDevice( device );
 
 	checkOro( cub::DeviceRadixSort::SortPairs(
-		m_pairTempStorage,
-		m_pairTempStorageSize,
+		temporaryStorage,
+		temporaryStorageSize,
 		inputKeys,
 		outputKeys,
 		inputValues,
 		outputValues,
-		static_cast<int>( size ),
+		static_cast<int>( count ),
 		0,
 		32,
 		stream ) );

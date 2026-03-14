@@ -167,10 +167,10 @@ void LbvhBuilder::build(
 	mortonCodeValues[0] = reinterpret_cast<uint32_t*>( taskQueue ) + 1 * primitives.getCount();
 	mortonCodeKeys[1]	= reinterpret_cast<uint32_t*>( boxNodes ) + 0 * primitives.getCount();
 	mortonCodeValues[1] = reinterpret_cast<uint32_t*>( boxNodes ) + 1 * primitives.getCount();
+	uint8_t* radixSortTempStorage =
+		temporaryMemoryArena.allocate<uint8_t>( getRadixSortPairsTemporaryStorageSize( primitives.getCount() ) );
 
 	uint32_t* updateCounters = reinterpret_cast<uint32_t*>( boxNodes ) + 2 * primitives.getCount();
-
-	RadixSort sort( context.getDevice() );
 	Timer	  timer;
 
 	Compiler&				 compiler = context.getCompiler();
@@ -290,9 +290,16 @@ void LbvhBuilder::build(
 
 	// STEP 4: Sort Morton codes
 	timer.measure( SortTime, [&]() {
-		sort.sort(
-			mortonCodeKeys[0], mortonCodeValues[0], mortonCodeKeys[1], mortonCodeValues[1], primitives.getCount(), stream );
-		// SORT( mortonCodeKeys[0], mortonCodeValues[0], mortonCodeKeys[1], mortonCodeValues[1] );
+		radixSortPairs(
+			context.getDevice(),
+			radixSortTempStorage,
+			getRadixSortPairsTemporaryStorageSize( primitives.getCount() ),
+			mortonCodeKeys[0],
+			mortonCodeValues[0],
+			mortonCodeKeys[1],
+			mortonCodeValues[1],
+			primitives.getCount(),
+			stream );
 	} );
 
 	// STEP 5: Emit topology and refit nodes
