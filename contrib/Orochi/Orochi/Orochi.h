@@ -27,12 +27,10 @@
 #include <nvrtc.h>
 
 
-// This part allows Orochi.h to be included by the device kernel code to compile, and use generic cuda** names.
+// This part allows Orochi.h to be included by device kernel code and expose
+// a CUDA-oriented API surface without depending on separate loader helpers.
 // TODO: make this list exhaustive by auto-generating it with Orochi Summoner.
 
-// #include "../contrib/hipew/include/hipew.h"
-
-// #define OROCHI_ENABLE_CUEW
 #define OROAPI HIPAPI
 #define ORO_CB HIP_CB
 
@@ -125,5 +123,4 @@ enum {
 //     customPaths_Hip[]    = {"amdhip64_6.dll", "amdhip64.dll", NULL};
 //     customPaths_Hiprtc[] = {"hiprtc0600.dll", "hiprtc0507.dll", NULL};
 //     Note that those lists are non-correlated, meaning Orochi can take for example the second element of customPaths_Hip and the first element of customPaths_Hiprtc.
-
 
