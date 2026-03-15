@@ -104,6 +104,12 @@
    - 这两条测试直接从生成好的 `hiprt*_nv_precompiled_bitcode.fatbin` 中加载 kernel
    - 用来守护“预编译产物可被当前运行时消费”这条主路径
 
+6. 新增的 precompiled 执行侧 UT
+   - `LaunchPrecompiledTraceKernel`
+   已在 `MACA + cu-bridge` 下实际通过
+   - 该测试直接加载 `hiprt*_nv_precompiled_bitcode.fatbin` 中的 `TraceKernel`
+   - 然后构造最小 scene / ray / stack，实际 launch kernel 并校验 hit 结果
+
 ## 4. 当前还存在的限制
 
 当前最重要的限制只有一条：
@@ -134,7 +140,7 @@
 与之对应，当前真正作为 cu-bridge 主验证路径的是：
 
 - 先生成 `hiprt*_nv_precompiled_bitcode.fatbin`
-- 再通过 `LoadPrecompiledTraceKernel*` UT 直接加载验证
+- 再通过 `LoadPrecompiledTraceKernel*` / `LaunchPrecompiledTraceKernel` UT 直接加载与执行验证
 
 ## 5. 当前推荐用法
 
