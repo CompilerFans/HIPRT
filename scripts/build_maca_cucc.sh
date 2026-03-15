@@ -18,4 +18,6 @@ export CUCC_CMAKE_ENTRY="${CUCC_CMAKE_ENTRY:-2}"
 export LIBRARY_PATH="${CUCC_PATH}/lib:/opt/mxdriver/lib:${LIBRARY_PATH:-}"
 
 cmake_maca -S "$ROOT_DIR" -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
-cmake --build "$BUILD_DIR" --config "$BUILD_TYPE" -j"${BUILD_JOBS:-4}" --target "$BUILD_TARGET"
+pushd "$BUILD_DIR" >/dev/null
+make_maca -j"${BUILD_JOBS:-4}" "$BUILD_TARGET"
+popd >/dev/null
