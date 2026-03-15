@@ -2569,6 +2569,84 @@ TEST_F( hiprtTest, LaunchPrecompiledTraceKernel )
 	checkHiprt( hiprtDestroyContext( ctxt ) );
 }
 
+TEST_F( hiprtTest, LaunchPrecompiledTraceKernelWithCustomFuncTable )
+{
+	hiprtContext ctxt;
+	checkHiprt( hiprtCreateContext( HIPRT_API_VERSION, m_ctxtInput, ctxt ) );
+	checkHiprt( hiprtSetLogLevel( ctxt, hiprtLogLevelError | hiprtLogLevelWarn ) );
+
+	hiprtTriangleMeshPrimitive mesh{};
+	mesh.triangleCount	= 2;
+	mesh.triangleStride = sizeof( uint3 );
+	malloc( reinterpret_cast<uint3*&>( mesh.triangleIndices ), mesh.triangleCount );
+	uint32_t idx[] = { 0, 1, 2, 0, 2, 3 };
+	copyHtoD( reinterpret_cast<uint3*>( mesh.triangleIndices ), reinterpret_cast<uint3*>( idx ), mesh.triangleCount );
+
+	mesh.vertexCount  = 4;
+	mesh.vertexStride = sizeof( float3 );
+	malloc( reinterpret_cast<float3*&>( mesh.vertices ), mesh.vertexCount );
+	float3 v[] = { { 0.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f }, { 1.0f, 1.0f, 0.0f }, { 1.0f, 0.0f, 0.0f } };
+	copyHtoD( reinterpret_cast<float3*>( mesh.vertices ), v, mesh.vertexCount );
+
+	const uint32_t GeomType = 3;
+
+	hiprtGeometryBuildInput geomInput{};
+	geomInput.type					 = hiprtPrimitiveTypeTriangleMesh;
+	geomInput.primitive.triangleMesh = mesh;
+	geomInput.geomType				 = GeomType;
+
+	size_t			  geomTempSize;
+	hiprtDevicePtr	  geomTemp;
+	hiprtBuildOptions options{};
+	options.buildFlags = hiprtBuildFlagBitPreferFastBuild;
+	checkHiprt( hiprtGetGeometryBuildTemporaryBufferSize( ctxt, geomInput, options, geomTempSize ) );
+	malloc( reinterpret_cast<uint8_t*&>( geomTemp ), geomTempSize );
+
+	hiprtGeometry geom;
+	checkHiprt( hiprtCreateGeometry( ctxt, geomInput, options, geom ) );
+	checkHiprt( hiprtBuildGeometry( ctxt, hiprtBuildOperationBuild, geomInput, options, geomTemp, 0, geom ) );
+
+	cudaFunction_t func   = nullptr;
+	CUmodule	   module = nullptr;
+	checkHiprt( loadPrecompiledTraceKernel( "CutoutKernel", func, &module ) );
+
+	hiprtFuncDataSet funcDataSet{};
+	hiprtFuncTable	 funcTable;
+	checkHiprt( hiprtCreateFuncTable( ctxt, 4, 1, funcTable ) );
+	checkHiprt( hiprtSetFuncTable( ctxt, funcTable, GeomType, 0, funcDataSet ) );
+
+	uint8_t* dst = nullptr;
+	malloc( dst, g_parsedArgs.m_ww * g_parsedArgs.m_wh * 4 );
+	uint2 res = { g_parsedArgs.m_ww, g_parsedArgs.m_wh };
+	checkOro( cuMemsetD8( reinterpret_cast<size_t>( dst ), 0, g_parsedArgs.m_ww * g_parsedArgs.m_wh * 4 ) );
+
+	void* args[] = { &geom, &dst, &funcTable, &res };
+	launchKernel( func, g_parsedArgs.m_ww, g_parsedArgs.m_wh, args );
+	waitForCompletion();
+
+	std::vector<uint8_t> image( g_parsedArgs.m_ww * g_parsedArgs.m_wh * 4 );
+	copyDtoH( image.data(), dst, image.size() );
+	bool hasHitPixel = false;
+	for ( size_t i = 0; i < image.size(); i += 4 )
+	{
+		if ( image[i] != 0 || image[i + 1] != 0 || image[i + 2] != 0 )
+		{
+			hasHitPixel = true;
+			break;
+		}
+	}
+	EXPECT_TRUE( hasHitPixel );
+
+	free( mesh.triangleIndices );
+	free( mesh.vertices );
+	free( geomTemp );
+	free( dst );
+	checkOro( cuModuleUnload( module ) );
+	checkHiprt( hiprtDestroyFuncTable( ctxt, funcTable ) );
+	checkHiprt( hiprtDestroyGeometry( ctxt, geom ) );
+	checkHiprt( hiprtDestroyContext( ctxt ) );
+}
+
 TEST_F( hiprtTest, BoundingBox )
 {
 	hiprtContext ctxt;

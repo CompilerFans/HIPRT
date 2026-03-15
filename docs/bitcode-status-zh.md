@@ -106,9 +106,12 @@
 
 6. 新增的 precompiled 执行侧 UT
    - `LaunchPrecompiledTraceKernel`
+   - `LaunchPrecompiledTraceKernelWithCustomFuncTable`
    已在 `MACA + cu-bridge` 下实际通过
-   - 该测试直接加载 `hiprt*_nv_precompiled_bitcode.fatbin` 中的 `TraceKernel`
-   - 然后构造最小 scene / ray / stack，实际 launch kernel 并校验 hit 结果
+   - 这两条测试分别覆盖：
+     - `TraceKernel`
+     - `CutoutKernel + custom func table`
+   - 然后构造最小 scene / ray / stack 或 geometry / func table，实际 launch kernel 并校验结果
 
 ## 4. 当前还存在的限制
 
@@ -140,7 +143,7 @@
 与之对应，当前真正作为 cu-bridge 主验证路径的是：
 
 - 先生成 `hiprt*_nv_precompiled_bitcode.fatbin`
-- 再通过 `LoadPrecompiledTraceKernel*` / `LaunchPrecompiledTraceKernel` UT 直接加载与执行验证
+- 再通过 `LoadPrecompiledTraceKernel*` / `LaunchPrecompiledTraceKernel*` UT 直接加载与执行验证
 
 ## 5. 当前推荐用法
 

@@ -18,4 +18,4 @@ export LD_LIBRARY_PATH="$ROOT_DIR/contrib/embree/linux:${LD_LIBRARY_PATH:-}"
 	--width=512 \
 	--height=512 \
 	--referencePath="$ROOT_DIR/test/references" \
-	--gtest_filter="${GTEST_FILTER:-hiprtTest.LoadPrecompiledTraceKernel:hiprtTest.LoadPrecompiledTraceKernelWithCustomFuncTable:hiprtTest.LaunchPrecompiledTraceKernel}"
+	--gtest_filter="${GTEST_FILTER:-hiprtTest.LoadPrecompiledTraceKernel:hiprtTest.LoadPrecompiledTraceKernelWithCustomFuncTable:hiprtTest.LaunchPrecompiledTraceKernel:hiprtTest.LaunchPrecompiledTraceKernelWithCustomFuncTable}"

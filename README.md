@@ -101,7 +101,7 @@ Build with CMake only.
 - The CUDA/cu-bridge build can now generate the HIPRT precompiled fatbin artifacts and a precompiled trace-kernel fatbin through `scripts/bitcodes/compile.py` and `scripts/bitcodes/precompile_bitcode.py`.
 - `hiprtBuildTraceKernelsFromBitcode(...)` has been re-enabled for CUDA-side PTX/CUBIN linking against the generated `hiprt*_nv_lib.fatbin`.
 - On `MACA + cu-bridge`, the recommended path is still the precompiled workflow. Runtime `nvrtc --device-c` emission for user trace kernels is not yet stable enough to use as the primary validation path, so the related UTs are skipped on cu-bridge and the precompiled artifacts are the supported validation route there.
-- The precompiled validation route is covered by UTs that directly load the generated `hiprt*_nv_precompiled_bitcode.fatbin`, resolve both `TraceKernel` and `CutoutKernel`, and launch `TraceKernel` on a minimal scene.
+- The precompiled validation route is covered by UTs that directly load the generated `hiprt*_nv_precompiled_bitcode.fatbin`, resolve both `TraceKernel` and `CutoutKernel`, and launch both the plain trace path and the custom-func-table path on minimal test scenes.
 
 For the detailed Chinese status and current MACA constraints, see `docs/bitcode-status-zh.md`.
 
