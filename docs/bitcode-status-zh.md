@@ -176,6 +176,12 @@ HIPRT_ENABLE_PRECOMPILED_TRACE_KERNEL=ON \
 
 视为主验证产物。
 
+当前仓库也提供了直接跑这条链路的脚本：
+
+```bash
+./scripts/unittest_maca_cucc_precompiled.sh
+```
+
 ## 6. 结论
 
 当前结论可以明确写成一句话：

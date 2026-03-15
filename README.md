@@ -20,6 +20,7 @@ cmake --build build --config Release -j
 ```bash
 ./scripts/build.sh
 ./scripts/build_and_test.sh
+./scripts/unittest_maca_cucc_precompiled.sh
 ```
 
 如需更完整的中文改造说明，请查看 `docs/cuda-only-build-zh.md`。
