@@ -190,3 +190,49 @@ HIPRT_ENABLE_PRECOMPILED_TRACE_KERNEL=ON \
 当前结论可以明确写成一句话：
 
 - **bitcode / precompile / bake_kernel 工作流已经在当前主线重新恢复到“可构建、可产生产物、可作为 MACA 首次运行降时延方案”的状态；但 `MACA + cu-bridge` 下 runtime 用户源码即时 bitcode 生成仍有限制，因此该环境当前以 precompile 路径为主。**
+
+## 7. 当前阶段收尾结论
+
+到当前阶段，可以把支持边界再明确成两条：
+
+1. **已经完成并闭环验证**
+   - `MACA + cu-bridge`
+   - `bake_kernel`
+   - `HIPRT` 预编译 fatbin 生成
+   - precompiled trace fatbin 生成
+   - precompiled fatbin 的加载
+   - precompiled fatbin 的真实 kernel 执行
+   - custom func table 场景的 precompiled 执行
+
+2. **尚未在当前机器闭环验证**
+   - 原生 CUDA toolkit 环境下的 runtime `hiprtBuildTraceKernelsFromBitcode(...)`
+   - 即：
+     - 用户侧 runtime 编译源码
+     - 得到可消费 PTX/CUBIN
+     - 再即时链接到 `hiprt*_nv_lib.fatbin`
+
+这不是因为主线代码仍然缺少这部分实现，而是因为当前机器没有原生 `nvcc` / 原生 CUDA toolkit：
+
+- `nvcc` 不在 PATH
+- 当前 `CUDA_PATH` 指向的是 cu-bridge
+
+所以当前阶段的合理收尾就是：
+
+- 把 **MACA 主路径** 定义为“precompiled workflow 已完成”
+- 把 **native CUDA runtime bitcode 直编验证** 记录为“待在原生 CUDA 机器上补验”
+
+## 8. 后续待办
+
+如果后续切到一台带原生 CUDA toolkit 的机器，建议按下面顺序补最后一块验证：
+
+1. 配置原生 `nvcc`
+2. 在非 cu-bridge 环境跑：
+   - `hiprtTest.BuildTraceKernelFromBitcode`
+   - `hiprtTest.BuildTraceKernelFromBitcodeWithCustomFuncTable`
+3. 若通过，则把当前文档中的“runtime 用户源码即时 bitcode 生成仍有限制”收窄为：
+   - 仅限 `MACA + cu-bridge`
+   - 不再是 CUDA 主路径限制
+
+如果后续仍以 MACA 为主线，而不优先追 native CUDA runtime bitcode，那么当前阶段已经可以视为：
+
+- **bitcode / precompile / bake_kernel 工作流在 MACA 主路径上完成。**
