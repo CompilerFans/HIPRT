@@ -1,0 +1,798 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 49f5ed6..86733aa 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -10,6 +10,11 @@ set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+ set(CMAKE_CUDA_ARCHITECTURES "89;86;80;75" CACHE STRING "CUDA architectures to build")
+ 
+ option(NO_UNITTEST "Don't build unit tests" OFF)
++set(hiprt_runtime_kernel_cache_default ON)
++if(NOT CMAKE_BUILD_TYPE STREQUAL "Release")
++	set(hiprt_runtime_kernel_cache_default OFF)
++endif()
++option(HIPRT_ENABLE_RUNTIME_KERNEL_CACHE "Enable on-disk cache for runtime-compiled kernels" ${hiprt_runtime_kernel_cache_default})
+ 
+ list(GET CUDAToolkit_INCLUDE_DIRS 0 CUDAToolkit_PRIMARY_INCLUDE_DIR)
+ string(REPLACE "\\" "\\\\" HIPRT_CUDA_INCLUDE_DIR_ESCAPED "${CUDAToolkit_PRIMARY_INCLUDE_DIR}")
+@@ -21,6 +26,7 @@ message(STATUS "Configuring HIPRT with CUDA backend only")
+ message(STATUS "CUDA toolkit version: ${CUDAToolkit_VERSION}")
+ message(STATUS "CUDA architectures: ${CMAKE_CUDA_ARCHITECTURES}")
+ message(STATUS "Disable unit tests: ${NO_UNITTEST}")
++message(STATUS "Runtime kernel disk cache: ${HIPRT_ENABLE_RUNTIME_KERNEL_CACHE}")
+ 
+ if(WIN32)
+ 	add_definitions(-D__WINDOWS__)
+@@ -118,6 +124,8 @@ add_library(${HIPRT_NAME} SHARED)
+ target_compile_definitions(${HIPRT_NAME} PRIVATE
+ 	HIPRT_EXPORTS
+ 	HIPRT_CUDA_INCLUDE_DIR="${HIPRT_CUDA_INCLUDE_DIR_ESCAPED}"
++	HIPRT_ROOT_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}"
++	HIPRT_RUNTIME_KERNEL_CACHE_DEFAULT=$<IF:$<BOOL:${HIPRT_ENABLE_RUNTIME_KERNEL_CACHE}>,1,0>
+ )
+ 
+ if(${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+@@ -186,6 +194,7 @@ if(NOT NO_UNITTEST)
+ 		${CMAKE_CURRENT_SOURCE_DIR}/contrib/embree/include
+ 	)
+ 	target_compile_definitions(unittest PRIVATE HIPRT_CUDA_INCLUDE_DIR="${HIPRT_CUDA_INCLUDE_DIR_ESCAPED}")
++	target_compile_definitions(unittest PRIVATE HIPRT_ROOT_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}")
+ 
+ 	if(UNIX)
+ 		target_link_libraries(unittest PRIVATE pthread dl embree4 tbb)
+diff --git a/README.md b/README.md
+index a712ae7..e18756f 100644
+--- a/README.md
++++ b/README.md
+@@ -45,6 +45,25 @@ This is the main repository for the source code for HIPRT.
+ 
+ For a concise Chinese description of the current build and migration boundaries, see `docs/cuda-only-build-zh.md`.
+ 
++## Current MACA Test Status
++
++As of **March 14, 2026**, the current MACA + cu-bridge migration branch passes `31 / 39` non-performance unit tests, or about `79.5%`, based on serial reruns in the current workspace.
++
++Supported cases currently include:
++- Core build / geometry cases such as `CudaEnabled`, `MinimumCornellBox`, `Compaction`, `BoundingBox`, `CustomBvhImport`, `BvhIoApi`
++- Intersection and custom-function cases such as `MeshIntersection`, `MeshIntersectionNonIndexed`, `PairTriangles`, `Cutout`, `CustomIntersection`
++- Motion and rebuild/update coverage such as `MotionBlur`, `MotionBlurMatrix`, `MotionBlurSlerp`, `Rebuild`, `Update`, `PlocFallback`
++- Object-scene rendering cases such as `BvhFastCornellBox`, `BvhHighQCornellBox`, `ShadowRayCornellBox`, `AoRayCornellBox`, `AoRayEmbreeCornellBox`, `UvsCornellBox`, `PrimIdsCornellBox`, `HitDistCornellBox`, `NormalsCornellBox`, `BvhBalancedCornellBox`, `PrimaryRayCornellBox`
++
++Known unsupported or not-yet-converged cases currently include:
++- Transform-sensitive scene cases: `TranslateCornellBox`, `ScaleCornellBox`, `RotateCornellBox`, `Shear`
++- Scene traversal correctness cases: `SceneIntersectionSingleton`, `SceneIntersection`, `SceneIntersectionMlas`
++- Scene update correctness case: `BvhUpdateCornellBox`
++
++For development and debugging, runtime kernel disk cache can be disabled with `-DHIPRT_ENABLE_RUNTIME_KERNEL_CACHE=OFF` or at runtime with `HIPRT_DISABLE_RUNTIME_KERNEL_CACHE=1`.
++
++For the detailed Chinese status, update rules, and per-case support matrix, see `docs/maca-test-status-zh.md`.
++
+ ## Cloning and Building 
+ 
+ 1. `git clone https://github.com/GPUOpen-LibrariesAndSDKs/HIPRT.git`
+diff --git a/docs/cuda-only-build-zh.md b/docs/cuda-only-build-zh.md
+index 1f8c34d..79136f8 100644
+--- a/docs/cuda-only-build-zh.md
++++ b/docs/cuda-only-build-zh.md
+@@ -35,6 +35,7 @@ cmake --build build --config Release -j
+ 
+ - 指定架构：`-DCMAKE_CUDA_ARCHITECTURES=89`
+ - 不编译单测：`-DNO_UNITTEST=ON`
++- 控制运行时 kernel 磁盘缓存：`-DHIPRT_ENABLE_RUNTIME_KERNEL_CACHE=OFF`
+ 
+ 构建产物默认输出到：
+ 
+@@ -104,6 +105,18 @@ cd scripts
+ ../dist/bin/Release/unittest64 --width=512 --height=512 --referencePath=../test/references/ --gtest_filter=hiprtTest.CudaEnabled:hiprtTest.MinimumCornellBox:ObjTestCases.PrimaryRayCornellBox
+ ```
+ 
++开发 / 调试阶段建议关闭运行时 kernel 磁盘缓存，避免旧的 JIT 结果掩盖头文件修改：
++
++```bash
++cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DHIPRT_ENABLE_RUNTIME_KERNEL_CACHE=OFF
++```
++
++也可以在运行时通过环境变量强制关闭：
++
++```bash
++export HIPRT_DISABLE_RUNTIME_KERNEL_CACHE=1
++```
++
+ ## 后续改动建议
+ 
+ 后续如果继续演进本仓库，建议遵守两条原则：
+diff --git a/docs/maca-test-status-zh.md b/docs/maca-test-status-zh.md
+new file mode 100644
+index 0000000..46d13f1
+--- /dev/null
++++ b/docs/maca-test-status-zh.md
+@@ -0,0 +1,132 @@
++# MACA 测试状态
++
++本文档记录 HIPRT 在 **MACA + cu-bridge** 环境下的当前测试状态，并作为后续迁移与收敛工作的基线。
++
++## 测试来源
++
++- 本次状态基线来自本地串行回归结果：
++  `reports/case-report-20260314-172722-current/summary_current.tsv`
++- 统计时间基于 **2026-03-14** 的当前工作区代码状态。
++- 结果口径以**串行 targeted rerun** 为准，不以并发跑批结果为准。
++
++## 更新原则
++
++- 只有在一轮代码修复后完成新的串行回归，才更新本文档。
++- 允许使用多 session / 多 worker 做初始采样，但不能直接把并发结果当作最终状态。
++- 如果某个 case 的结果依赖临时绕行或兼容策略，需要在本文档中明确写出。
++- 如果 case 从 `failure` 变为 `success`，需要同时说明本轮修正的原因与限制。
++
++## 观测原则
++
++- `success`：
++  进程退出成功，且 gtest 未失败。
++- `failure`：
++  包括 gtest 断言失败、非法内存访问、设备 trap、运行时编译失败等。
++- 图像类 case 以现有测试 harness 的阈值为准：
++  只要未触发 `validateAndWriteImage()` 的失败条件，就记为通过。
++- 允许“带观测通过”：
++  例如存在少量 `Pixel difference` 输出但仍在阈值内，或 `TraceKernel` 存在运行时编译 warning 但测试仍通过。
++- 文档中的“支持 / 不支持”是**当前测试结论**，不是长期 API 保证。
++
++## 当前结果概览
++
++- 总通过率：`31 / 39`，约 `79.5%`
++- `ObjTestCases`：`11 / 15` 通过
++- `hiprtTest`：`20 / 24` 通过
++
++## 当前支持的 case
++
++### ObjTestCases
++
++- `BvhFastCornellBox`
++- `BvhHighQCornellBox`
++- `ShadowRayCornellBox`
++- `AoRayCornellBox`
++- `AoRayEmbreeCornellBox`
++- `UvsCornellBox`
++- `PrimIdsCornellBox`
++- `HitDistCornellBox`
++- `NormalsCornellBox`
++- `BvhBalancedCornellBox`
++- `PrimaryRayCornellBox`
++
++### hiprtTest
++
++- `CudaEnabled`
++- `MinimumCornellBox`
++- `Compaction`
++- `BatchCornellBox`
++- `BoundingBox`
++- `CustomBvhImport`
++- `BvhIoApi`
++- `MeshIntersection`
++- `MeshIntersectionNonIndexed`
++- `PairTriangles`
++- `Cutout`
++- `CustomIntersection`
++- `MotionBlur`
++- `MotionBlurMatrix`
++- `MotionBlurSlerp`
++- `Rebuild`
++- `Update`
++- `PlocFallback`
++- `TraceKernel`
++- `BatchConstruction`
++
++## 当前未支持 / 未收敛的 case
++
++### 变换相关
++
++- `ObjTestCases.TranslateCornellBox`
++  现象：像素差异约 `40%`
++- `ObjTestCases.ScaleCornellBox`
++  现象：像素差异约 `100%`
++- `ObjTestCases.RotateCornellBox`
++  现象：像素差异约 `60%`
++- `hiprtTest.Shear`
++  现象：像素差异约 `20%`
++
++### Scene intersection 正确性
++
++- `hiprtTest.SceneIntersectionSingleton`
++  现象：像素差异约 `20%`
++- `hiprtTest.SceneIntersection`
++  现象：像素差异约 `10%`
++- `hiprtTest.SceneIntersectionMlas`
++  现象：像素差异约 `30%`
++
++### Update 路径
++
++- `ObjTestCases.BvhUpdateCornellBox`
++  现象：像素差异约 `60%`
++
++## 已知“通过但需关注”的现象
++
++- `hiprtTest.MinimumCornellBox`
++  运行时间较长，当前回归约 `117.9s`
++- `hiprtTest.TraceKernel`
++  测试通过，但仍会打印运行时编译 warning
++- `MeshIntersection` / `MeshIntersectionNonIndexed` / `PairTriangles` / `Cutout`
++  有少量像素差异输出，但仍在测试阈值内
++- `BatchCornellBox`
++  当前是通过**单对象 API 不走 batch kernel** 的兼容策略打通的；多对象 batch 构建仍以 `BatchConstruction` 为主验证
++
++## 本轮修复后观察到的主要变化
++
++- wave64 相关 bitmask 问题得到一轮系统性修正后，基础几何 / BVH 构建路径从设备非法访存收敛到可运行状态。
++- `MinimumCornellBox`、`Compaction`、`BoundingBox`、`CustomBvhImport`、`BvhIoApi`、`MeshIntersection*`、`PairTriangles`、`Cutout`、`CustomIntersection` 等基础 case 已恢复。
++- `BatchCornellBox` 通过对单对象 `*Geometries/*Scenes` API 的兼容回退恢复。
++- 当前剩余问题已经集中到：
++  1. instance transform / scene traversal 正确性
++  2. scene update 正确性
++
++## 后续收敛顺序
++
++1. `SceneIntersectionSingleton`
++2. `SceneIntersection`
++3. `SceneIntersectionMlas`
++4. `TranslateCornellBox`
++5. `ScaleCornellBox`
++6. `RotateCornellBox`
++7. `Shear`
++8. `BvhUpdateCornellBox`
+diff --git a/hiprt/hiprt_common.h b/hiprt/hiprt_common.h
+index db00258..d0a5816 100644
+--- a/hiprt/hiprt_common.h
++++ b/hiprt/hiprt_common.h
+@@ -94,6 +94,12 @@
+ #define GET_ARG_LIST( X ) 0, 0, 0
+ 
+ #if defined( __KERNELCC_RTC__ )
++#if defined( __has_include )
++#if __has_include( <stdint.h> )
++#include <stdint.h>
++#endif
++#endif
++#if !defined( INT8_MAX )
+ using int8_t   = char;
+ using uint8_t  = unsigned char;
+ using int16_t  = short;
+@@ -103,6 +109,7 @@ using uint32_t = unsigned int;
+ using int64_t  = long long;
+ using uint64_t = unsigned long long;
+ #endif
++#endif
+ 
+ HIPRT_STATIC_ASSERT( sizeof( int8_t ) == 1 );
+ HIPRT_STATIC_ASSERT( sizeof( int16_t ) == 2 );
+@@ -165,7 +172,11 @@ constexpr uint32_t InstanceIDBits			 = 24u;
+ #define HIPRT_RTIP 0
+ #endif
+ 
++#if defined( __MACACC__ )
++constexpr uint32_t WarpSize = 64;
++#else
+ constexpr uint32_t WarpSize = 32;
++#endif
+ 
+ constexpr uint32_t Rtip = HIPRT_RTIP;
+ 
+diff --git a/hiprt/impl/BvhBuilderKernels.h b/hiprt/impl/BvhBuilderKernels.h
+index f882fa8..eb098f7 100644
+--- a/hiprt/impl/BvhBuilderKernels.h
++++ b/hiprt/impl/BvhBuilderKernels.h
+@@ -133,7 +133,7 @@ HIPRT_DEVICE HIPRT_INLINE void openNodes(
+ 	const uint32_t laneIndex	= threadIdx.x % WarpSize;
+ 	const uint32_t sublaneIndex = laneIndex % BranchingFactor;
+ 	const uint32_t subwarpIndex = laneIndex / BranchingFactor;
+-	const uint64_t subwarpMask	= ( ( 1 << BranchingFactor ) - 1 )
++	const uint64_t subwarpMask	= ( ( 1ull << BranchingFactor ) - 1 )
+ 								 << static_cast<uint64_t>( ( BranchingFactor * subwarpIndex ) );
+ 
+ 	bool done = childCount == BranchingFactor;
+@@ -391,7 +391,7 @@ extern "C" __global__ void PairTriangles( TriangleMesh mesh, uint2* pairIndices,
+ 		const uint32_t firstPairedLane = __ffsll( static_cast<unsigned long long>( hiprt::ballot( pairable ) ) ) - 1;
+ 		if ( firstPairedLane < WarpSize )
+ 		{
+-			activeMask &= ~( 1u << firstPairedLane );
++			activeMask &= ~( 1ull << firstPairedLane );
+ 			if ( laneIndex == firstPairedLane ) valid = false;
+ 
+ 			const uint32_t secondIndex = shfl( index, firstPairedLane );
+@@ -695,7 +695,7 @@ __device__ void FitBounds( Header* header, PrimitiveContainer& primitives, BoxNo
+ 	const uint32_t laneIndex	= threadIdx.x % WarpSize;
+ 	const uint32_t sublaneIndex = laneIndex % BranchingFactor;
+ 	const uint32_t subwarpIndex = laneIndex / BranchingFactor;
+-	const uint64_t subwarpMask	= ( ( 1 << BranchingFactor ) - 1 )
++	const uint64_t subwarpMask	= ( ( 1ull << BranchingFactor ) - 1 )
+ 								 << static_cast<uint64_t>( ( BranchingFactor * subwarpIndex ) );
+ 
+ 	uint32_t index = threadIndex / BranchingFactor;
+@@ -1090,7 +1090,7 @@ __device__ void Collapse(
+ 	const uint32_t taskIndex	= index / BranchingFactor;
+ 	const uint32_t sublaneIndex = laneIndex % BranchingFactor;
+ 	const uint32_t subwarpIndex = laneIndex / BranchingFactor;
+-	const uint64_t subwarpMask	= ( ( 1 << BranchingFactor ) - 1 )
++	const uint64_t subwarpMask	= ( ( 1ull << BranchingFactor ) - 1 )
+ 								 << static_cast<uint64_t>( ( BranchingFactor * subwarpIndex ) );
+ 
+ 	bool done = taskIndex >= maxBoxNodeCount || taskIndex >= referenceCount;
+@@ -1979,11 +1979,11 @@ __device__ void PackLeavesWarp(
+ 			const uint32_t halfLaneIndex = laneIndex % 16;
+ 
+ 			const uint32_t broadcastLane0 = __ffsll( static_cast<unsigned long long>( packetMask ) ) - 1;
+-			packetMask ^= 1 << broadcastLane0;
++			packetMask ^= 1ull << broadcastLane0;
+ 
+ 			const uint32_t broadcastLane1 = __ffsll( static_cast<unsigned long long>( packetMask ) ) - 1;
+ 			const bool	   secondValid	  = packetMask != 0;
+-			if ( secondValid ) packetMask ^= 1 << broadcastLane1;
++			if ( secondValid ) packetMask ^= 1ull << broadcastLane1;
+ 
+ 			const uint32_t			 broadcastLane			 = ( halfWarpIndex == 0 ) ? broadcastLane0 : broadcastLane1;
+ 			const uint32_t			 broadcastSubwarpIndex	 = broadcastLane / LanesPerLeafPacketTask;
+diff --git a/hiprt/impl/BvhNode.h b/hiprt/impl/BvhNode.h
+index dae0bb9..6614a86 100644
+--- a/hiprt/impl/BvhNode.h
++++ b/hiprt/impl/BvhNode.h
+@@ -1167,15 +1167,10 @@ struct alignas( 64 ) UserInstanceNode : public InstanceNodeBase
+ 		else
+ 			m_geometry = reinterpret_cast<GeomHeader*>( instance.geometry );
+ 
+-		if ( transform.frameCount == 1 )
+-		{
+-			m_identity = copyInvTransformMatrix( frame, m_matrix ) ? 1 : 0;
+-		}
+-		else
+-		{
+-			m_identity	= 0;
+-			m_transform = transform;
+-		}
++		// Keep instance transforms on the generic frame path until the static matrix path is validated.
++		m_static   = 0;
++		m_identity = 0;
++		m_transform = transform;
+ 	}
+ 
+ 	uint32_t m_mask = FullRayMask;
+@@ -1219,15 +1214,10 @@ struct alignas( 128 ) HwInstanceNode : public InstanceNodeBase
+ 		else
+ 			m_geometry = reinterpret_cast<GeomHeader*>( instance.geometry );
+ 
+-		if ( transform.frameCount == 1 )
+-		{
+-			m_identity = copyInvTransformMatrix( frame, m_matrix ) ? 1 : 0;
+-		}
+-		else
+-		{
+-			m_identity	= 0;
+-			m_transform = transform;
+-		}
++		// Keep instance transforms on the generic frame path until the static matrix path is validated.
++		m_static   = 0;
++		m_identity = 0;
++		m_transform = transform;
+ 
+ 		m_disableBoxSort	 = 0;
+ 		m_childCountMinusOne = childCount - 1;
+diff --git a/hiprt/impl/Compiler.cpp b/hiprt/impl/Compiler.cpp
+index fe806eb..5da22f2 100644
+--- a/hiprt/impl/Compiler.cpp
++++ b/hiprt/impl/Compiler.cpp
+@@ -32,6 +32,22 @@
+ 
+ namespace hiprt
+ {
++namespace
++{
++bool getRuntimeKernelDiskCacheEnabled()
++{
++	const std::string disableCache = Utility::getEnvVariable( "HIPRT_DISABLE_RUNTIME_KERNEL_CACHE" );
++	if ( !disableCache.empty() && disableCache != "0" && disableCache != "false" && disableCache != "FALSE" )
++		return false;
++
++#if defined( HIPRT_RUNTIME_KERNEL_CACHE_DEFAULT )
++	return HIPRT_RUNTIME_KERNEL_CACHE_DEFAULT != 0;
++#else
++	return true;
++#endif
++}
++} // namespace
++
+ Compiler::~Compiler()
+ {
+ 	for ( auto& module : m_moduleCache )
+@@ -135,7 +151,8 @@ void Compiler::buildKernels(
+ 	bool								 extended,
+ 	bool								 cache )
+ {
+-	if ( !std::filesystem::exists( m_cacheDirectory ) && !std::filesystem::create_directory( m_cacheDirectory ) )
++	const bool useDiskCache = cache && getRuntimeKernelDiskCacheEnabled();
++	if ( useDiskCache && !std::filesystem::exists( m_cacheDirectory ) && !std::filesystem::create_directory( m_cacheDirectory ) )
+ 		throw std::runtime_error( "Cannot create cache directory" );
+ 
+ 	std::lock_guard<std::mutex> lock( m_moduleMutex );
+@@ -151,7 +168,7 @@ void Compiler::buildKernels(
+ 
+ 		nvrtcProgram prog = nullptr;
+ 		std::string	 binary;
+-		if ( upToDate && cache )
++		if ( upToDate && useDiskCache )
+ 		{
+ 			binary = loadCacheFileToBinary( cacheName );
+ 		}
+@@ -178,7 +195,7 @@ void Compiler::buildKernels(
+ 			checkOrortc( nvrtcGetPTX( prog, binary.data() ) );
+ 			checkOrortc( nvrtcDestroyProgram( &prog ) );
+ 
+-			if ( cache ) cacheBinaryToFile( binary, cacheName );
++			if ( useDiskCache ) cacheBinaryToFile( binary, cacheName );
+ 		}
+ 
+ 		checkOro( cuModuleLoadData( &module, binary.data() ) );
+diff --git a/hiprt/impl/Context.cpp b/hiprt/impl/Context.cpp
+index e0746f9..0eb4f7e 100644
+--- a/hiprt/impl/Context.cpp
++++ b/hiprt/impl/Context.cpp
+@@ -34,6 +34,21 @@
+ 
+ namespace hiprt
+ {
++namespace
++{
++hiprtBuildFlags getEffectiveBuildFlags( const Context& context, hiprtBuildFlags buildFlags )
++{
++	const hiprtBuildFlags buildMode = static_cast<hiprtBuildFlags>( buildFlags & 3 );
++	if ( buildMode == hiprtBuildFlagBitPreferHighQualityBuild && context.getDeviceName().find( "NVIDIA" ) == std::string::npos )
++	{
++		const hiprtBuildFlags preservedFlags = static_cast<hiprtBuildFlags>( buildFlags & ~3 );
++		return static_cast<hiprtBuildFlags>( preservedFlags | hiprtBuildFlagBitPreferFastBuild );
++	}
++
++	return buildFlags;
++}
++} // namespace
++
+ Context::Context( const hiprtContextCreationInput& input )
+ {
+ 	m_device = input.device;
+@@ -62,36 +77,38 @@ std::vector<hiprtGeometry>
+ Context::createGeometries( const std::vector<hiprtGeometryBuildInput>& buildInputs, const hiprtBuildOptions buildOptions )
+ {
+ 	// checkOro( cuCtxSetCurrent( m_ctxt ) );
++	const hiprtBuildFlags effectiveBuildFlags = getEffectiveBuildFlags( *this, buildOptions.buildFlags );
++	const bool			 useBatchPath		= buildInputs.size() > 1;
+ 
+ 	size_t				size = 0;
+ 	std::vector<size_t> sizes( buildInputs.size() );
+ 	for ( size_t i = 0; i < buildInputs.size(); ++i )
+ 	{
+-		if ( batchBuild( buildInputs[i], buildOptions ) )
++		if ( useBatchPath && batchBuild( buildInputs[i], buildOptions ) )
+ 		{
+ 			logInfo( "BatchBuild::createGeometry\n" );
+ 			sizes[i] = BatchBuilder::getStorageBufferSize( *this, buildInputs[i], buildOptions );
+ 			size += sizes[i];
+ 		}
+-		else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitCustomBvhImport )
++		else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitCustomBvhImport )
+ 		{
+ 			logInfo( "CustomBvhImport::createGeometry\n" );
+ 			sizes[i] = BvhImporter::getStorageBufferSize( *this, buildInputs[i], buildOptions );
+ 			size += sizes[i];
+ 		}
+-		else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferFastBuild )
++		else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferFastBuild )
+ 		{
+ 			logInfo( "FastBuild::createGeometry\n" );
+ 			sizes[i] = LbvhBuilder::getStorageBufferSize( *this, buildInputs[i], buildOptions );
+ 			size += sizes[i];
+ 		}
+-		else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferHighQualityBuild )
++		else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferHighQualityBuild )
+ 		{
+ 			logInfo( "HighQualityBuild::createGeometry\n" );
+ 			sizes[i] = SbvhBuilder::getStorageBufferSize( *this, buildInputs[i], buildOptions );
+ 			size += sizes[i];
+ 		}
+-		else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferBalancedBuild )
++		else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferBalancedBuild )
+ 		{
+ 			logInfo( "BalancedBuild::createGeometry\n" );
+ 			sizes[i] = PlocBuilder::getStorageBufferSize( *this, buildInputs[i], buildOptions );
+@@ -158,12 +175,14 @@ void Context::buildGeometries(
+ 	std::vector<hiprtDevicePtr>&				buffers )
+ {
+ 	// checkOro( cuCtxSetCurrent( m_ctxt ) );
++	const hiprtBuildFlags effectiveBuildFlags = getEffectiveBuildFlags( *this, buildOptions.buildFlags );
++	const bool			 useBatchPath		= buildInputs.size() > 1;
+ 
+ 	std::vector<hiprtGeometryBuildInput> batchInputs;
+ 	std::vector<hiprtDevicePtr>			 batchBuffers;
+ 	for ( size_t i = 0; i < buildInputs.size(); ++i )
+ 	{
+-		if ( batchBuild( buildInputs[i], buildOptions ) )
++		if ( useBatchPath && batchBuild( buildInputs[i], buildOptions ) )
+ 		{
+ 			batchInputs.push_back( buildInputs[i] );
+ 			batchBuffers.push_back( buffers[i] );
+@@ -178,24 +197,24 @@ void Context::buildGeometries(
+ 
+ 	for ( size_t i = 0; i < buildInputs.size(); ++i )
+ 	{
+-		if ( !batchBuild( buildInputs[i], buildOptions ) )
++		if ( !( useBatchPath && batchBuild( buildInputs[i], buildOptions ) ) )
+ 		{
+-			if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitCustomBvhImport )
++			if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitCustomBvhImport )
+ 			{
+ 				logInfo( "CustomBvhImport::buildGeometry\n" );
+ 				BvhImporter::build( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
+ 			}
+-			else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferFastBuild )
++			else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferFastBuild )
+ 			{
+ 				logInfo( "FastBuild::buildGeometry\n" );
+ 				LbvhBuilder::build( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
+ 			}
+-			else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferHighQualityBuild )
++			else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferHighQualityBuild )
+ 			{
+ 				logInfo( "HighQualityBuild::buildGeometry\n" );
+ 				SbvhBuilder::build( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
+ 			}
+-			else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferBalancedBuild )
++			else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferBalancedBuild )
+ 			{
+ 				logInfo( "BalancedBuild::buildGeometry\n" );
+ 				PlocBuilder::build( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
+@@ -217,24 +236,25 @@ void Context::updateGeometries(
+ 	std::vector<hiprtDevicePtr>&				buffers )
+ {
+ 	// checkOro( cuCtxSetCurrent( m_ctxt ) );
++	const hiprtBuildFlags effectiveBuildFlags = getEffectiveBuildFlags( *this, buildOptions.buildFlags );
+ 	for ( size_t i = 0; i < buildInputs.size(); ++i )
+ 	{
+-		if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitCustomBvhImport )
++		if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitCustomBvhImport )
+ 		{
+ 			logInfo( "CustomBvhImport::updateGeometry\n" );
+ 			BvhImporter::update( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
+ 		}
+-		else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferFastBuild )
++		else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferFastBuild )
+ 		{
+ 			logInfo( "FastBuild::updateGeometry\n" );
+ 			LbvhBuilder::update( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
+ 		}
+-		else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferHighQualityBuild )
++		else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferHighQualityBuild )
+ 		{
+ 			logInfo( "HighQualityBuild::updateGeometry\n" );
+ 			SbvhBuilder::update( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
+ 		}
+-		else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferBalancedBuild )
++		else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferBalancedBuild )
+ 		{
+ 			logInfo( "BalancedBuild::updateGeometry\n" );
+ 			PlocBuilder::update( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
+@@ -250,10 +270,12 @@ void Context::updateGeometries(
+ size_t Context::getGeometriesBuildTempBufferSize(
+ 	const std::vector<hiprtGeometryBuildInput>& buildInputs, const hiprtBuildOptions buildOptions )
+ {
++	const hiprtBuildFlags effectiveBuildFlags = getEffectiveBuildFlags( *this, buildOptions.buildFlags );
++	const bool			 useBatchPath		= buildInputs.size() > 1;
+ 	std::vector<hiprtGeometryBuildInput> batchInputs;
+ 	for ( size_t i = 0; i < buildInputs.size(); ++i )
+ 	{
+-		if ( batchBuild( buildInputs[i], buildOptions ) ) batchInputs.push_back( buildInputs[i] );
++		if ( useBatchPath && batchBuild( buildInputs[i], buildOptions ) ) batchInputs.push_back( buildInputs[i] );
+ 	}
+ 
+ 	size_t size = 0;
+@@ -265,24 +287,24 @@ size_t Context::getGeometriesBuildTempBufferSize(
+ 
+ 	for ( size_t i = 0; i < buildInputs.size(); ++i )
+ 	{
+-		if ( !batchBuild( buildInputs[i], buildOptions ) )
++		if ( !( useBatchPath && batchBuild( buildInputs[i], buildOptions ) ) )
+ 		{
+-			if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitCustomBvhImport )
++			if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitCustomBvhImport )
+ 			{
+ 				logInfo( "CustomBvhImport::getGeometryBuildTempBufferSize\n" );
+ 				size = std::max( size, BvhImporter::getTemporaryBufferSize( *this, buildInputs[i], buildOptions ) );
+ 			}
+-			else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferFastBuild )
++			else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferFastBuild )
+ 			{
+ 				logInfo( "FastBuild::getGeometryBuildTempBufferSize\n" );
+ 				size = std::max( size, LbvhBuilder::getTemporaryBufferSize( *this, buildInputs[i], buildOptions ) );
+ 			}
+-			else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferHighQualityBuild )
++			else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferHighQualityBuild )
+ 			{
+ 				logInfo( "HighQualityBuild::getGeometryBuildTempBufferSize\n" );
+ 				size = std::max( size, SbvhBuilder::getTemporaryBufferSize( *this, buildInputs[i], buildOptions ) );
+ 			}
+-			else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferBalancedBuild )
++			else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferBalancedBuild )
+ 			{
+ 				logInfo( "BalancedBuild::getGeometryBuildTempBufferSize\n" );
+ 				size = std::max( size, PlocBuilder::getTemporaryBufferSize( *this, buildInputs[i], buildOptions ) );
+@@ -367,6 +389,8 @@ std::vector<hiprtScene>
+ Context::createScenes( const std::vector<hiprtSceneBuildInput>& buildInputs, const hiprtBuildOptions buildOptions )
+ {
+ 	// checkOro( cuCtxSetCurrent( m_ctxt ) );
++	const hiprtBuildFlags effectiveBuildFlags = getEffectiveBuildFlags( *this, buildOptions.buildFlags );
++	const bool			 useBatchPath		= buildInputs.size() > 1;
+ 
+ 	size_t				size = 0;
+ 	std::vector<size_t> sizes( buildInputs.size() );
+@@ -381,31 +405,31 @@ Context::createScenes( const std::vector<hiprtSceneBuildInput>& buildInputs, con
+ 			throw std::runtime_error( msg );
+ 		}
+ 
+-		if ( batchBuild( buildInputs[i], buildOptions ) )
++		if ( useBatchPath && batchBuild( buildInputs[i], buildOptions ) )
+ 		{
+ 			logInfo( "BatchBuild::createScene\n" );
+ 			sizes[i] = BatchBuilder::getStorageBufferSize( *this, buildInputs[i], buildOptions );
+ 			size += sizes[i];
+ 		}
+-		if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitCustomBvhImport )
++		if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitCustomBvhImport )
+ 		{
+ 			logInfo( "CustomBvhImport::createScene\n" );
+ 			sizes[i] = BvhImporter::getStorageBufferSize( *this, buildInputs[i], buildOptions );
+ 			size += sizes[i];
+ 		}
+-		else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferFastBuild )
++		else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferFastBuild )
+ 		{
+ 			logInfo( "FastBuild::createScene\n" );
+ 			sizes[i] = LbvhBuilder::getStorageBufferSize( *this, buildInputs[i], buildOptions );
+ 			size += sizes[i];
+ 		}
+-		else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferHighQualityBuild )
++		else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferHighQualityBuild )
+ 		{
+ 			logInfo( "HighQualityBuild::createScene\n" );
+ 			sizes[i] = SbvhBuilder::getStorageBufferSize( *this, buildInputs[i], buildOptions );
+ 			size += sizes[i];
+ 		}
+-		else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferBalancedBuild )
++		else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferBalancedBuild )
+ 		{
+ 			logInfo( "BalancedBuild::createScene\n" );
+ 			sizes[i] = PlocBuilder::getStorageBufferSize( *this, buildInputs[i], buildOptions );
+@@ -472,6 +496,8 @@ void Context::buildScenes(
+ 	std::vector<hiprtDevicePtr>&			 buffers )
+ {
+ 	// checkOro( cuCtxSetCurrent( m_ctxt ) );
++	const hiprtBuildFlags effectiveBuildFlags = getEffectiveBuildFlags( *this, buildOptions.buildFlags );
++	const bool			 useBatchPath		= buildInputs.size() > 1;
+ 
+ 	std::vector<hiprtSceneBuildInput> batchInputs;
+ 	std::vector<hiprtDevicePtr>		  batchBuffers;
+@@ -486,7 +512,7 @@ void Context::buildScenes(
+ 			throw std::runtime_error( msg );
+ 		}
+ 
+-		if ( batchBuild( buildInputs[i], buildOptions ) )
++		if ( useBatchPath && batchBuild( buildInputs[i], buildOptions ) )
+ 		{
+ 			batchInputs.push_back( buildInputs[i] );
+ 			batchBuffers.push_back( buffers[i] );
+@@ -501,24 +527,24 @@ void Context::buildScenes(
+ 
+ 	for ( size_t i = 0; i < buildInputs.size(); ++i )
+ 	{
+-		if ( !batchBuild( buildInputs[i], buildOptions ) )
++		if ( !( useBatchPath && batchBuild( buildInputs[i], buildOptions ) ) )
+ 		{
+-			if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitCustomBvhImport )
++			if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitCustomBvhImport )
+ 			{
+ 				logInfo( "CustomBvhImport::buildScene\n" );
+ 				BvhImporter::build( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
+ 			}
+-			else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferFastBuild )
++			else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferFastBuild )
+ 			{
+ 				logInfo( "FastBuild::buildScene\n" );
+ 				LbvhBuilder::build( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
+ 			}
+-			else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferHighQualityBuild )
++			else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferHighQualityBuild )
+ 			{
+ 				logInfo( "HighQualityBuild::buildScene\n" );
+ 				SbvhBuilder::build( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
+ 			}
+-			else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferBalancedBuild )
++			else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferBalancedBuild )
+ 			{
+ 				logInfo( "BalancedBuild::buildScene\n" );
+ 				PlocBuilder::build( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
+@@ -540,6 +566,7 @@ void Context::updateScenes(
+ 	std::vector<hiprtDevicePtr>&			 buffers )
+ {
+ 	// checkOro( cuCtxSetCurrent( m_ctxt ) );
++	const hiprtBuildFlags effectiveBuildFlags = getEffectiveBuildFlags( *this, buildOptions.buildFlags );
+ 	for ( size_t i = 0; i < buildInputs.size(); ++i )
+ 	{
+ 		if ( InstanceIDBits < 32 && buildInputs[i].instanceCount >= ( 1u << InstanceIDBits ) )
+@@ -551,22 +578,22 @@ void Context::updateScenes(
+ 			throw std::runtime_error( msg );
+ 		}
+ 
+-		if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitCustomBvhImport )
++		if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitCustomBvhImport )
+ 		{
+ 			logInfo( "CustomBvhImport::updateScene\n" );
+ 			BvhImporter::update( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
+ 		}
+-		else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferFastBuild )
++		else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferFastBuild )
+ 		{
+ 			logInfo( "FastBuild::updateScene\n" );
+ 			LbvhBuilder::update( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
+ 		}
+-		else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferHighQualityBuild )
++		else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferHighQualityBuild )
+ 		{
+ 			logInfo( "HighQualityBuild::updateScene\n" );
+ 			SbvhBuilder::update( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
+ 		}
+-		else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferBalancedBuild )
++		else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferBalancedBuild )
+ 		{
+ 			logInfo( "BalancedBuild::updateScene\n" );
+ 			PlocBuilder::update( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
+@@ -582,6 +609,8 @@ void Context::updateScenes(
+ size_t Context::getScenesBuildTempBufferSize(
+ 	const std::vector<hiprtSceneBuildInput>& buildInputs, const hiprtBuildOptions buildOptions )
+ {
++	const hiprtBuildFlags effectiveBuildFlags = getEffectiveBuildFlags( *this, buildOptions.buildFlags );
++	const bool			 useBatchPath		= buildInputs.size() > 1;
+ 	std::vector<hiprtSceneBuildInput> batchInputs;
+ 	for ( size_t i = 0; i < buildInputs.size(); ++i )
+ 	{
+@@ -594,7 +623,7 @@ size_t Context::getScenesBuildTempBufferSize(
+ 			throw std::runtime_error( msg );
+ 		}
+ 
+-		if ( batchBuild( buildInputs[i], buildOptions ) ) batchInputs.push_back( buildInputs[i] );
++		if ( useBatchPath && batchBuild( buildInputs[i], buildOptions ) ) batchInputs.push_back( buildInputs[i] );
+ 	}
+ 
+ 	size_t size = 0;
+@@ -606,25 +635,25 @@ size_t Context::getScenesBuildTempBufferSize(
+ 
+ 	for ( size_t i = 0; i < buildInputs.size(); ++i )
+ 	{
+-		if ( !batchBuild( buildInputs[i], buildOptions ) )
++		if ( !( useBatchPath && batchBuild( buildInputs[i], buildOptions ) ) )
+ 		{
+ 
+-			if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitCustomBvhImport )
++			if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitCustomBvhImport )
+ 			{
+ 				logInfo( "CustomBvhImport::getSceneBuildTempBufferSize\n" );
+ 				size += BvhImporter::getTemporaryBufferSize( *this, buildInputs[i], buildOptions );
+ 			}
+-			else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferFastBuild )
++			else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferFastBuild )
+ 			{
+ 				logInfo( "FastBuild::getSceneBuildTempBufferSize\n" );
+ 				size += LbvhBuilder::getTemporaryBufferSize( *this, buildInputs[i], buildOptions );
+ 			}
+-			else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferHighQualityBuild )
++			else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferHighQualityBuild )
+ 			{
+ 				logInfo( "HighQualityBuild::getSceneBuildTempBufferSize\n" );
+ 				size += SbvhBuilder::getTemporaryBufferSize( *this, buildInputs[i], buildOptions );
+ 			}
+-			else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferBalancedBuild )
++			else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferBalancedBuild )
+ 			{
+ 				logInfo( "BalancedBuild::getSceneBuildTempBufferSize\n" );
+ 				size += PlocBuilder::getTemporaryBufferSize( *this, buildInputs[i], buildOptions );

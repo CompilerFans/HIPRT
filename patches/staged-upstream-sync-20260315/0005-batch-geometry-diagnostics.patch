@@ -1,0 +1,416 @@
+diff --git a/docs/maca-debug-findings-zh.md b/docs/maca-debug-findings-zh.md
+index fff9315..1598cb1 100644
+--- a/docs/maca-debug-findings-zh.md
++++ b/docs/maca-debug-findings-zh.md
+@@ -44,9 +44,32 @@
+ - 当前已对单对象 `*Geometries/*Scenes` 调用做兼容回退，不再走 batch kernel。
+ - 这条策略已经让 `BatchCornellBox` 恢复通过。
+ 
++### 4. geometry batch 路径更像 latent OOB，而不是普遍的 batch 不可用
++
++新增诊断测试后，当前已经得到更具体的事实：
++
++- `BatchGeometryCornellSweepBuildOnly`
++  - `triangleCount=2/4/8/16` 通过
++  - `triangleCount=32` 在 `BatchBuild_hiprtGeometryBuildInput` 上触发 memory violation
++- `BatchGeometryIndexedQuadStripSweepBuildOnly`
++  - 即使换成**索引 mesh**，边界仍然是 `2/4/8/16` 通过，`32` 失败
++- `BatchGeometryIndexedQuadStripPrePairedSweepBuildOnly`
++  - 在**预先提供 `trianglePairIndices`** 后，`2/4/8/16/32` 全部通过
++
++这说明：
++
++- 问题不像“batch 几何内核整体不可用”
++- 更像是“未配对 triangle mesh 的 batch 几何路径”在规模到 `32` 左右时触发 latent OOB
++- 这类问题在 CUDA 上有可能因为 padding / UB / 对齐余量未立即崩溃，但在当前 MACA 环境下被更早暴露
++
++因此当前最优先方向是：
++
++- 检查 batch geometry kernel 是否缺少与普通 builder 等价的 triangle pairing / packet 预处理
++- 继续对比 host 侧分配大小与 device 侧实际写入大小，排查真实越界来源
++
+ ## 变换 / scene 方向的已证实事实
+ 
+-### 4. scene AABB 构建本身是正确的
++### 5. scene AABB 构建本身是正确的
+ 
+ 以下诊断单测已通过：
+ 
+@@ -60,7 +83,7 @@
+ 
+ 因此，剩余问题**不在 scene build 的 AABB 生成本身**。
+ 
+-### 5. scene header / instance node 的 frame 元数据写入是正确的
++### 6. scene header / instance node 的 frame 元数据写入是正确的
+ 
+ 以下诊断单测已通过：
+ 
+@@ -78,7 +101,7 @@
+ 
+ 因此，剩余问题**不在 frame/header 元数据写入，也不在 `Transform` 的 frame 选择逻辑**。
+ 
+-### 6. helper 形式的 world-to-object 变换是正确的
++### 7. helper 形式的 world-to-object 变换是正确的
+ 
+ 以下诊断单测已通过：
+ 
+@@ -94,7 +117,7 @@
+ 
+ 因此，剩余问题**不在这组 helper API 的单层结果**。
+ 
+-### 7. geometry traversal 本身是正确的
++### 8. geometry traversal 本身是正确的
+ 
+ 以下诊断单测已通过：
+ 
+@@ -106,7 +129,7 @@
+ 
+ 因此，剩余问题**不在 geometry traversal / triangle hit 这一层**。
+ 
+-### 8. helper 变换 + geometry traversal 组合也是正确的
++### 9. helper 变换 + geometry traversal 组合也是正确的
+ 
+ 以下诊断单测已通过：
+ 
+@@ -126,7 +149,7 @@
+   或
+ - 它内部使用的 `Transform::transformRay()`
+ 
+-### 9. 当前 scene traversal 功能路径已恢复
++### 10. 当前 scene traversal 功能路径已恢复
+ 
+ 以下 case 现已恢复通过：
+ 
+@@ -152,7 +175,7 @@
+ 
+ ## 当前最关键的失败诊断
+ 
+-### 10. `Transform::transformRay()` 诊断在当前工作树下已恢复
++### 11. `Transform::transformRay()` 诊断在当前工作树下已恢复
+ 
+ 以下诊断单测当前已通过：
+ 
+@@ -163,7 +186,7 @@
+ - 至少在当前工作树下，`Transform::transformRay()` 不再是最直接的功能 blocker
+ - 它仍然值得保留为回归测试，因为之前确实出现过错误结果
+ 
+-### 11. `MatrixFrame::getMatrixFrameInv(frame)` 诊断在当前工作树下已恢复
++### 12. `MatrixFrame::getMatrixFrameInv(frame)` 诊断在当前工作树下已恢复
+ 
+ 以下诊断单测当前已通过：
+ 
+@@ -174,7 +197,7 @@
+ - 这条诊断目前不再是主 blocker
+ - 但它仍应保留为红灯回归基线，防止后续 scene transform 修正时倒退
+ 
+-### 12. recreate 后再次 render 问题在当前工作树下已恢复
++### 13. recreate 后再次 render 问题在当前工作树下已恢复
+ 
+ 以下新增诊断单测当前已通过：
+ 
+@@ -188,7 +211,7 @@
+ - recreate + render 路径在当前工作树下已恢复
+ - 这组测试应继续保留，防止后续再次出现生命周期回归
+ 
+-### 13. trace kernel rebuild / custom stack 问题在当前工作树下已恢复
++### 14. trace kernel rebuild / custom stack 问题在当前工作树下已恢复
+ 
+ 以下诊断单测当前已通过：
+ 
+diff --git a/docs/maca-post-init-logic-review-zh.md b/docs/maca-post-init-logic-review-zh.md
+index db28c90..7931055 100644
+--- a/docs/maca-post-init-logic-review-zh.md
++++ b/docs/maca-post-init-logic-review-zh.md
+@@ -169,6 +169,13 @@ cd /data/HIPRT/scripts
+ 结论：
+ 
+ - geometry 单对象 batch 回退**仍然必要**
++- 新增 batch 诊断测试进一步说明：
++  - `BatchGeometryCornellSweepBuildOnly`：`triangleCount=2/4/8/16` 通过，`32` 失败
++  - `BatchGeometryIndexedQuadStripSweepBuildOnly`：即使换成索引 mesh，边界仍然是 `32` 失败
++  - `BatchGeometryIndexedQuadStripPrePairedSweepBuildOnly`：预先提供 `trianglePairIndices` 后，`2/4/8/16/32` 全部通过
++- 这使当前最强工作假设变成：
++  - geometry batch 路径存在**未配对 triangle mesh** 相关的 latent OOB 或缺失预处理
++  - 这类问题可能在 CUDA 上因为 padding / UB / 对齐余量没有立刻崩，但在当前 MACA 环境下被稳定暴露
+ 
+ #### scene 单对象 batch 路径
+ 
+diff --git a/test/hiprtTest.cpp b/test/hiprtTest.cpp
+index 0eb1909..58202aa 100644
+--- a/test/hiprtTest.cpp
++++ b/test/hiprtTest.cpp
+@@ -26,6 +26,7 @@
+ #include <cuda_profiler_api.h>
+ #include <nvrtc.h>
+ #include <test/hiprtTest.h>
++#include <test/CornellBox.h>
+ #define STB_IMAGE_WRITE_IMPLEMENTATION
+ #include <contrib/stbi/stbi_image_write.h>
+ #define STB_IMAGE_IMPLEMENTATION
+@@ -37,6 +38,7 @@
+ #include <chrono>
+ #include <thread>
+ #include <algorithm>
++#include <numeric>
+ 
+ CmdArguments g_parsedArgs;
+ 
+@@ -738,6 +740,125 @@ hiprtError hiprtTest::buildTraceKernel(
+ 	return e;
+ }
+ 
++void hiprtTest::createCornellTriangleMeshPrimitive(
++	uint32_t triangleCount, hiprtTriangleMeshPrimitive& mesh, std::vector<void*>& garbageCollector )
++{
++	ASSERT( triangleCount > 0 && triangleCount <= CornellBoxTriangleCount );
++
++	mesh = {};
++	mesh.triangleCount	= triangleCount;
++	mesh.triangleStride = sizeof( uint3 );
++	malloc( reinterpret_cast<uint3*&>( mesh.triangleIndices ), mesh.triangleCount );
++	garbageCollector.push_back( const_cast<void*>( mesh.triangleIndices ) );
++
++	std::vector<uint32_t> indices( 3 * triangleCount );
++	std::iota( indices.begin(), indices.end(), 0u );
++	copyHtoD( reinterpret_cast<uint3*>( mesh.triangleIndices ), reinterpret_cast<uint3*>( indices.data() ), mesh.triangleCount );
++
++	mesh.vertexCount  = 3 * triangleCount;
++	mesh.vertexStride = sizeof( float3 );
++	malloc( reinterpret_cast<float3*&>( mesh.vertices ), mesh.vertexCount );
++	garbageCollector.push_back( const_cast<void*>( mesh.vertices ) );
++	copyHtoD( reinterpret_cast<float3*>( mesh.vertices ), const_cast<float3*>( cornellBoxVertices.data() ), mesh.vertexCount );
++}
++
++void hiprtTest::createIndexedQuadStripTriangleMeshPrimitive(
++	uint32_t quadCount, hiprtTriangleMeshPrimitive& mesh, std::vector<void*>& garbageCollector )
++{
++	ASSERT( quadCount > 0 );
++
++	mesh = {};
++	mesh.triangleCount	= 2 * quadCount;
++	mesh.triangleStride = sizeof( uint3 );
++
++	std::vector<uint3>  indices( mesh.triangleCount );
++	std::vector<float3> vertices( 2 * ( quadCount + 1 ) );
++
++	for ( uint32_t i = 0; i <= quadCount; ++i )
++	{
++		vertices[2 * i + 0] = { static_cast<float>( i ), 0.0f, 0.0f };
++		vertices[2 * i + 1] = { static_cast<float>( i ), 1.0f, 0.0f };
++	}
++
++	for ( uint32_t i = 0; i < quadCount; ++i )
++	{
++		const uint32_t v0 = 2 * i + 0;
++		const uint32_t v1 = 2 * i + 1;
++		const uint32_t v2 = 2 * i + 2;
++		const uint32_t v3 = 2 * i + 3;
++		indices[2 * i + 0] = { v0, v1, v2 };
++		indices[2 * i + 1] = { v2, v1, v3 };
++	}
++
++	malloc( reinterpret_cast<uint3*&>( mesh.triangleIndices ), mesh.triangleCount );
++	garbageCollector.push_back( const_cast<void*>( mesh.triangleIndices ) );
++	copyHtoD( reinterpret_cast<uint3*>( mesh.triangleIndices ), indices.data(), mesh.triangleCount );
++
++	mesh.vertexCount  = static_cast<uint32_t>( vertices.size() );
++	mesh.vertexStride = sizeof( float3 );
++	malloc( reinterpret_cast<float3*&>( mesh.vertices ), mesh.vertexCount );
++	garbageCollector.push_back( const_cast<void*>( mesh.vertices ) );
++	copyHtoD( reinterpret_cast<float3*>( mesh.vertices ), vertices.data(), vertices.size() );
++}
++
++void hiprtTest::attachSequentialTrianglePairs(
++	uint32_t pairCount, hiprtTriangleMeshPrimitive& mesh, std::vector<void*>& garbageCollector )
++{
++	ASSERT( pairCount > 0 );
++	ASSERT( 2 * pairCount <= mesh.triangleCount );
++
++	std::vector<uint2> pairIndices( pairCount );
++	for ( uint32_t i = 0; i < pairCount; ++i )
++		pairIndices[i] = { 2 * i + 0, 2 * i + 1 };
++
++	mesh.trianglePairCount = pairCount;
++	malloc( reinterpret_cast<uint2*&>( mesh.trianglePairIndices ), pairCount );
++	garbageCollector.push_back( const_cast<void*>( mesh.trianglePairIndices ) );
++	copyHtoD( reinterpret_cast<uint2*>( mesh.trianglePairIndices ), pairIndices.data(), pairIndices.size() );
++}
++
++void hiprtTest::destroyGarbage( std::vector<void*>& garbageCollector )
++{
++	for ( void* ptr : garbageCollector )
++		free( ptr );
++	garbageCollector.clear();
++}
++
++void hiprtTest::buildBatchGeometriesBuildOnly(
++	const std::vector<hiprtGeometryBuildInput>& geomInputs, const hiprtBuildOptions& options )
++{
++	hiprtContext ctxt;
++	checkHiprt( hiprtCreateContext( HIPRT_API_VERSION, m_ctxtInput, ctxt ) );
++	checkHiprt( hiprtSetLogLevel( ctxt, hiprtLogLevelError | hiprtLogLevelWarn ) );
++
++	hiprtDevicePtr tempGeomBuffer = nullptr;
++	size_t		   tempGeomSize   = 0;
++	checkHiprt( hiprtGetGeometriesBuildTemporaryBufferSize(
++		ctxt, static_cast<uint32_t>( geomInputs.size() ), geomInputs.data(), options, tempGeomSize ) );
++	if ( tempGeomSize > 0 ) malloc( reinterpret_cast<uint8_t*&>( tempGeomBuffer ), tempGeomSize );
++
++	std::vector<hiprtGeometry>	 geometries( geomInputs.size() );
++	std::vector<hiprtGeometry*> geomAddrs( geomInputs.size() );
++	for ( size_t i = 0; i < geometries.size(); ++i )
++		geomAddrs[i] = &geometries[i];
++
++	checkHiprt( hiprtCreateGeometries(
++		ctxt, static_cast<uint32_t>( geomInputs.size() ), geomInputs.data(), options, geomAddrs.data() ) );
++	checkHiprt( hiprtBuildGeometries(
++		ctxt,
++		hiprtBuildOperationBuild,
++		static_cast<uint32_t>( geomInputs.size() ),
++		geomInputs.data(),
++		options,
++		tempGeomBuffer,
++		0,
++		geometries.data() ) );
++
++	if ( tempGeomBuffer != nullptr ) free( tempGeomBuffer );
++	checkHiprt( hiprtDestroyGeometries( ctxt, static_cast<uint32_t>( geometries.size() ), geometries.data() ) );
++	checkHiprt( hiprtDestroyContext( ctxt ) );
++}
++
+ void hiprtTest::validateAndWriteImage(
+ 	const std::filesystem::path& imgPath, uint8_t* data, std::optional<std::filesystem::path> refFilename )
+ {
+diff --git a/test/hiprtTest.h b/test/hiprtTest.h
+index 4a7fc6c..46259c1 100644
+--- a/test/hiprtTest.h
++++ b/test/hiprtTest.h
+@@ -135,6 +135,20 @@ class hiprtTest : public ::testing::Test
+ 		uint32_t									 numGeomTypes = 0u,
+ 		uint32_t									 numRayTypes  = 1u );
+ 
++	void createCornellTriangleMeshPrimitive(
++		uint32_t triangleCount, hiprtTriangleMeshPrimitive& mesh, std::vector<void*>& garbageCollector );
++
++	void createIndexedQuadStripTriangleMeshPrimitive(
++		uint32_t quadCount, hiprtTriangleMeshPrimitive& mesh, std::vector<void*>& garbageCollector );
++
++	void attachSequentialTrianglePairs(
++		uint32_t pairCount, hiprtTriangleMeshPrimitive& mesh, std::vector<void*>& garbageCollector );
++
++	void destroyGarbage( std::vector<void*>& garbageCollector );
++
++	void buildBatchGeometriesBuildOnly(
++		const std::vector<hiprtGeometryBuildInput>& geomInputs, const hiprtBuildOptions& options );
++
+ 	void launchKernel( cudaFunction_t func, uint32_t nx, uint32_t ny, void** args, uint32_t sharedMemoryBytes = 0 );
+ 	void launchKernel(
+ 		cudaFunction_t func, uint32_t nx, uint32_t ny, uint32_t tx, uint32_t ty, void** args, uint32_t sharedMemoryBytes = 0 );
+diff --git a/test/main.cpp b/test/main.cpp
+index 206daf2..19cda58 100644
+--- a/test/main.cpp
++++ b/test/main.cpp
+@@ -899,6 +899,103 @@ TEST_F( hiprtTest, BatchCornellBox )
+ 	checkHiprt( hiprtDestroyContext( ctxt ) );
+ }
+ 
++TEST_F( hiprtTest, BatchGeometryCornellSweepBuildOnly )
++{
++	constexpr size_t GeomCount = 2;
++	const std::array<uint32_t, 5> triangleCounts = { 2u, 4u, 8u, 16u, 32u };
++
++	hiprtBuildOptions options{};
++	options.buildFlags			   = hiprtBuildFlagBitPreferFastBuild;
++	options.batchBuildMaxPrimCount = 64u;
++
++	for ( uint32_t triangleCount : triangleCounts )
++	{
++		std::cout << "BatchGeometryCornellSweepBuildOnly triangleCount=" << triangleCount << std::endl;
++
++		std::vector<std::vector<void*>> garbageCollectors( GeomCount );
++		std::vector<hiprtGeometryBuildInput> geomInputs( GeomCount );
++		for ( size_t i = 0; i < GeomCount; ++i )
++		{
++			hiprtTriangleMeshPrimitive mesh;
++			createCornellTriangleMeshPrimitive( triangleCount, mesh, garbageCollectors[i] );
++			geomInputs[i] = {};
++			geomInputs[i].type					 = hiprtPrimitiveTypeTriangleMesh;
++			geomInputs[i].primitive.triangleMesh = mesh;
++			geomInputs[i].geomType				 = 0;
++		}
++
++		buildBatchGeometriesBuildOnly( geomInputs, options );
++
++		for ( std::vector<void*>& garbageCollector : garbageCollectors )
++			destroyGarbage( garbageCollector );
++	}
++}
++
++TEST_F( hiprtTest, BatchGeometryIndexedQuadStripSweepBuildOnly )
++{
++	constexpr size_t GeomCount = 2;
++	const std::array<uint32_t, 5> quadCounts = { 1u, 2u, 4u, 8u, 16u };
++
++	hiprtBuildOptions options{};
++	options.buildFlags			   = hiprtBuildFlagBitPreferFastBuild;
++	options.batchBuildMaxPrimCount = 64u;
++
++	for ( uint32_t quadCount : quadCounts )
++	{
++		std::cout << "BatchGeometryIndexedQuadStripSweepBuildOnly triangleCount=" << ( 2 * quadCount ) << std::endl;
++
++		std::vector<std::vector<void*>> garbageCollectors( GeomCount );
++		std::vector<hiprtGeometryBuildInput> geomInputs( GeomCount );
++		for ( size_t i = 0; i < GeomCount; ++i )
++		{
++			hiprtTriangleMeshPrimitive mesh;
++			createIndexedQuadStripTriangleMeshPrimitive( quadCount, mesh, garbageCollectors[i] );
++			geomInputs[i] = {};
++			geomInputs[i].type					 = hiprtPrimitiveTypeTriangleMesh;
++			geomInputs[i].primitive.triangleMesh = mesh;
++			geomInputs[i].geomType				 = 0;
++		}
++
++		buildBatchGeometriesBuildOnly( geomInputs, options );
++
++		for ( std::vector<void*>& garbageCollector : garbageCollectors )
++			destroyGarbage( garbageCollector );
++	}
++}
++
++TEST_F( hiprtTest, BatchGeometryIndexedQuadStripPrePairedSweepBuildOnly )
++{
++	constexpr size_t GeomCount = 2;
++	const std::array<uint32_t, 5> quadCounts = { 1u, 2u, 4u, 8u, 16u };
++
++	hiprtBuildOptions options{};
++	options.buildFlags			   = hiprtBuildFlagBitPreferFastBuild;
++	options.batchBuildMaxPrimCount = 64u;
++
++	for ( uint32_t quadCount : quadCounts )
++	{
++		std::cout << "BatchGeometryIndexedQuadStripPrePairedSweepBuildOnly triangleCount=" << ( 2 * quadCount ) << std::endl;
++
++		std::vector<std::vector<void*>> garbageCollectors( GeomCount );
++		std::vector<hiprtGeometryBuildInput> geomInputs( GeomCount );
++		for ( size_t i = 0; i < GeomCount; ++i )
++		{
++			hiprtTriangleMeshPrimitive mesh;
++			createIndexedQuadStripTriangleMeshPrimitive( quadCount, mesh, garbageCollectors[i] );
++			attachSequentialTrianglePairs( quadCount, mesh, garbageCollectors[i] );
++			geomInputs[i] = {};
++			geomInputs[i].type					 = hiprtPrimitiveTypeTriangleMesh;
++			geomInputs[i].primitive.triangleMesh = mesh;
++			geomInputs[i].geomType				 = 0;
++		}
++
++		buildBatchGeometriesBuildOnly( geomInputs, options );
++
++		for ( std::vector<void*>& garbageCollector : garbageCollectors )
++			destroyGarbage( garbageCollector );
++	}
++}
++
+ TEST_F( hiprtTest, SceneAabbSingletonSrt )
+ {
+ 	hiprtContext ctxt;

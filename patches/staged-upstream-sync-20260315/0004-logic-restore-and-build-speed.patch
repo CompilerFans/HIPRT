@@ -1,0 +1,1489 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index f6c7e94..e2ac394 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -10,19 +10,73 @@ set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+ set(CMAKE_CUDA_ARCHITECTURES "89;86;80;75" CACHE STRING "CUDA architectures to build")
+ 
+ option(NO_UNITTEST "Don't build unit tests" OFF)
+-option(HIPRT_ENABLE_RUNTIME_KERNEL_CACHE "Enable on-disk cache for runtime-compiled kernels" OFF)
++set(hiprt_runtime_kernel_cache_default ON)
++if(NOT CMAKE_BUILD_TYPE STREQUAL "Release")
++	set(hiprt_runtime_kernel_cache_default OFF)
++endif()
++option(HIPRT_ENABLE_RUNTIME_KERNEL_CACHE "Enable on-disk cache for runtime-compiled kernels" ${hiprt_runtime_kernel_cache_default})
++option(HIPRT_ENABLE_CCACHE "Use ccache as compiler launcher when available" ON)
++option(HIPRT_ENABLE_MOLD "Use mold linker when available" ON)
++set(HIPRT_WARP_SIZE_OVERRIDE "" CACHE STRING "Override HIPRT device warp size; empty uses platform defaults")
++
++if(HIPRT_WARP_SIZE_OVERRIDE AND NOT HIPRT_WARP_SIZE_OVERRIDE MATCHES "^(32|64)$")
++	message(FATAL_ERROR "HIPRT_WARP_SIZE_OVERRIDE must be empty, 32, or 64")
++endif()
+ 
+ list(GET CUDAToolkit_INCLUDE_DIRS 0 CUDAToolkit_PRIMARY_INCLUDE_DIR)
+ string(REPLACE "\\" "\\\\" HIPRT_CUDA_INCLUDE_DIR_ESCAPED "${CUDAToolkit_PRIMARY_INCLUDE_DIR}")
+ 
++set(hiprt_ccache_status "disabled")
++if(HIPRT_ENABLE_CCACHE)
++	find_program(HIPRT_CCACHE_PROGRAM ccache)
++	if(HIPRT_CCACHE_PROGRAM)
++		set(CMAKE_CXX_COMPILER_LAUNCHER "${HIPRT_CCACHE_PROGRAM}")
++		set(CMAKE_CUDA_COMPILER_LAUNCHER "${HIPRT_CCACHE_PROGRAM}")
++		set(hiprt_ccache_status "enabled (${HIPRT_CCACHE_PROGRAM})")
++	else()
++		set(hiprt_ccache_status "requested but ccache not found")
++	endif()
++else()
++	set(hiprt_ccache_status "disabled by HIPRT_ENABLE_CCACHE=OFF")
++endif()
++
++set(hiprt_mold_status "disabled")
++if(HIPRT_ENABLE_MOLD)
++	if(UNIX AND NOT APPLE)
++		find_program(HIPRT_MOLD_PROGRAM mold)
++		if(HIPRT_MOLD_PROGRAM)
++			string(APPEND CMAKE_EXE_LINKER_FLAGS " -fuse-ld=mold")
++			string(APPEND CMAKE_SHARED_LINKER_FLAGS " -fuse-ld=mold")
++			string(APPEND CMAKE_MODULE_LINKER_FLAGS " -fuse-ld=mold")
++			set(hiprt_mold_status "enabled (${HIPRT_MOLD_PROGRAM})")
++		else()
++			set(hiprt_mold_status "requested but mold not found")
++		endif()
++	else()
++		set(hiprt_mold_status "not supported on this platform")
++	endif()
++else()
++	set(hiprt_mold_status "disabled by HIPRT_ENABLE_MOLD=OFF")
++endif()
++
+ add_definitions(-DGTEST_HAS_TR1_TUPLE=0)
+ add_definitions(-DHIPRT_PUBLIC_REPO)
++if(HIPRT_WARP_SIZE_OVERRIDE)
++	add_definitions(-DHIPRT_WARP_SIZE=${HIPRT_WARP_SIZE_OVERRIDE})
++endif()
+ 
+ message(STATUS "Configuring HIPRT with CUDA backend only")
++message(STATUS "CMake generator: ${CMAKE_GENERATOR}")
+ message(STATUS "CUDA toolkit version: ${CUDAToolkit_VERSION}")
+ message(STATUS "CUDA architectures: ${CMAKE_CUDA_ARCHITECTURES}")
+ message(STATUS "Disable unit tests: ${NO_UNITTEST}")
+ message(STATUS "Runtime kernel disk cache: ${HIPRT_ENABLE_RUNTIME_KERNEL_CACHE}")
++message(STATUS "ccache compiler launcher: ${hiprt_ccache_status}")
++message(STATUS "mold linker: ${hiprt_mold_status}")
++message(STATUS "HIPRT warp size override: ${HIPRT_WARP_SIZE_OVERRIDE}")
++if(NOT CMAKE_GENERATOR MATCHES "Ninja")
++	message(STATUS "Ninja is recommended for faster configure/build iterations")
++endif()
+ 
+ if(WIN32)
+ 	add_definitions(-D__WINDOWS__)
+diff --git a/README.md b/README.md
+index 7d738af..ebe16c0 100644
+--- a/README.md
++++ b/README.md
+@@ -11,10 +11,24 @@ HIPRT 当前仓库保留 `HIPRT` 项目名称以及 `hiprt*` 公开 API 命名
+ 快速构建：
+ 
+ ```bash
+-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
++cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+ cmake --build build --config Release -j
+ ```
+ 
++推荐的加速构建环境：
++
++- 使用 `Ninja` 生成器
++- 安装 `ccache` 作为编译 launcher
++- 安装 `mold` 作为链接器
++
++当前 `CMakeLists.txt` 会在工具存在时自动启用 `ccache` 和 `mold`。如果需要关闭，可传入：
++
++```bash
++cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
++  -DHIPRT_ENABLE_CCACHE=OFF \
++  -DHIPRT_ENABLE_MOLD=OFF
++```
++
+ 一键脚本：
+ 
+ ```bash
+@@ -62,7 +76,9 @@ Supported cases currently include:
+ 
+ There are no currently failing non-performance unit tests in the present MACA baseline. The recreate, stack, and transform diagnostics are still kept in the suite as regression guards.
+ 
+-Runtime kernel disk cache is currently disabled by default during the MACA migration. It can be enabled with `-DHIPRT_ENABLE_RUNTIME_KERNEL_CACHE=ON`, or force-disabled at runtime with `HIPRT_DISABLE_RUNTIME_KERNEL_CACHE=1`.
++Runtime kernel disk cache now follows the original policy again: enabled by default for `Release`, disabled by default for non-`Release` builds. You can still override it with `-DHIPRT_ENABLE_RUNTIME_KERNEL_CACHE=ON|OFF`, or force-disable it at runtime with `HIPRT_DISABLE_RUNTIME_KERNEL_CACHE=1`.
++
++The Linux unit-test helper scripts keep runtime kernel cache enabled by default for faster repeated test runs. To debug JIT/header changes, explicitly run with `HIPRT_DISABLE_RUNTIME_KERNEL_CACHE=1`.
+ 
+ For the detailed Chinese status, update rules, and per-case support matrix, see `docs/maca-test-status-zh.md`.
+ 
+@@ -76,16 +92,19 @@ For the detailed Chinese status, update rules, and per-case support matrix, see
+ Build with CMake only.
+ 
+ &nbsp;&nbsp;&nbsp;Example on Windows:  
+-&nbsp;&nbsp;&nbsp;5. `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release`  
++&nbsp;&nbsp;&nbsp;5. `cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release`  
+ &nbsp;&nbsp;&nbsp;6. `cmake --build build --config Release`  
+ 
+ &nbsp;&nbsp;&nbsp;Example on Linux:  
+-&nbsp;&nbsp;&nbsp;5. `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release`  
++&nbsp;&nbsp;&nbsp;5. `cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release`  
+ &nbsp;&nbsp;&nbsp;6. `cmake --build build --config Release -j`  
+ 
+ ### Build Notes
+ 
+ - `CUDAToolkit` is required. CMake configures the project in CUDA mode only.
++- `Ninja` is the recommended generator for faster incremental builds.
++- `ccache` is auto-enabled as the C++/CUDA compiler launcher when available. Disable with `-DHIPRT_ENABLE_CCACHE=OFF`.
++- `mold` is auto-enabled as the linker on supported Unix platforms when available. Disable with `-DHIPRT_ENABLE_MOLD=OFF`.
+ - `CMAKE_CUDA_ARCHITECTURES` is cache-configurable. Example: `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_ARCHITECTURES=89`.
+ - Unit tests are built by default. Disable them with `-DNO_UNITTEST=ON`.
+ - Generated binaries are written to `dist/bin/<Config>/`.
+diff --git a/docs/cuda-only-build-zh.md b/docs/cuda-only-build-zh.md
+index ab95744..974da20 100644
+--- a/docs/cuda-only-build-zh.md
++++ b/docs/cuda-only-build-zh.md
+@@ -35,7 +35,7 @@ cmake --build build --config Release -j
+ 
+ - 指定架构：`-DCMAKE_CUDA_ARCHITECTURES=89`
+ - 不编译单测：`-DNO_UNITTEST=ON`
+-- 控制运行时 kernel 磁盘缓存：`-DHIPRT_ENABLE_RUNTIME_KERNEL_CACHE=ON|OFF`（当前默认 `OFF`）
++- 控制运行时 kernel 磁盘缓存：`-DHIPRT_ENABLE_RUNTIME_KERNEL_CACHE=ON|OFF`（当前默认策略：`Release` 为 `ON`，非 `Release` 为 `OFF`；测试建议保持开启）
+ 
+ 构建产物默认输出到：
+ 
+@@ -115,6 +115,11 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DHIPRT_ENABLE_RUNTIME_KERNEL_CACHE
+ 
+ ```bash
+ export HIPRT_DISABLE_RUNTIME_KERNEL_CACHE=1
++
++说明：
++
++- 常规 `Release` 测试建议保持 cache 开启，以减少重复 JIT 编译时间。
++- 只有在排查 JIT 头文件、运行时编译输入或 cache 失效问题时，才建议显式设置 `HIPRT_DISABLE_RUNTIME_KERNEL_CACHE=1`。
+ ```
+ 
+ ## 后续改动建议
+diff --git a/docs/maca-debug-findings-zh.md b/docs/maca-debug-findings-zh.md
+index eadfc0c..fff9315 100644
+--- a/docs/maca-debug-findings-zh.md
++++ b/docs/maca-debug-findings-zh.md
+@@ -18,12 +18,14 @@
+ 
+ ## 已证实的事实
+ 
+-### 1. runtime kernel disk cache 不应在调试阶段默认开启
++### 1. runtime kernel disk cache 在常规测试中应开启，调试阶段才建议关闭
+ 
+ - 根级 `cache/` 会缓存 JIT 结果。
+ - 只清 `scripts/cache/` 不足以让运行时内核重新编译。
++- 在常规 `Release` 测试中，开启 cache 可以显著减少重复 runtime compile 时间。
+ - 在调试阶段，旧 cache 会掩盖头文件修改，导致“源码已改、运行行为未变”的假象。
+-- 当前仓库已经把 runtime kernel disk cache 默认值改为 `OFF`，并保留：
++- 当前仓库已经恢复 runtime kernel disk cache 的原始默认策略：`Release` 为 `ON`，非 `Release` 为 `OFF`。
++- 当前测试脚本默认保留 cache 开启，并保留：
+   - CMake 开关：`HIPRT_ENABLE_RUNTIME_KERNEL_CACHE`
+   - 运行时环境变量：`HIPRT_DISABLE_RUNTIME_KERNEL_CACHE=1`
+ 
+diff --git a/docs/maca-post-init-logic-review-zh.md b/docs/maca-post-init-logic-review-zh.md
+new file mode 100644
+index 0000000..db28c90
+--- /dev/null
++++ b/docs/maca-post-init-logic-review-zh.md
+@@ -0,0 +1,456 @@
++# `maca_init` 之后逻辑改动复盘
++
++本文档复盘 `maca_init` 到当前 `HEAD` 之间的**行为级**代码改动，重点回答：
++
++1. 哪些改动属于真实 bug 修复，不应恢复。
++2. 哪些改动只是调试期或兼容期策略，后续应恢复或改成显式开关。
++3. 哪些结论已经通过当前代码和 targeted rerun 验证。
++
++## 1. 范围与基线
++
++- 基线 tag：`maca_init`
++- 基线提交：`6caaf4a37506f1e0c482358446e835ad82c3d659`
++- 当前代码：当前工作树
++- 复盘范围：
++  - 只看 `maca_init..HEAD` 期间对行为有影响的代码
++  - 不把纯文档、纯测试新增、构建产物纳入“是否恢复”的判断
++
++## 2. 复盘方法
++
++本次判断分两层：
++
++1. **源码对照**
++   重点查看：
++   - `hiprt/impl/Context.cpp`
++   - `hiprt/impl/BvhNode.h`
++   - `hiprt/impl/hiprt_device_impl.h`
++   - `hiprt/impl/Transform.h`
++   - `hiprt/impl/Compiler.cpp`
++   - `hiprt/hiprt_common.h`
++   - `hiprt/impl/BvhBuilderKernels.h`
++   - `hiprt/impl/BvhBuilderUtil.h`
++   - `hiprt/impl/PlocBuilderKernels.h`
++
++2. **当前代码 targeted rerun**
++   所有命令都在当前 `HEAD` 上执行，统一使用：
++
++```bash
++cd /data/HIPRT/scripts
++../dist/bin/Release/unittest64 --width=512 --height=512 --referencePath=../test/references ...
++```
++
++## 3. 总结结论
++
++### 3.1 明确不建议恢复
++
++以下改动当前仍属于真实修复，不建议恢复：
++
++1. wave32/wave64 与 maskbit 相关修复
++2. geometry 单对象 `*Geometries` 不再走 batch path
++
++### 3.2 不应误用为常规测试默认值，但调试期仍合理
++
++以下改动更适合作为开发策略，而不是最终默认行为：
++
++1. runtime kernel disk cache 调试时显式关闭
++
++### 3.3 已经验证可回归原始逻辑
++
++以下改动当前已经通过 targeted rerun 验证，可回归 `maca_init` 语义：
++
++1. `PreferHighQualityBuild` 在非 NVIDIA 上的静默降级
++2. scene 单对象 `*Scenes` 不再走 batch path
++3. scene build 后 host-side `patchSceneInstanceNodes()`
++4. `BvhNode::init()` 中单帧 instance 的原始静态 matrix / 动态 transform 分支
++5. `hiprt_device_impl` 中 scene dynamic transform 分支使用 `Transform tr(...).transformRay(...)`
++6. `Transform::transformRay()` 恢复为 `frame.invTransform(...)` 的原始实现
++
++### 3.4 当前最值得恢复或改成显式开关
++
++以下改动不应继续以“静默兼容”的形式保留：
++
++1. `PreferHighQualityBuild` 在非 NVIDIA 上被静默降级为 `PreferFastBuild`
++
++### 3.5 仍待继续分析
++
++1. geometry 单对象 batch 路径的根因仍需继续分析
++
++## 4. 分项结论
++
++## 4.1 wave32/wave64 与 maskbit 修复
++
++### 当前判断
++
++- 结论：**必须保留**
++- 原因：这是公共语义修复，不是绕行策略
++
++### 关键源码点
++
++- `hiprt/hiprt_common.h`
++  - `HIPRT_WARP_SIZE` / `WarpSize`
++  - `LaneMask`
++  - `laneMaskFirstSet()` / `laneMaskPopCount()` / `laneMaskLowerCount()` / `subLaneMask()`
++- `hiprt/impl/BvhBuilderKernels.h`
++- `hiprt/impl/BvhBuilderUtil.h`
++- `hiprt/impl/PlocBuilderKernels.h`
++- `hiprt/impl/hiprt_device_impl.h`
++
++### 本质影响
++
++- 这是对 wave mask 宽度和位操作的一致性修复
++- 影响的是：
++  - `ballot()` 返回值宽度
++  - `__ffsll` / `__popcll` 这一类 mask 处理
++  - `subwarpMask` / `packetMask` / `warpBallot` 的位数语义
++
++恢复这类改动，会重新把 MACA 上的 wave64 路径带回 32-bit 假设。
++
++### 本轮验证
++
++执行：
++
++```bash
++--gtest_filter=hiprtTest.MinimumCornellBox:hiprtTest.Compaction:hiprtTest.PairTriangles:hiprtTest.PlocFallback
++```
++
++结果：
++
++- `MinimumCornellBox`：通过
++- `Compaction`：通过
++- `PairTriangles`：通过
++- `PlocFallback`：通过
++
++结论：
++
++- 当前这些直接依赖公共 mask 语义的基础路径都已通过
++- 因此 wave/mask 修复不是可恢复项
++
++## 4.2 单对象 batch 回退
++
++### 当前判断
++
++- 结论：**需要保留 geometry 单对象回退；scene 单对象回退已可恢复原始逻辑**
++- 原因：两条路径的当前结论不同，不能再合并看
++
++### 关键源码点
++
++- geometry：
++  - `Context::createGeometries`
++  - `Context::buildGeometries`
++  - `Context::getGeometriesBuildTempBufferSize`
++- scene：
++  - `Context::createScenes`
++  - `Context::buildScenes`
++  - `Context::getScenesBuildTempBufferSize`
++
++这使得单对象 `*Geometries/*Scenes` 不再因为 API 入口形式而误入 batch kernel。
++
++### 本质影响
++
++- 这改变的是**内部调度策略**
++- 不改变公开 API 输入输出语义
++- 但 geometry 与 scene 两条路径的稳定性目前已经分化
++
++### 本轮验证
++
++#### geometry 单对象 batch 路径
++
++在仅恢复 geometry 单对象 batch 原始行为后，完整重编再执行：
++
++```bash
++--gtest_filter=hiprtTest.BatchConstruction:hiprtTest.BatchCornellBox
++```
++
++结果：
++
++- `BatchCornellBox` 在 `BatchBuild_hiprtGeometryBuildInput` 上触发设备非法访存
++- 后续还出现过 `EmitTopologyAndFitBounds_TriangleMesh` / `LbvhBuilder` 一侧的非法访问级联错误
++
++结论：
++
++- geometry 单对象 batch 回退**仍然必要**
++
++#### scene 单对象 batch 路径
++
++执行：
++
++```bash
++--gtest_filter=hiprtTest.SceneAabbSingletonSrt:hiprtTest.SceneAabbSingletonMatrixShear:hiprtTest.SceneSingletonSrtNodeUsesTransformHeader:hiprtTest.SceneWorldToObjectRaySrt:hiprtTest.SceneInternalTransformRaySrt:hiprtTest.SceneTransformDebugSrt:hiprtTest.SceneInterpolatedFrameDebugSrt:hiprtTest.SceneInverseMatrixDebugSrt:hiprtTest.SceneWorldToObjectRayMatrixShear:hiprtTest.SceneClosestHitSingletonSrt:hiprtTest.SceneClosestHitSingletonSrtRecreate:hiprtTest.SceneManualClosestHitSingletonSrt:hiprtTest.SceneTraceKernelSingletonSrt:hiprtTest.SceneIntersectionSingleton:hiprtTest.SceneIntersection:hiprtTest.SceneIntersectionMlas:ObjTestCases.TranslateCornellBox:ObjTestCases.ScaleCornellBox:ObjTestCases.RotateCornellBox:hiprtTest.Shear
++```
++
++结果：
++
++- `20 / 20` 通过
++
++结论：
++
++- scene 单对象 batch 回退当前**已非必要**
++- scene 这半边可以恢复到 `maca_init` 的原始逻辑
++
++## 4.3 scene host patch 与 instance 节点语义
++
++### 当前判断
++
++- 结论：**当前已验证可恢复原始逻辑**
++- 原因：去掉 host patch，并恢复 `BvhNode::init()` 的原始 instance 节点语义后，scene / transform / motion blur 覆盖仍通过
++
++### 关键源码点
++
++- `hiprt/impl/BvhNode.h`
++- `hiprt/impl/Context.cpp`
++- `hiprt/impl/hiprt_device_impl.h`
++
++### 本质影响
++
++这一组改动在前一阶段被作为 scene 主路径的兜底策略引入，但当前逐步回归后，已经能把下列逻辑一起恢复：
++
++1. 删除 host-side `patchSceneInstanceNodes()`
++2. 恢复 `BvhNode::init()` 中单帧 instance 的原始静态 matrix 分支
++3. 恢复 `hiprt_device_impl` 中 dynamic transform 分支直接调用 `Transform tr(...).transformRay(...)`
++
++### 本轮验证
++
++执行：
++
++```bash
++--gtest_filter=hiprtTest.SceneAabbSingletonSrt:hiprtTest.SceneAabbSingletonMatrixShear:hiprtTest.SceneSingletonSrtNodeUsesTransformHeader:hiprtTest.SceneWorldToObjectRaySrt:hiprtTest.SceneInternalTransformRaySrt:hiprtTest.SceneTransformDebugSrt:hiprtTest.SceneInterpolatedFrameDebugSrt:hiprtTest.SceneInverseMatrixDebugSrt:hiprtTest.SceneWorldToObjectRayMatrixShear:hiprtTest.SceneClosestHitSingletonSrt:hiprtTest.SceneClosestHitSingletonSrtRecreate:hiprtTest.SceneManualClosestHitSingletonSrt:hiprtTest.SceneTraceKernelSingletonSrt:hiprtTest.SceneIntersectionSingleton:hiprtTest.SceneIntersection:hiprtTest.SceneIntersectionMlas:ObjTestCases.TranslateCornellBox:ObjTestCases.ScaleCornellBox:ObjTestCases.RotateCornellBox:hiprtTest.Shear
++```
++
++结果：
++
++- `20 / 20` 通过
++
++再执行：
++
++```bash
++--gtest_filter=hiprtTest.MotionBlur:hiprtTest.MotionBlurMatrix:hiprtTest.MotionBlurSlerp
++```
++
++结果：
++
++- `3 / 3` 通过
++
++结论：
++
++- host-side `patchSceneInstanceNodes()` 当前已非必要
++- `BvhNode::init()` 的原始语义当前已恢复可用
++- `hiprt_device_impl` 的原始 dynamic transform 路径当前已恢复可用
++
++## 4.4 `Transform::transformRay()` 改动
++
++### 当前判断
++
++- 结论：**当前已验证可恢复原始逻辑**
++- 原因：把 `Transform.h` 回归到 `maca_init` 的 `frame.invTransform(...)` 实现后，scene / transform / motion blur 覆盖仍然通过
++
++### 关键源码点
++
++- `hiprt/impl/Transform.h:345`
++- `hiprt/impl/hiprt_device_impl.h:983`
++
++### 当前状态
++
++- `maca_init` 时，`Transform::transformRay()` 直接使用 `frame.invTransform(...)`
++- 当前已直接恢复到这条实现
++
++### 本轮验证
++
++执行：
++
++```bash
++--gtest_filter=hiprtTest.SceneAabbSingletonSrt:hiprtTest.SceneAabbSingletonMatrixShear:hiprtTest.SceneSingletonSrtNodeUsesTransformHeader:hiprtTest.SceneWorldToObjectRaySrt:hiprtTest.SceneInternalTransformRaySrt:hiprtTest.SceneTransformDebugSrt:hiprtTest.SceneInterpolatedFrameDebugSrt:hiprtTest.SceneInverseMatrixDebugSrt:hiprtTest.SceneWorldToObjectRayMatrixShear:hiprtTest.SceneClosestHitSingletonSrt:hiprtTest.SceneClosestHitSingletonSrtRecreate:hiprtTest.SceneManualClosestHitSingletonSrt:hiprtTest.SceneTraceKernelSingletonSrt:hiprtTest.SceneIntersectionSingleton:hiprtTest.SceneIntersection:hiprtTest.SceneIntersectionMlas:ObjTestCases.TranslateCornellBox:ObjTestCases.ScaleCornellBox:ObjTestCases.RotateCornellBox:hiprtTest.Shear
++```
++
++结果：
++
++- `20 / 20` 通过
++
++再执行：
++
++```bash
++--gtest_filter=hiprtTest.MotionBlur:hiprtTest.MotionBlurMatrix:hiprtTest.MotionBlurSlerp
++```
++
++结果：
++
++- `3 / 3` 通过
++
++结论：
++
++- `Transform::transformRay()` 当前已可恢复到 `maca_init` 原始实现
++
++## 4.5 runtime kernel disk cache 调试时显式关闭
++
++### 当前判断
++
++- 结论：**调试期合理，常规测试不应默认关闭**
++- 原因：这是调试策略，不是正确性修复
++
++### 关键源码点
++
++- `CMakeLists.txt:13`
++- `hiprt/impl/Compiler.cpp:37`
++- `hiprt/impl/Compiler.cpp:161`
++
++### 本质影响
++
++- 当前默认策略：
++  - `Release`：`HIPRT_ENABLE_RUNTIME_KERNEL_CACHE=ON`
++  - 非 `Release`：`HIPRT_ENABLE_RUNTIME_KERNEL_CACHE=OFF`
++- 同时支持运行时强制关闭：
++  - `HIPRT_DISABLE_RUNTIME_KERNEL_CACHE=1`
++
++这能避免旧 cache 掩盖 JIT/header 修改，但它属于调试控制，不应再作为常规 `Release` 测试的默认运行方式。
++
++### 本轮验证
++
++- 调试时仍可使用：
++
++```bash
++HIPRT_DISABLE_RUNTIME_KERNEL_CACHE=1
++```
++
++结论：
++
++- 这项控制对开发调试仍有价值
++- 常规 `Release` 测试应保持 cache 开启，以减少重复 runtime compile 时间
++
++## 4.6 `PreferHighQualityBuild` 静默降级
++
++### 当前判断
++
++- 结论：**已验证可恢复原语义；不应继续静默保留**
++- 原因：这不是 bug fix，而是语义改写，而且当前工作树下移除后相关 non-performance case 已通过
++
++### 关键源码点
++
++- `hiprt/impl/Context.cpp:39`
++- `hiprt/impl/Context.cpp:42`
++
++当前逻辑：
++
++- 当请求 `hiprtBuildFlagBitPreferHighQualityBuild`
++- 且设备名不包含 `NVIDIA`
++- 就直接改写为 `hiprtBuildFlagBitPreferFastBuild`
++
++### 本质影响
++
++- 这会让调用方请求 HQ builder，但实际执行 fast builder
++- 当前测试仍然在明确请求 HQ：
++  - `test/main.cpp:454`
++  - `test/main.cpp:690`
++  - `test/main.cpp:771`
++
++同时文档又把这些 case 记为“已支持”，例如：
++
++- `README.md:61`
++- `docs/maca-test-status-zh.md:44`
++
++因此当前问题不是“功能是否能跑”，而是：
++
++- **测试和文档口径把“请求 HQ 且最终通过”误写成了“当前支持 HQ builder”**
++
++### 本轮验证
++
++先做源码语义确认：
++
++- 代码中 flag 在进入 builder 分发前已被改写，因此之前的通过结果不能证明真正执行了 HQ builder
++
++随后在当前工作树中临时移除静默降级逻辑，再执行：
++
++```bash
++--gtest_filter=ObjTestCases.BvhHighQCornellBox:hiprtTest.MinimumCornellBox:hiprtTest.Compaction
++```
++
++结果：
++
++- `ObjTestCases.BvhHighQCornellBox`：通过
++- `hiprtTest.MinimumCornellBox`：通过
++- `hiprtTest.Compaction`：通过
++
++额外观察：
++
++- `BvhHighQCornellBox` 在移除降级后，`Bvh build time` 明显升高到约 `26.6s`
++- 这说明当前运行的已不再是先前的 fast fallback，而是真正的 HQ builder 路径
++
++### 建议
++
++当前更推荐：
++
++1. 直接恢复原语义：
++   - 请求 HQ 就真的走 HQ
++   - 不支持再显式失败
++2. 如果未来还要保留 fallback，必须改成显式控制：
++   - 例如单独的 MACA fallback 开关
++   - 同时修正文档和测试口径
++
++当前不建议继续保留“静默降级”。
++
++## 4.7 `BvhNode::init()` 中的死赋值
++
++### 当前判断
++
++- 结论：**建议清理**
++- 原因：这是代码噪声，不是行为策略
++
++### 关键源码点
++
++- `hiprt/impl/BvhNode.h:1163`
++- `hiprt/impl/BvhNode.h:1171`
++- `hiprt/impl/BvhNode.h:1210`
++- `hiprt/impl/BvhNode.h:1218`
++
++### 本质影响
++
++- `m_static` 先按 `transform.frameCount == 1` 赋值
++- 随后又立刻被覆盖为 `0`
++
++这不影响当前行为判断，但会误导阅读者，以为 static path 仍然部分保留在构造逻辑中。
++
++建议后续单独清理，不要把它和“恢复 static path”混为一谈。
++
++## 5. 当前建议顺序
++
++如果按“最值得先处理”的顺序排：
++
++1. 优先处理 `PreferHighQualityBuild` 静默降级
++   - 恢复原语义，或改成显式 fallback 开关
++2. 保持当前 batch 单对象回退与 scene transform/host patch 不动
++3. 保持 wave/mask 修复不动
++4. 调试时按需显式关闭 runtime cache；常规测试保持开启
++5. 单独清理 `BvhNode::init()` 的死赋值
++
++## 6. 本轮验证命令汇总
++
++### 6.1 wave/mask 基础路径
++
++```bash
++cd /data/HIPRT/scripts
++../dist/bin/Release/unittest64 \
++  --width=512 --height=512 --referencePath=../test/references \
++  --gtest_filter=hiprtTest.MinimumCornellBox:hiprtTest.Compaction:hiprtTest.PairTriangles:hiprtTest.PlocFallback
++```
++
++结果：`4 / 4` 通过
++
++### 6.2 batch 路径
++
++```bash
++cd /data/HIPRT/scripts
++../dist/bin/Release/unittest64 \
++  --width=512 --height=512 --referencePath=../test/references \
++  --gtest_filter=hiprtTest.BatchConstruction:hiprtTest.BatchCornellBox
++```
++
++结果：`2 / 2` 通过
++
++### 6.3 scene transform / traversal 诊断
++
++```bash
++cd /data/HIPRT/scripts
++../dist/bin/Release/unittest64 \
++  --width=512 --height=512 --referencePath=../test/references \
++  --gtest_filter=hiprtTest.SceneSingletonSrtNodeUsesTransformHeader:hiprtTest.SceneWorldToObjectRaySrt:hiprtTest.SceneClosestHitSingletonSrt:hiprtTest.SceneInternalTransformRaySrt:hiprtTest.SceneInverseMatrixDebugSrt
++```
++
++结果：`5 / 5` 通过
+diff --git a/hiprt/hiprt_common.h b/hiprt/hiprt_common.h
+index d0a5816..0e6d5ca 100644
+--- a/hiprt/hiprt_common.h
++++ b/hiprt/hiprt_common.h
+@@ -166,17 +166,23 @@ constexpr uint32_t MaxInstanceLevels		 = 4u;
+ constexpr uint32_t DefaultAlignment			 = 64u;
+ constexpr uint32_t NoRotationIndex			 = 127u;
+ constexpr uint32_t InstanceIDBits			 = 24u;
++using LaneMask								 = uint64_t;
+ 
+ #ifdef __KERNELCC__
+ #ifndef HIPRT_RTIP
+ #define HIPRT_RTIP 0
+ #endif
+ 
++#ifndef HIPRT_WARP_SIZE
+ #if defined( __MACACC__ )
+-constexpr uint32_t WarpSize = 64;
++#define HIPRT_WARP_SIZE 64
+ #else
+-constexpr uint32_t WarpSize = 32;
++#define HIPRT_WARP_SIZE 32
+ #endif
++#endif
++
++HIPRT_STATIC_ASSERT( HIPRT_WARP_SIZE == 32 || HIPRT_WARP_SIZE == 64 );
++constexpr uint32_t WarpSize = HIPRT_WARP_SIZE;
+ 
+ constexpr uint32_t Rtip = HIPRT_RTIP;
+ 
+@@ -226,12 +232,102 @@ HIPRT_HOST_DEVICE HIPRT_INLINE uint32_t clz( uint32_t value )
+ #endif
+ }
+ 
++HIPRT_HOST_DEVICE HIPRT_INLINE uint32_t clzll( uint64_t value )
++{
++#if defined( __CUDA_ARCH__ )
++	return __clzll( static_cast<unsigned long long>( value ) );
++#else
++	uint32_t count = 0;
++	for ( uint64_t mask = 1ull << 63; mask && !( value & mask ); mask >>= 1 )
++		++count;
++	return value == 0 ? 64 : count;
++#endif
++}
++
++HIPRT_HOST_DEVICE constexpr LaneMask laneMaskBit( uint32_t lane )
++{
++	if ( lane >= 64 ) return 0ull;
++	return 1ull << lane;
++}
++
++HIPRT_HOST_DEVICE constexpr LaneMask laneMaskPrefix( uint32_t lane )
++{
++	return lane == 0 ? 0ull : ( lane >= 64 ? ~0ull : ( laneMaskBit( lane ) - 1ull ) );
++}
++
++HIPRT_HOST_DEVICE constexpr LaneMask laneMaskRange( uint32_t count, uint32_t offset = 0 )
++{
++	if ( count == 0 || offset >= 64 ) return 0ull;
++
++	const uint32_t clampedCount = count < ( 64u - offset ) ? count : ( 64u - offset );
++	if ( clampedCount == 64 ) return ~0ull;
++	return ( ( 1ull << clampedCount ) - 1ull ) << offset;
++}
++
++HIPRT_HOST_DEVICE constexpr LaneMask subLaneMask( uint32_t subgroupSize, uint32_t subgroupIndex )
++{
++	return laneMaskRange( subgroupSize, subgroupSize * subgroupIndex );
++}
++
++HIPRT_HOST_DEVICE HIPRT_INLINE uint32_t laneMaskPopCount( LaneMask mask )
++{
++#if defined( __CUDA_ARCH__ )
++	return __popcll( static_cast<unsigned long long>( mask ) );
++#else
++	uint32_t count = 0;
++	while ( mask )
++	{
++		mask &= mask - 1ull;
++		++count;
++	}
++	return count;
++#endif
++}
++
++HIPRT_HOST_DEVICE HIPRT_INLINE uint32_t laneMaskFirstSet( LaneMask mask )
++{
++	if ( mask == 0 ) return InvalidValue;
++
++#if defined( __CUDA_ARCH__ )
++	return static_cast<uint32_t>( __ffsll( static_cast<unsigned long long>( mask ) ) - 1 );
++#else
++	uint32_t lane = 0;
++	while ( ( mask & 1ull ) == 0 )
++	{
++		mask >>= 1;
++		++lane;
++	}
++	return lane;
++#endif
++}
++
++HIPRT_HOST_DEVICE HIPRT_INLINE uint32_t laneMaskLastSet( LaneMask mask )
++{
++	return mask == 0 ? InvalidValue : 63u - clzll( mask );
++}
++
++HIPRT_HOST_DEVICE HIPRT_INLINE uint32_t laneMaskLowerCount( LaneMask mask, uint32_t lane )
++{
++	return laneMaskPopCount( mask & laneMaskPrefix( lane ) );
++}
++
++HIPRT_HOST_DEVICE constexpr LaneMask laneMaskClear( LaneMask mask, uint32_t lane ) { return mask & ~laneMaskBit( lane ); }
++
+ #ifdef __KERNELCC__
++HIPRT_INLINE HIPRT_DEVICE LaneMask activeMask()
++{
++#ifdef __CUDACC__
++	return static_cast<LaneMask>( __activemask() );
++#else
++	return __ballot( 1 );
++#endif
++}
++
+ template <typename T>
+ HIPRT_INLINE HIPRT_DEVICE T shfl( T var, int srcLane )
+ {
+ #ifdef __CUDACC__
+-	return __shfl_sync( __activemask(), var, srcLane );
++	return __shfl_sync( activeMask(), var, srcLane );
+ #else
+ 	return __shfl( var, srcLane );
+ #endif
+@@ -241,7 +337,7 @@ template <typename T>
+ HIPRT_INLINE HIPRT_DEVICE T shfl_up( T var, int srcLane )
+ {
+ #ifdef __CUDACC__
+-	return __shfl_up_sync( __activemask(), var, srcLane );
++	return __shfl_up_sync( activeMask(), var, srcLane );
+ #else
+ 	return __shfl_up( var, srcLane );
+ #endif
+@@ -251,7 +347,7 @@ template <typename T>
+ HIPRT_INLINE HIPRT_DEVICE T shfl_down( T var, int srcLane )
+ {
+ #ifdef __CUDACC__
+-	return __shfl_down_sync( __activemask(), var, srcLane );
++	return __shfl_down_sync( activeMask(), var, srcLane );
+ #else
+ 	return __shfl_down( var, srcLane );
+ #endif
+@@ -261,16 +357,16 @@ template <typename T>
+ HIPRT_INLINE HIPRT_DEVICE T shfl_xor( T var, int srcLane )
+ {
+ #ifdef __CUDACC__
+-	return __shfl_xor_sync( __activemask(), var, srcLane );
++	return __shfl_xor_sync( activeMask(), var, srcLane );
+ #else
+ 	return __shfl_xor( var, srcLane );
+ #endif
+ }
+ 
+-HIPRT_INLINE HIPRT_DEVICE uint64_t ballot( int predicate )
++HIPRT_INLINE HIPRT_DEVICE LaneMask ballot( int predicate )
+ {
+ #ifdef __CUDACC__
+-	return static_cast<uint64_t>( __ballot_sync( __activemask(), predicate ) );
++	return static_cast<LaneMask>( __ballot_sync( activeMask(), predicate ) );
+ #else
+ 	return __ballot( predicate );
+ #endif
+@@ -279,7 +375,7 @@ HIPRT_INLINE HIPRT_DEVICE uint64_t ballot( int predicate )
+ HIPRT_INLINE HIPRT_DEVICE uint32_t any( int predicate )
+ {
+ #ifdef __CUDACC__
+-	return __any_sync( __activemask(), predicate );
++	return __any_sync( activeMask(), predicate );
+ #else
+ 	return __any( predicate );
+ #endif
+@@ -287,7 +383,7 @@ HIPRT_INLINE HIPRT_DEVICE uint32_t any( int predicate )
+ HIPRT_INLINE HIPRT_DEVICE uint32_t all( int predicate )
+ {
+ #ifdef __CUDACC__
+-	return __all_sync( __activemask(), predicate );
++	return __all_sync( activeMask(), predicate );
+ #else
+ 	return __all( predicate );
+ #endif
+diff --git a/hiprt/impl/BvhBuilderKernels.h b/hiprt/impl/BvhBuilderKernels.h
+index eb098f7..f9b42e7 100644
+--- a/hiprt/impl/BvhBuilderKernels.h
++++ b/hiprt/impl/BvhBuilderKernels.h
+@@ -133,8 +133,7 @@ HIPRT_DEVICE HIPRT_INLINE void openNodes(
+ 	const uint32_t laneIndex	= threadIdx.x % WarpSize;
+ 	const uint32_t sublaneIndex = laneIndex % BranchingFactor;
+ 	const uint32_t subwarpIndex = laneIndex / BranchingFactor;
+-	const uint64_t subwarpMask	= ( ( 1ull << BranchingFactor ) - 1 )
+-								 << static_cast<uint64_t>( ( BranchingFactor * subwarpIndex ) );
++	const LaneMask subwarpMask	= hiprt::subLaneMask( BranchingFactor, subwarpIndex );
+ 
+ 	bool done = childCount == BranchingFactor;
+ 	while ( hiprt::ballot( !done ) )
+@@ -156,8 +155,7 @@ HIPRT_DEVICE HIPRT_INLINE void openNodes(
+ 			maxArea = hiprt::max( maxArea, shfl_xor( maxArea, i ) );
+ 		if ( maxArea < 0.0f ) done = true;
+ 
+-		const uint32_t maxLaneIndex =
+-			__ffsll( static_cast<unsigned long long>( hiprt::ballot( maxArea == area ) ) & subwarpMask ) - 1;
++		const uint32_t maxLaneIndex = hiprt::laneMaskFirstSet( hiprt::ballot( maxArea == area ) & subwarpMask );
+ 		const uint32_t maxIndex		 = maxLaneIndex % BranchingFactor;
+ 		const uint32_t maxChildIndex = shfl( childIndex, maxLaneIndex );
+ 
+@@ -366,7 +364,7 @@ extern "C" __global__ void PairTriangles( TriangleMesh mesh, uint2* pairIndices,
+ 
+ 	bool	 valid		 = index < mesh.getCount();
+ 	uint32_t pairedIndex = InvalidValue;
+-	uint64_t activeMask	 = hiprt::ballot( valid );
++	LaneMask activeMask	 = hiprt::ballot( valid );
+ 
+ 	uint3 triIndices;
+ 	if ( valid ) triIndices = mesh.fetchTriangleIndices( index );
+@@ -375,7 +373,7 @@ extern "C" __global__ void PairTriangles( TriangleMesh mesh, uint2* pairIndices,
+ 	{
+ 		activeMask = shfl( activeMask, 0 );
+ 
+-		const uint64_t broadcastLane = __ffsll( static_cast<unsigned long long>( activeMask ) ) - 1;
++		const uint32_t broadcastLane = hiprt::laneMaskFirstSet( activeMask );
+ 		if ( laneIndex == broadcastLane ) valid = false;
+ 
+ 		activeMask &= activeMask - 1;
+@@ -388,10 +386,10 @@ extern "C" __global__ void PairTriangles( TriangleMesh mesh, uint2* pairIndices,
+ 		if ( index != broadcastIndex && valid )
+ 			pairable = tryPairTriangles( triIndicesBroadcast, triIndices ).x != InvalidValue;
+ 
+-		const uint32_t firstPairedLane = __ffsll( static_cast<unsigned long long>( hiprt::ballot( pairable ) ) ) - 1;
++		const uint32_t firstPairedLane = hiprt::laneMaskFirstSet( hiprt::ballot( pairable ) );
+ 		if ( firstPairedLane < WarpSize )
+ 		{
+-			activeMask &= ~( 1ull << firstPairedLane );
++			activeMask = hiprt::laneMaskClear( activeMask, firstPairedLane );
+ 			if ( laneIndex == firstPairedLane ) valid = false;
+ 
+ 			const uint32_t secondIndex = shfl( index, firstPairedLane );
+@@ -695,8 +693,7 @@ __device__ void FitBounds( Header* header, PrimitiveContainer& primitives, BoxNo
+ 	const uint32_t laneIndex	= threadIdx.x % WarpSize;
+ 	const uint32_t sublaneIndex = laneIndex % BranchingFactor;
+ 	const uint32_t subwarpIndex = laneIndex / BranchingFactor;
+-	const uint64_t subwarpMask	= ( ( 1ull << BranchingFactor ) - 1 )
+-								 << static_cast<uint64_t>( ( BranchingFactor * subwarpIndex ) );
++	const LaneMask subwarpMask	= hiprt::subLaneMask( BranchingFactor, subwarpIndex );
+ 
+ 	uint32_t index = threadIndex / BranchingFactor;
+ 
+@@ -712,7 +709,7 @@ __device__ void FitBounds( Header* header, PrimitiveContainer& primitives, BoxNo
+ 		internal   = sublaneIndex < childCount && node.getChildType( sublaneIndex ) == BoxType;
+ 	}
+ 
+-	uint32_t internalCount = __popcll( hiprt::ballot( internal ) & subwarpMask );
++	uint32_t internalCount = hiprt::laneMaskPopCount( hiprt::ballot( internal ) & subwarpMask );
+ 	if ( internalCount > 0 ) done = true;
+ 
+ 	while ( hiprt::any( !done ) )
+@@ -750,7 +747,7 @@ __device__ void FitBounds( Header* header, PrimitiveContainer& primitives, BoxNo
+ 			internal   = sublaneIndex < childCount && node.getChildType( sublaneIndex ) == BoxType;
+ 		}
+ 
+-		internalCount = __popcll( hiprt::ballot( internal ) & subwarpMask );
++		internalCount = hiprt::laneMaskPopCount( hiprt::ballot( internal ) & subwarpMask );
+ 
+ 		__threadfence();
+ 
+@@ -823,7 +820,7 @@ __device__ void FitOrientedBounds(
+ 	uint32_t childCount = node.getChildCount();
+ 	bool	 internal	= laneIndex < childCount && node.getChildType( laneIndex ) == BoxType;
+ 
+-	uint32_t internalCount = __popcll( hiprt::ballot( internal ) );
++	uint32_t internalCount = hiprt::laneMaskPopCount( hiprt::ballot( internal ) );
+ 
+ 	bool done = internalCount > 0;
+ 
+@@ -855,7 +852,7 @@ __device__ void FitOrientedBounds(
+ 			}
+ 
+ 			const float	   minArea	= warpMin( minAreaLane );
+-			const uint32_t minIndex = __ffsll( static_cast<unsigned long long>( hiprt::ballot( minAreaLane == minArea ) ) ) - 1;
++			const uint32_t minIndex = hiprt::laneMaskFirstSet( hiprt::ballot( minAreaLane == minArea ) );
+ 			const uint32_t matrixIndex = shfl( minIndexLane, minIndex );
+ 
+ 			Aabb	 childBox;
+@@ -901,7 +898,7 @@ __device__ void FitOrientedBounds(
+ 		childCount = node.getChildCount();
+ 		internal   = laneIndex < childCount && node.getChildType( laneIndex ) == BoxType;
+ 
+-		internalCount = __popcll( hiprt::ballot( internal ) );
++		internalCount = hiprt::laneMaskPopCount( hiprt::ballot( internal ) );
+ 
+ 		__threadfence();
+ 
+@@ -1090,8 +1087,7 @@ __device__ void Collapse(
+ 	const uint32_t taskIndex	= index / BranchingFactor;
+ 	const uint32_t sublaneIndex = laneIndex % BranchingFactor;
+ 	const uint32_t subwarpIndex = laneIndex / BranchingFactor;
+-	const uint64_t subwarpMask	= ( ( 1ull << BranchingFactor ) - 1 )
+-								 << static_cast<uint64_t>( ( BranchingFactor * subwarpIndex ) );
++	const LaneMask subwarpMask	= hiprt::subLaneMask( BranchingFactor, subwarpIndex );
+ 
+ 	bool done = taskIndex >= maxBoxNodeCount || taskIndex >= referenceCount;
+ 
+@@ -1127,7 +1123,7 @@ __device__ void Collapse(
+ 		if ( nodeAddr == 0 ) parentAddr = InvalidValue;
+ 
+ 		// fill inactive lanes with first valid node index
+-		const uint32_t firstValidLane = __ffsll( static_cast<unsigned long long>( hiprt::ballot( valid ) ) ) - 1;
++		const uint32_t firstValidLane = hiprt::laneMaskFirstSet( hiprt::ballot( valid ) );
+ 		nodeIndex					  = shfl( nodeIndex, valid ? laneIndex : firstValidLane );
+ 
+ 		BinaryNode binaryNode = binaryNodes[getNodeAddr( nodeIndex )];
+@@ -1178,8 +1174,8 @@ __device__ void Collapse(
+ 		if constexpr ( !is_same<PrimitiveNode, TrianglePacketNode>::value )
+ 		{
+ 			const bool	   leaf			 = isLeafNode( childIndex );
+-			const uint64_t activeSubmask = hiprt::ballot( active && leaf ) & subwarpMask;
+-			const uint32_t rangeSize	 = __popcll( activeSubmask );
++			const LaneMask activeSubmask = hiprt::ballot( active && leaf ) & subwarpMask;
++			const uint32_t rangeSize	 = hiprt::laneMaskPopCount( activeSubmask );
+ 			const uint32_t rangeAddr	 = warpOffset( active && leaf, &header->m_referenceCount );
+ 			if ( active && leaf ) referenceIndices[rangeAddr] = childIndex;
+ 			if ( valid && sublaneIndex == 0 && activeSubmask != 0 ) task = { rangeAddr, nodeAddr, rangeSize };
+@@ -1225,8 +1221,8 @@ __device__ void Collapse(
+ 				}
+ 			}
+ 
+-			const uint64_t activeSubmask   = hiprt::ballot( active && fatLeaf ) & subwarpMask;
+-			const uint32_t lastActiveLane  = activeSubmask == 0 ? 0 : ( WarpSize - 1 ) - __clzll( activeSubmask );
++			const LaneMask activeSubmask   = hiprt::ballot( active && fatLeaf ) & subwarpMask;
++			const uint32_t lastActiveLane  = activeSubmask == 0 ? 0 : hiprt::laneMaskLastSet( activeSubmask );
+ 			const uint32_t lastRangeOffset = shfl( rangeOffset, lastActiveLane );
+ 			if ( valid && sublaneIndex == 0 && activeSubmask != 0 )
+ 			{
+@@ -1972,18 +1968,18 @@ __device__ void PackLeavesWarp(
+ 		__threadfence_block();
+ 
+ 		// build packets
+-		uint64_t packetMask = hiprt::ballot( taskIndex < taskCount && packet.m_triPairCount > 0 && sublaneIndex == 0 );
++		LaneMask packetMask = hiprt::ballot( taskIndex < taskCount && packet.m_triPairCount > 0 && sublaneIndex == 0 );
+ 		while ( packetMask )
+ 		{
+ 			const uint32_t halfWarpIndex = laneIndex / 16;
+ 			const uint32_t halfLaneIndex = laneIndex % 16;
+ 
+-			const uint32_t broadcastLane0 = __ffsll( static_cast<unsigned long long>( packetMask ) ) - 1;
+-			packetMask ^= 1ull << broadcastLane0;
++			const uint32_t broadcastLane0 = hiprt::laneMaskFirstSet( packetMask );
++			packetMask = hiprt::laneMaskClear( packetMask, broadcastLane0 );
+ 
+-			const uint32_t broadcastLane1 = __ffsll( static_cast<unsigned long long>( packetMask ) ) - 1;
++			const uint32_t broadcastLane1 = hiprt::laneMaskFirstSet( packetMask );
+ 			const bool	   secondValid	  = packetMask != 0;
+-			if ( secondValid ) packetMask ^= 1ull << broadcastLane1;
++			if ( secondValid ) packetMask = hiprt::laneMaskClear( packetMask, broadcastLane1 );
+ 
+ 			const uint32_t			 broadcastLane			 = ( halfWarpIndex == 0 ) ? broadcastLane0 : broadcastLane1;
+ 			const uint32_t			 broadcastSubwarpIndex	 = broadcastLane / LanesPerLeafPacketTask;
+diff --git a/hiprt/impl/BvhBuilderUtil.h b/hiprt/impl/BvhBuilderUtil.h
+index 4d01812..7b2fe92 100644
+--- a/hiprt/impl/BvhBuilderUtil.h
++++ b/hiprt/impl/BvhBuilderUtil.h
+@@ -164,13 +164,15 @@ template <typename T>
+ HIPRT_DEVICE T warpOffset( bool warpVal, T* counter )
+ {
+ 	const uint32_t laneIndex  = threadIdx.x & ( WarpSize - 1 );
+-	const uint64_t warpBallot = hiprt::ballot( warpVal );
+-	const T		   warpCount  = __popcll( warpBallot );
+-	const T		   warpSum	  = __popcll( warpBallot & ( ( 1ull << laneIndex ) - 1ull ) );
++	const LaneMask warpBallot = hiprt::ballot( warpVal );
++	if ( warpBallot == 0 ) return static_cast<T>( 0 );
++	const T		   warpCount  = hiprt::laneMaskPopCount( warpBallot );
++	const T		   warpSum	  = hiprt::laneMaskLowerCount( warpBallot, laneIndex );
+ 	T			   warpOffset;
+-	if ( laneIndex == __ffsll( static_cast<unsigned long long>( warpBallot ) ) - 1 )
++	const uint32_t firstLane = hiprt::laneMaskFirstSet( warpBallot );
++	if ( laneIndex == firstLane )
+ 		warpOffset = atomicAdd( counter, warpCount );
+-	warpOffset = shfl( warpOffset, __ffsll( static_cast<unsigned long long>( warpBallot ) ) - 1 );
++	warpOffset = shfl( warpOffset, firstLane );
+ 	return warpOffset + warpSum;
+ }
+ 
+@@ -289,9 +291,9 @@ HIPRT_DEVICE T blockScan( bool blockVal, T* blockCache )
+ 	const uint32_t warpsPerBlock = DivideRoundUp( static_cast<uint32_t>( blockDim.x ), WarpSize );
+ 
+ 	T			   blockValue = blockVal;
+-	const uint64_t warpBallot = hiprt::ballot( blockVal );
+-	const T		   warpCount  = __popcll( warpBallot );
+-	const T		   warpSum	  = __popcll( warpBallot & ( ( 1ull << laneIndex ) - 1ull ) );
++	const LaneMask warpBallot = hiprt::ballot( blockVal );
++	const T		   warpCount  = hiprt::laneMaskPopCount( warpBallot );
++	const T		   warpSum	  = hiprt::laneMaskLowerCount( warpBallot, laneIndex );
+ 
+ 	if ( laneIndex == 0 ) blockCache[warpIndex] = warpCount;
+ 
+diff --git a/hiprt/impl/BvhNode.h b/hiprt/impl/BvhNode.h
+index 6614a86..92d3623 100644
+--- a/hiprt/impl/BvhNode.h
++++ b/hiprt/impl/BvhNode.h
+@@ -1160,17 +1160,22 @@ struct alignas( 64 ) UserInstanceNode : public InstanceNodeBase
+ 		m_primIndex = primIndex;
+ 		m_mask		= mask;
+ 		m_type		= instance.type;
+-		m_static	= transform.frameCount == 1 ? 1 : 0;
+ 
+ 		if ( instance.type == hiprtInstanceTypeScene )
+ 			m_scene = reinterpret_cast<SceneHeader*>( instance.scene );
+ 		else
+ 			m_geometry = reinterpret_cast<GeomHeader*>( instance.geometry );
+ 
+-		// Keep instance transforms on the generic frame path until the static matrix path is validated.
+-		m_static   = 0;
+-		m_identity = 0;
+-		m_transform = transform;
++		m_static = transform.frameCount == 1 ? 1 : 0;
++		if ( transform.frameCount == 1 )
++		{
++			m_identity = copyInvTransformMatrix( frame, m_matrix ) ? 1 : 0;
++		}
++		else
++		{
++			m_identity	= 0;
++			m_transform = transform;
++		}
+ 	}
+ 
+ 	uint32_t m_mask = FullRayMask;
+@@ -1207,17 +1212,22 @@ struct alignas( 128 ) HwInstanceNode : public InstanceNodeBase
+ 		m_mask		= mask;
+ 		m_hwMask	= 0xff;
+ 		m_type		= instance.type;
+-		m_static	= transform.frameCount == 1 ? 1 : 0;
+ 
+ 		if ( instance.type == hiprtInstanceTypeScene )
+ 			m_scene = reinterpret_cast<SceneHeader*>( instance.scene );
+ 		else
+ 			m_geometry = reinterpret_cast<GeomHeader*>( instance.geometry );
+ 
+-		// Keep instance transforms on the generic frame path until the static matrix path is validated.
+-		m_static   = 0;
+-		m_identity = 0;
+-		m_transform = transform;
++		m_static = transform.frameCount == 1 ? 1 : 0;
++		if ( transform.frameCount == 1 )
++		{
++			m_identity = copyInvTransformMatrix( frame, m_matrix ) ? 1 : 0;
++		}
++		else
++		{
++			m_identity	= 0;
++			m_transform = transform;
++		}
+ 
+ 		m_disableBoxSort	 = 0;
+ 		m_childCountMinusOne = childCount - 1;
+diff --git a/hiprt/impl/Context.cpp b/hiprt/impl/Context.cpp
+index 1dd0571..7034924 100644
+--- a/hiprt/impl/Context.cpp
++++ b/hiprt/impl/Context.cpp
+@@ -34,76 +34,6 @@
+ 
+ namespace hiprt
+ {
+-namespace
+-{
+-hiprtBuildFlags getEffectiveBuildFlags( const Context& context, hiprtBuildFlags buildFlags )
+-{
+-	const hiprtBuildFlags buildMode = static_cast<hiprtBuildFlags>( buildFlags & 3 );
+-	if ( buildMode == hiprtBuildFlagBitPreferHighQualityBuild && context.getDeviceName().find( "NVIDIA" ) == std::string::npos )
+-	{
+-		const hiprtBuildFlags preservedFlags = static_cast<hiprtBuildFlags>( buildFlags & ~3 );
+-		return static_cast<hiprtBuildFlags>( preservedFlags | hiprtBuildFlagBitPreferFastBuild );
+-	}
+-
+-	return buildFlags;
+-}
+-
+-void patchSceneInstanceNodes(
+-	const Context& context, const hiprtSceneBuildInput& buildInput, hiprtScene scene, cudaStream_t stream )
+-{
+-	if ( context.getDeviceName().find( "NVIDIA" ) != std::string::npos ) return;
+-	if ( buildInput.instanceCount == 0 || buildInput.frameCount == 0 ) return;
+-
+-	SceneHeader header{};
+-	checkOro( cuMemcpyDtoH( &header, reinterpret_cast<size_t>( scene ), sizeof( SceneHeader ) ) );
+-	if ( header.m_primCount == 0 || header.m_primNodes == nullptr ) return;
+-
+-	std::vector<hiprtTransformHeader> transformHeaders( buildInput.instanceCount );
+-	if ( buildInput.instanceTransformHeaders != nullptr )
+-	{
+-		checkOro( cuMemcpyDtoH(
+-			transformHeaders.data(),
+-			reinterpret_cast<size_t>( buildInput.instanceTransformHeaders ),
+-			sizeof( hiprtTransformHeader ) * buildInput.instanceCount ) );
+-	}
+-	else
+-	{
+-		for ( uint32_t i = 0; i < buildInput.instanceCount; ++i )
+-			transformHeaders[i] = hiprtTransformHeader{ i, 1u };
+-	}
+-
+-	if ( context.getRtip() >= 31 )
+-	{
+-		std::vector<HwInstanceNode> nodes( header.m_primCount );
+-		checkOro( cuMemcpyDtoH(
+-			nodes.data(), reinterpret_cast<size_t>( header.m_primNodes ), sizeof( HwInstanceNode ) * header.m_primCount ) );
+-		for ( uint32_t i = 0; i < std::min<uint32_t>( header.m_primCount, buildInput.instanceCount ); ++i )
+-		{
+-			nodes[i].m_static   = 0;
+-			nodes[i].m_identity = 0;
+-			nodes[i].m_transform = transformHeaders[i];
+-		}
+-		checkOro( cuMemcpyHtoD(
+-			reinterpret_cast<size_t>( header.m_primNodes ), nodes.data(), sizeof( HwInstanceNode ) * header.m_primCount ) );
+-	}
+-	else
+-	{
+-		std::vector<UserInstanceNode> nodes( header.m_primCount );
+-		checkOro( cuMemcpyDtoH(
+-			nodes.data(), reinterpret_cast<size_t>( header.m_primNodes ), sizeof( UserInstanceNode ) * header.m_primCount ) );
+-		for ( uint32_t i = 0; i < std::min<uint32_t>( header.m_primCount, buildInput.instanceCount ); ++i )
+-		{
+-			nodes[i].m_static   = 0;
+-			nodes[i].m_identity = 0;
+-			nodes[i].m_transform = transformHeaders[i];
+-		}
+-		checkOro( cuMemcpyHtoD(
+-			reinterpret_cast<size_t>( header.m_primNodes ), nodes.data(), sizeof( UserInstanceNode ) * header.m_primCount ) );
+-	}
+-
+-	if ( stream != 0 ) checkOro( cudaStreamSynchronize( stream ) );
+-}
+-} // namespace
+ 
+ Context::Context( const hiprtContextCreationInput& input )
+ {
+@@ -137,7 +67,7 @@ std::vector<hiprtGeometry>
+ Context::createGeometries( const std::vector<hiprtGeometryBuildInput>& buildInputs, const hiprtBuildOptions buildOptions )
+ {
+ 	// checkOro( cuCtxSetCurrent( m_ctxt ) );
+-	const hiprtBuildFlags effectiveBuildFlags = getEffectiveBuildFlags( *this, buildOptions.buildFlags );
++	const hiprtBuildFlags effectiveBuildFlags = buildOptions.buildFlags;
+ 	const bool			 useBatchPath		= buildInputs.size() > 1;
+ 
+ 	size_t				size = 0;
+@@ -235,7 +165,7 @@ void Context::buildGeometries(
+ 	std::vector<hiprtDevicePtr>&				buffers )
+ {
+ 	// checkOro( cuCtxSetCurrent( m_ctxt ) );
+-	const hiprtBuildFlags effectiveBuildFlags = getEffectiveBuildFlags( *this, buildOptions.buildFlags );
++	const hiprtBuildFlags effectiveBuildFlags = buildOptions.buildFlags;
+ 	const bool			 useBatchPath		= buildInputs.size() > 1;
+ 
+ 	std::vector<hiprtGeometryBuildInput> batchInputs;
+@@ -296,7 +226,7 @@ void Context::updateGeometries(
+ 	std::vector<hiprtDevicePtr>&				buffers )
+ {
+ 	// checkOro( cuCtxSetCurrent( m_ctxt ) );
+-	const hiprtBuildFlags effectiveBuildFlags = getEffectiveBuildFlags( *this, buildOptions.buildFlags );
++	const hiprtBuildFlags effectiveBuildFlags = buildOptions.buildFlags;
+ 	for ( size_t i = 0; i < buildInputs.size(); ++i )
+ 	{
+ 		if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitCustomBvhImport )
+@@ -330,7 +260,7 @@ void Context::updateGeometries(
+ size_t Context::getGeometriesBuildTempBufferSize(
+ 	const std::vector<hiprtGeometryBuildInput>& buildInputs, const hiprtBuildOptions buildOptions )
+ {
+-	const hiprtBuildFlags effectiveBuildFlags = getEffectiveBuildFlags( *this, buildOptions.buildFlags );
++	const hiprtBuildFlags effectiveBuildFlags = buildOptions.buildFlags;
+ 	const bool			 useBatchPath		= buildInputs.size() > 1;
+ 	std::vector<hiprtGeometryBuildInput> batchInputs;
+ 	for ( size_t i = 0; i < buildInputs.size(); ++i )
+@@ -449,8 +379,8 @@ std::vector<hiprtScene>
+ Context::createScenes( const std::vector<hiprtSceneBuildInput>& buildInputs, const hiprtBuildOptions buildOptions )
+ {
+ 	// checkOro( cuCtxSetCurrent( m_ctxt ) );
+-	const hiprtBuildFlags effectiveBuildFlags = getEffectiveBuildFlags( *this, buildOptions.buildFlags );
+-	const bool			 useBatchPath		= buildInputs.size() > 1;
++	const hiprtBuildFlags effectiveBuildFlags = buildOptions.buildFlags;
++	const bool			 useBatchPath		= true;
+ 
+ 	size_t				size = 0;
+ 	std::vector<size_t> sizes( buildInputs.size() );
+@@ -556,8 +486,8 @@ void Context::buildScenes(
+ 	std::vector<hiprtDevicePtr>&			 buffers )
+ {
+ 	// checkOro( cuCtxSetCurrent( m_ctxt ) );
+-	const hiprtBuildFlags effectiveBuildFlags = getEffectiveBuildFlags( *this, buildOptions.buildFlags );
+-	const bool			 useBatchPath		= buildInputs.size() > 1;
++	const hiprtBuildFlags effectiveBuildFlags = buildOptions.buildFlags;
++	const bool			 useBatchPath		= true;
+ 
+ 	std::vector<hiprtSceneBuildInput> batchInputs;
+ 	std::vector<hiprtDevicePtr>		  batchBuffers;
+@@ -593,31 +523,26 @@ void Context::buildScenes(
+ 			{
+ 				logInfo( "CustomBvhImport::buildScene\n" );
+ 				BvhImporter::build( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
+-				patchSceneInstanceNodes( *this, buildInputs[i], reinterpret_cast<hiprtScene>( buffers[i] ), stream );
+ 			}
+ 			else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferFastBuild )
+ 			{
+ 				logInfo( "FastBuild::buildScene\n" );
+ 				LbvhBuilder::build( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
+-				patchSceneInstanceNodes( *this, buildInputs[i], reinterpret_cast<hiprtScene>( buffers[i] ), stream );
+ 			}
+ 			else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferHighQualityBuild )
+ 			{
+ 				logInfo( "HighQualityBuild::buildScene\n" );
+ 				SbvhBuilder::build( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
+-				patchSceneInstanceNodes( *this, buildInputs[i], reinterpret_cast<hiprtScene>( buffers[i] ), stream );
+ 			}
+ 			else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferBalancedBuild )
+ 			{
+ 				logInfo( "BalancedBuild::buildScene\n" );
+ 				PlocBuilder::build( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
+-				patchSceneInstanceNodes( *this, buildInputs[i], reinterpret_cast<hiprtScene>( buffers[i] ), stream );
+ 			}
+ 			else
+ 			{
+ 				logWarn( "Unknow build option => FastBuild::buildScene used instead\n" );
+ 				LbvhBuilder::build( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
+-				patchSceneInstanceNodes( *this, buildInputs[i], reinterpret_cast<hiprtScene>( buffers[i] ), stream );
+ 			}
+ 		}
+ 	}
+@@ -631,7 +556,7 @@ void Context::updateScenes(
+ 	std::vector<hiprtDevicePtr>&			 buffers )
+ {
+ 	// checkOro( cuCtxSetCurrent( m_ctxt ) );
+-	const hiprtBuildFlags effectiveBuildFlags = getEffectiveBuildFlags( *this, buildOptions.buildFlags );
++	const hiprtBuildFlags effectiveBuildFlags = buildOptions.buildFlags;
+ 	for ( size_t i = 0; i < buildInputs.size(); ++i )
+ 	{
+ 		if ( InstanceIDBits < 32 && buildInputs[i].instanceCount >= ( 1u << InstanceIDBits ) )
+@@ -674,8 +599,8 @@ void Context::updateScenes(
+ size_t Context::getScenesBuildTempBufferSize(
+ 	const std::vector<hiprtSceneBuildInput>& buildInputs, const hiprtBuildOptions buildOptions )
+ {
+-	const hiprtBuildFlags effectiveBuildFlags = getEffectiveBuildFlags( *this, buildOptions.buildFlags );
+-	const bool			 useBatchPath		= buildInputs.size() > 1;
++	const hiprtBuildFlags effectiveBuildFlags = buildOptions.buildFlags;
++	const bool			 useBatchPath		= true;
+ 	std::vector<hiprtSceneBuildInput> batchInputs;
+ 	for ( size_t i = 0; i < buildInputs.size(); ++i )
+ 	{
+diff --git a/hiprt/impl/PlocBuilderKernels.h b/hiprt/impl/PlocBuilderKernels.h
+index 5154b13..2f15a55 100644
+--- a/hiprt/impl/PlocBuilderKernels.h
++++ b/hiprt/impl/PlocBuilderKernels.h
+@@ -174,12 +174,12 @@ extern "C" __global__ void __launch_bounds__( PlocMainBlockSize ) HPloc(
+ 
+ 		const uint32_t size	 = j - i;
+ 		const bool	   last	 = active && size == primCount;
+-		uint64_t	   merge = hiprt::ballot( ( active && size > WarpSize / 2 ) || last );
++			LaneMask	   merge = hiprt::ballot( ( active && size > WarpSize / 2 ) || last );
+ 
+-		while ( merge )
+-		{
+-			const uint32_t currentLane = __ffsll( static_cast<unsigned long long>( merge ) ) - 1;
+-			merge &= merge - 1;
++			while ( merge )
++			{
++				const uint32_t currentLane = hiprt::laneMaskFirstSet( merge );
++				merge &= merge - 1;
+ 
+ 			const uint32_t current_i   = shfl( i, currentLane );
+ 			const uint32_t current_j   = shfl( j, currentLane );
+@@ -191,13 +191,13 @@ extern "C" __global__ void __launch_bounds__( PlocMainBlockSize ) HPloc(
+ 
+ 			uint32_t leftIndex = InvalidValue;
+ 			if ( laneIndex < numLeft ) leftIndex = nodeIndices[current_i + laneIndex];
+-			uint32_t numValidLeft = __popcll( hiprt::ballot( leftIndex != InvalidValue ) );
+-			numLeft				  = min( numLeft, numValidLeft );
++				uint32_t numValidLeft = hiprt::laneMaskPopCount( hiprt::ballot( leftIndex != InvalidValue ) );
++				numLeft				  = min( numLeft, numValidLeft );
+ 
+ 			uint32_t rightIndex = InvalidValue;
+ 			if ( laneIndex < numRight ) rightIndex = nodeIndices[current_s + laneIndex];
+-			uint32_t numValidRight = __popcll( hiprt::ballot( rightIndex != InvalidValue ) );
+-			numRight			   = min( numRight, numValidRight );
++				uint32_t numValidRight = hiprt::laneMaskPopCount( hiprt::ballot( rightIndex != InvalidValue ) );
++				numRight			   = min( numRight, numValidRight );
+ 
+ 			if ( laneIndex < numLeft ) nodeIndicesWarp[laneIndex] = leftIndex;
+ 			if ( laneIndex < numRight ) nodeIndicesWarp[laneIndex + numLeft] = rightIndex;
+@@ -278,9 +278,9 @@ extern "C" __global__ void __launch_bounds__( PlocMainBlockSize ) HPloc(
+ 					}
+ 				}
+ 
+-				const uint64_t warpBallot = hiprt::ballot( nodeIndex != InvalidValue ); // warp sync'd here
+-				const uint32_t newIndex	  = __popcll( warpBallot & ( ( 1ull << laneIndex ) - 1ull ) );
+-				numberOfClusters		  = __popcll( warpBallot );
++					const LaneMask warpBallot = hiprt::ballot( nodeIndex != InvalidValue ); // warp sync'd here
++					const uint32_t newIndex	  = hiprt::laneMaskLowerCount( warpBallot, laneIndex );
++					numberOfClusters		  = hiprt::laneMaskPopCount( warpBallot );
+ 
+ 				if ( nodeIndex != InvalidValue )
+ 				{
+diff --git a/hiprt/impl/Transform.h b/hiprt/impl/Transform.h
+index bac28b7..d0a3741 100644
+--- a/hiprt/impl/Transform.h
++++ b/hiprt/impl/Transform.h
+@@ -342,35 +342,18 @@ class Transform
+ 		return f;
+ 	}
+ 
+-		HIPRT_HOST_DEVICE hiprtRay transformRay( const hiprtRay& ray, float time ) const
+-		{
+-			hiprtRay outRay;
+-			Frame	 frame = interpolateFrames( time );
+-			if ( frame.identity() ) return ray;
+-			MatrixFrame matrix = MatrixFrame::getMatrixFrameInv( frame );
+-			outRay.origin = {
+-				matrix.m_matrix[0][0] * ray.origin.x + matrix.m_matrix[0][1] * ray.origin.y +
+-					matrix.m_matrix[0][2] * ray.origin.z + matrix.m_matrix[0][3],
+-				matrix.m_matrix[1][0] * ray.origin.x + matrix.m_matrix[1][1] * ray.origin.y +
+-					matrix.m_matrix[1][2] * ray.origin.z + matrix.m_matrix[1][3],
+-				matrix.m_matrix[2][0] * ray.origin.x + matrix.m_matrix[2][1] * ray.origin.y +
+-					matrix.m_matrix[2][2] * ray.origin.z + matrix.m_matrix[2][3] };
+-
+-			const float3 target = {
+-				matrix.m_matrix[0][0] * ( ray.origin.x + ray.direction.x ) +
+-					matrix.m_matrix[0][1] * ( ray.origin.y + ray.direction.y ) +
+-					matrix.m_matrix[0][2] * ( ray.origin.z + ray.direction.z ) + matrix.m_matrix[0][3],
+-				matrix.m_matrix[1][0] * ( ray.origin.x + ray.direction.x ) +
+-					matrix.m_matrix[1][1] * ( ray.origin.y + ray.direction.y ) +
+-					matrix.m_matrix[1][2] * ( ray.origin.z + ray.direction.z ) + matrix.m_matrix[1][3],
+-				matrix.m_matrix[2][0] * ( ray.origin.x + ray.direction.x ) +
+-					matrix.m_matrix[2][1] * ( ray.origin.y + ray.direction.y ) +
+-					matrix.m_matrix[2][2] * ( ray.origin.z + ray.direction.z ) + matrix.m_matrix[2][3] };
+-			outRay.direction = target - outRay.origin;
+-			outRay.minT		 = ray.minT;
+-			outRay.maxT		 = ray.maxT;
+-			return outRay;
+-		}
++	HIPRT_HOST_DEVICE hiprtRay transformRay( const hiprtRay& ray, float time ) const
++	{
++		hiprtRay outRay;
++		Frame	 frame = interpolateFrames( time );
++		if ( frame.identity() ) return ray;
++		outRay.origin	 = frame.invTransform( ray.origin );
++		outRay.direction = frame.invTransform( ray.origin + ray.direction );
++		outRay.direction = outRay.direction - outRay.origin;
++		outRay.minT		 = ray.minT;
++		outRay.maxT		 = ray.maxT;
++		return outRay;
++	}
+ 
+ 	HIPRT_HOST_DEVICE float3 transformNormal( const float3& normal, float time ) const
+ 	{
+diff --git a/hiprt/impl/hiprt_device_impl.h b/hiprt/impl/hiprt_device_impl.h
+index 01ac8a2..6489427 100644
+--- a/hiprt/impl/hiprt_device_impl.h
++++ b/hiprt/impl/hiprt_device_impl.h
+@@ -136,7 +136,7 @@ HIPRT_DEVICE GlobalStack<StackEntry, DynamicAssignment>::GlobalStack(
+ 	{
+ 		const uint32_t warpsPerBlock	= hiprt::DivideRoundUp( blockDim.x * blockDim.y, Stride );
+ 		const uint32_t activeWarps		= globalStackBuffer.stackCount >> LogStride;
+-		const uint32_t firstThreadIndex = __ffsll( static_cast<unsigned long long>( hiprt::ballot( true ) ) ) - 1;
++		const uint32_t firstThreadIndex = hiprt::laneMaskFirstSet( hiprt::ballot( true ) );
+ 
+ 		uint32_t  warpHash			= InvalidValue;
+ 		uint32_t  warpHashCandidate = ( warpIndex + ( blockIdx.x + blockIdx.y * gridDim.x ) * warpsPerBlock ) % activeWarps;
+@@ -175,7 +175,7 @@ HIPRT_DEVICE GlobalStack<StackEntry, DynamicAssignment>::~GlobalStack()
+ 		__threadfence();
+ 		const uint32_t threadIndex		= threadIdx.x + threadIdx.y * blockDim.x;
+ 		const uint32_t laneIndex		= threadIndex & ( Stride - 1 );
+-		const uint32_t firstThreadIndex = __ffsll( static_cast<unsigned long long>( hiprt::ballot( true ) ) ) - 1;
++		const uint32_t firstThreadIndex = hiprt::laneMaskFirstSet( hiprt::ballot( true ) );
+ 		if ( laneIndex == firstThreadIndex ) atomicExch( m_globalStackLock, 0 );
+ 	}
+ }
+@@ -980,12 +980,8 @@ HIPRT_DEVICE bool SceneTraversal<Stack, InstanceStack, TraversalType>::transform
+ 		}
+ 		else
+ 		{
+-			const uint32_t instanceID = instanceNode.m_primIndex;
+-			const float3	  origin	 = hiprtPointWorldToObject( ray.origin, reinterpret_cast<hiprtScene>( m_scene ), instanceID, m_time );
+-			const float3	  target	 = hiprtPointWorldToObject(
+-				ray.origin + ray.direction, reinterpret_cast<hiprtScene>( m_scene ), instanceID, m_time );
+-			ray.origin				  = origin;
+-			ray.direction			  = target - origin;
++			Transform tr( m_frames, instanceNode.m_transform.frameIndex, instanceNode.m_transform.frameCount );
++			ray = tr.transformRay( ray, m_time );
+ 		}
+ 		if constexpr ( Rtip < 31 ) invD = rcp( ray.direction );
+ 	}
+diff --git a/scripts/build.sh b/scripts/build.sh
+index 6dccf5a..f57a09b 100755
+--- a/scripts/build.sh
++++ b/scripts/build.sh
+@@ -6,6 +6,9 @@ BUILD_DIR="${BUILD_DIR:-$ROOT_DIR/build}"
+ BUILD_TYPE="${BUILD_TYPE:-Release}"
+ CUDA_ARCHITECTURES="${CUDA_ARCHITECTURES:-}"
+ BUILD_TESTS="${BUILD_TESTS:-ON}"
++if [[ -z "${CMAKE_GENERATOR:-}" ]] && command -v ninja >/dev/null 2>&1; then
++  CMAKE_GENERATOR="Ninja"
++fi
+ 
+ cmake_args=(
+   -S "$ROOT_DIR"
+@@ -13,6 +16,10 @@ cmake_args=(
+   -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
+ )
+ 
++if [[ -n "${CMAKE_GENERATOR:-}" ]]; then
++  cmake_args+=(-G "$CMAKE_GENERATOR")
++fi
++
+ if [[ -n "$CUDA_ARCHITECTURES" ]]; then
+   cmake_args+=(-DCMAKE_CUDA_ARCHITECTURES="$CUDA_ARCHITECTURES")
+ fi
+diff --git a/scripts/unittest.sh b/scripts/unittest.sh
+index bb5ecf2..2baaf44 100755
+--- a/scripts/unittest.sh
++++ b/scripts/unittest.sh
+@@ -1,3 +1,4 @@
+ PWD_PATH=`pwd`
+ export LD_LIBRARY_PATH="$PWD_PATH/../contrib/embree/linux:${LD_LIBRARY_PATH}"
++export HIPRT_DISABLE_RUNTIME_KERNEL_CACHE="${HIPRT_DISABLE_RUNTIME_KERNEL_CACHE:-0}"
+ ../dist/bin/Release/unittest64 --width=512 --height=512 --referencePath=../test/references/ --gtest_filter=-*PerformanceTest* --gtest_output=xml:../result.xml
+diff --git a/scripts/unittest_perf.sh b/scripts/unittest_perf.sh
+index dcf296d..46280c5 100644
+--- a/scripts/unittest_perf.sh
++++ b/scripts/unittest_perf.sh
+@@ -1,3 +1,4 @@
+ PWD_PATH=`pwd`
+ export LD_LIBRARY_PATH="$PWD_PATH/../contrib/embree/linux:${LD_LIBRARY_PATH}"
++export HIPRT_DISABLE_RUNTIME_KERNEL_CACHE="${HIPRT_DISABLE_RUNTIME_KERNEL_CACHE:-0}"
+ ../dist/bin/Release/unittest64 --width=512 --height=512 --referencePath=../test/references/ --gtest_filter=*PerformanceTest* --gtest_output=xml:../result.xml
