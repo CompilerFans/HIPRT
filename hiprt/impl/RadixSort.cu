@@ -22,17 +22,80 @@
 //
 //////////////////////////////////////////////////////////////////////////////////////////
 
-#pragma once
-#include <cuda_runtime_api.h>
-#include <cuda.h>
-#include <cuda_profiler_api.h>
-#include <nvrtc.h>
-#include <hiprt/hiprt_common.h>
-#include <contrib/cpp20/source_location.h>
+#include <cub/device/device_radix_sort.cuh>
+
+#include <hiprt/impl/Error.h>
+#include <hiprt/impl/RadixSort.h>
 
 namespace hiprt
 {
-void checkOro( cudaError res, const source_location& location = source_location::current() );
-void checkOro( CUresult res, const source_location& location = source_location::current() );
-void checkOrortc( nvrtcResult res, const source_location& location = source_location::current() );
+namespace
+{
+class ScopedDevice final
+{
+  public:
+	explicit ScopedDevice( int device )
+	{
+		checkOro( cudaGetDevice( &m_prevDevice ) );
+		if ( m_prevDevice != device )
+		{
+			checkOro( cudaSetDevice( device ) );
+			m_restore = true;
+		}
+	}
+
+	~ScopedDevice()
+	{
+		if ( m_restore ) checkOro( cudaSetDevice( m_prevDevice ) );
+	}
+
+  private:
+	int	 m_prevDevice = 0;
+	bool m_restore	  = false;
+};
+} // namespace
+
+size_t RadixSort::getTemporaryStorageSize( size_t count )
+{
+	size_t requiredBytes = 0;
+	checkOro( cub::DeviceRadixSort::SortPairs(
+		nullptr,
+		requiredBytes,
+		static_cast<const uint32_t*>( nullptr ),
+		static_cast<uint32_t*>( nullptr ),
+		static_cast<const uint32_t*>( nullptr ),
+		static_cast<uint32_t*>( nullptr ),
+		static_cast<int>( count ),
+		0,
+		32,
+		0 ) );
+
+	return requiredBytes;
+}
+
+void RadixSort::sort(
+	void*			temporaryStorage,
+	size_t			temporaryStorageSize,
+	uint32_t*		inputKeys,
+	uint32_t*		inputValues,
+	uint32_t*		outputKeys,
+	uint32_t*		outputValues,
+	size_t			count,
+	cudaStream_t	stream ) const noexcept
+{
+	ScopedDevice scopedDevice( m_device );
+
+	checkOro( cub::DeviceRadixSort::SortPairs(
+		temporaryStorage,
+		temporaryStorageSize,
+		inputKeys,
+		outputKeys,
+		inputValues,
+		outputValues,
+		static_cast<int>( count ),
+		0,
+		32,
+		stream ) );
+}
+
 } // namespace hiprt

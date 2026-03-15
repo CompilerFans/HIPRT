@@ -117,7 +117,7 @@ class GpuMemory final
 	/// @param new_size The new container size which represents the number of elements after the function is called.
 	/// @param copy If true, the function will copy the data to the newly created memory space as well.
 	/// @param stream The Orochi stream used for the underlying operations.
-	void resizeAsync( const size_t new_size, const bool copy = false, oroStream stream = 0 ) noexcept
+	void resizeAsync( const size_t new_size, const bool copy = false, cudaStream_t stream = 0 ) noexcept
 	{
 		if( new_size <= m_capacity )
 		{
@@ -140,7 +140,7 @@ class GpuMemory final
 
 	/// @brief Asynchronous version of @c reset using a given Orochi stream.
 	/// @param stream The Orochi stream used for the underlying operations.
-	void resetAsync( oroStream stream = 0 ) noexcept { OrochiUtils::memsetAsync( m_data, 0, m_size * sizeof( T ), stream ); }
+	void resetAsync( cudaStream_t stream = 0 ) noexcept { OrochiUtils::memsetAsync( m_data, 0, m_size * sizeof( T ), stream ); }
 
 	/// @brief Copy the data from device memory to host.
 	/// @param host_ptr The host pointer.

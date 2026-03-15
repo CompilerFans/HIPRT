@@ -2,7 +2,7 @@
 
 "Yamata No Orochi"<sup>[1]</sup> 
 
-Orochi is a library loading HIP and CUDA APIs dynamically, allowing the user to switch APIs at runtime. Therefore you don't need to compile two separate implementations for each API. This allows you to compile and maintain a single binary that can run on both AMD and NVIDIA GPUs. Unlike HIP, which uses hipamd or CUDA at compile-time, Orochi will dynamically load the corresponding HIP/CUDA shared libraries depending on your platform. In other words, it combines the functionality offered by HIPEW and CUEW into a single library.
+Orochi is a library loading HIP and CUDA APIs dynamically, allowing the user to switch APIs at runtime. Therefore you don't need to compile two separate implementations for each API. This allows you to compile and maintain a single binary that can run on both AMD and NVIDIA GPUs. Unlike HIP, which uses hipamd or CUDA at compile-time, Orochi will dynamically load the corresponding HIP/CUDA shared libraries depending on your platform.
 
 
 ```mermaid
@@ -19,7 +19,6 @@ graph LR
 In order to enable the CUDA backend you need to:
  * Have the CUDA SDK installed ( only the header folder is used by Orochi, at compile-time )
  * Add the CUDA include folder to the Include Directories list of your project.
- * Add the define `OROCHI_ENABLE_CUEW` to your project
 
 For the HIP backend: it's easier as everything needed is embedded in this project, thus you don't need to do anything.
 

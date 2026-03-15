@@ -24,7 +24,11 @@
 
 #pragma once
 #include <hiprt/hiprt_common.h>
-#include <Orochi/Orochi.h>
+// #include <cuda_runtime.h>
+#include <cuda_runtime_api.h>
+#include <cuda.h>
+#include <cuda_profiler_api.h>
+#include <nvrtc.h>
 
 namespace hiprt
 {
@@ -46,28 +50,28 @@ class Kernel
 		}
 	};
 
-	Kernel( oroFunction function = 0 ) : m_function( function ) {}
+	Kernel( CUfunction function = 0 ) : m_function( function ) {}
 
-	void setArgs( const std::vector<Argument> args );
+	void setArgs( std::vector<Argument> args );
 
 	void launch(
-		const uint32_t gx,
-		const uint32_t gy,
-		const uint32_t gz,
-		const uint32_t bx,
-		const uint32_t by,
-		const uint32_t bz,
-		const uint32_t sharedMemBytes,
-		oroStream	   stream );
+		uint32_t  gx,
+		uint32_t  gy,
+		uint32_t  gz,
+		uint32_t  bx,
+		uint32_t  by,
+		uint32_t  bz,
+		uint32_t  sharedMemBytes,
+		cudaStream_t stream );
 
-	void launch( const uint32_t nx, oroStream stream = 0, const uint32_t sharedMemBytes = 0 );
-	void launch( const uint32_t nx, const uint32_t tx, oroStream stream = 0, const uint32_t sharedMemBytes = 0 );
+	void launch( uint32_t nx, cudaStream_t stream = 0, uint32_t sharedMemBytes = 0 );
+	void launch( uint32_t nx, uint32_t tx, cudaStream_t stream = 0, uint32_t sharedMemBytes = 0 );
 
-	uint32_t getNumSmem() const;
-	uint32_t getNumRegs() const;
+	uint32_t getNumSmem();
+	uint32_t getNumRegs();
 
   private:
-	oroFunction			 m_function;
+	CUfunction			 m_function;
 	std::vector<uint8_t> m_args;
 	std::vector<void*>	 m_argPtrs;
 };

@@ -22,90 +22,20 @@
 //
 //////////////////////////////////////////////////////////////////////////////////////////
 
+#include <regex>
+
 #include <hiprt/hiprt.h>
 #include <hiprt/impl/Compiler.h>
+#include <hiprt/impl/Context.h>
 #include <hiprt/impl/Error.h>
 #include <hiprt/impl/Utility.h>
-#include <hiprt/impl/Context.h>
-#include <regex>
-#if defined( HIPRT_BAKE_KERNEL_GENERATED )
-#include <hiprt/cache/Kernels.h>
-#include <hiprt/cache/KernelArgs.h>
-#endif
-
-// HIPRT_BAKE_COMPILED_KERNEL means we are using a precompiled kernel that is embedded as a buffer inside the executable.
-#if defined( HIPRT_BAKE_COMPILED_KERNEL )
-constexpr auto UseBakedCompiledKernel = true;
-#include "hiprt/impl/bvh_build_array.h"
-#else
-constexpr auto		 UseBakedCompiledKernel = false;
-const unsigned char* bvh_build_array_h		= nullptr; // if bvh_build_array.h is not used, declare a nullptr precompiled data.
-const size_t		 bvh_build_array_h_size = 0;
-const size_t		 bvh_build_array_h_size_uncompressed = 0;
-const bool			 bvh_build_array_h_isCompressed		 = false;
-#endif
-
-namespace
-{
-#if defined( HIPRT_BITCODE_LINKING )
-constexpr auto UseBitcode = true;
-#else
-constexpr auto		 UseBitcode							 = false;
-#endif
-
-#if defined( HIPRT_LOAD_FROM_STRING )
-constexpr auto UseBakedCode = true;
-#else
-constexpr auto		 UseBakedCode						 = false;
-#endif
-
-#if defined( HIPRT_BAKE_KERNEL_GENERATED )
-constexpr auto BakedCodeIsGenerated = true;
-#else
-constexpr auto		 BakedCodeIsGenerated				 = false;
-#endif
-HIPRT_STATIC_ASSERT( !UseBakedCode || BakedCodeIsGenerated );
-} // namespace
 
 namespace hiprt
 {
-Compiler::Compiler()
-{
-	if ( UseBitcode || UseBakedCompiledKernel || hiprtcCreateProgram == nullptr || hiprtcCompileProgram == nullptr ||
-		 hiprtcDestroyProgram == nullptr )
-	{
-		// If we use the precompiled bitcode, we won't check RTIP 3.1 support through HIPRTC.
-		// Or, if the HIP Run Time Compiler is not loaded (e.g. hiprtc0604.dll) , we can't check RTIP 3.1 support.
-
-		// We'll assume it's supported, and Context::getRtip is supposed to make extra checks to be sure it's actually
-		// supported.
-		m_rtip31Support = true;
-	}
-	else
-	{
-		// check the RTIP 3.1 support of the RTC
-
-		const std::string src =
-			"__global__ void rtcTest() { __builtin_amdgcn_image_bvh8_intersect_ray(0, 0.0f, 0xff, { 0.0f, 0.0f, 0.0f "
-			"}, { 1.0f, 0.0f, 0.0f }, 0, { 0, 0, 0, 0 }, nullptr, nullptr ); }";
-
-		orortcProgram prog;
-		checkOrortc( orortcCreateProgram( &prog, src.c_str(), "", 0, nullptr, nullptr ) );
-
-		m_rtip31Support = false;
-
-		if ( orortcCompileProgram( prog, 0, nullptr ) == ORORTC_SUCCESS )
-		{
-			m_rtip31Support = true;
-			checkOrortc( orortcDestroyProgram( &prog ) );
-		}
-	}
-}
-
 Compiler::~Compiler()
 {
 	for ( auto& module : m_moduleCache )
-		checkOro( oroModuleUnload( module.second ) );
+		checkOro( cuModuleUnload( module.second ) );
 }
 
 Kernel Compiler::getKernel(
@@ -119,76 +49,39 @@ Kernel Compiler::getKernel(
 {
 	std::lock_guard<std::mutex> lock( m_kernelMutex );
 
-	const std::string cacheName	 = moduleName.string() + funcName;
+	const std::string cacheName = moduleName.string() + funcName;
 	auto			  cacheEntry = m_kernelCache.find( cacheName );
 	if ( cacheEntry != m_kernelCache.end() ) return cacheEntry->second;
 
-	oroFunction function;
+	std::vector<const char*>	  funcNames = { funcName.c_str() };
+	std::vector<const char*>	  headers;
+	std::vector<const char*>	  includeNames;
+	std::vector<hiprtFuncNameSet> funcNameSets;
+	std::vector<CUfunction>	  functions;
+	CUmodule					  module = nullptr;
 
-	// if we use the precompiled bitcode as file or baked as binary, we use 'getFunctionFromPrecompiledBinary'
-	if constexpr ( UseBitcode || UseBakedCompiledKernel )
+	if ( numHeaders == 0 )
 	{
-		function = getFunctionFromPrecompiledBinary( funcName );
+		std::string src = readSourceCode( moduleName );
+		buildKernels(
+			context, funcNames, src, moduleName, headers, includeNames, options, 0, 0, funcNameSets, functions, module, false, true );
 	}
 	else
 	{
-		std::vector<const char*>	  funcNames = { funcName.c_str() };
-		std::vector<const char*>	  headers;
-		std::vector<const char*>	  includeNames;
-		std::vector<hiprtFuncNameSet> funcNameSets;
-		std::vector<oroFunction>	  functions;
-		oroModule					  module;
-
-		if ( numHeaders == 0 )
+		std::vector<std::string> headerData( numHeaders - 1 );
+		for ( uint32_t i = 0; i < numHeaders - 1; ++i )
 		{
-			const std::string src = readSourceCode( moduleName );
-			buildKernels(
-				context,
-				funcNames,
-				src,
-				moduleName,
-				headers,
-				includeNames,
-				options,
-				0,
-				0,
-				funcNameSets,
-				functions,
-				module,
-				false,
-				true );
+			includeNames.push_back( includeNamesIn[i] );
+			headerData[i] = headersIn[i];
+			headers.push_back( headerData[i].c_str() );
 		}
-		else
-		{
-			std::vector<std::string> headerData( numHeaders - 1 );
-			for ( uint32_t i = 0; i < numHeaders - 1; ++i )
-			{
-				includeNames.push_back( includeNamesIn[i] );
-				headerData[i] = headersIn[i];
-				headers.push_back( headerData[i].c_str() );
-			}
 
-			const std::string src = headersIn[numHeaders - 1];
-			buildKernels(
-				context,
-				funcNames,
-				src,
-				moduleName,
-				headers,
-				includeNames,
-				options,
-				0,
-				0,
-				funcNameSets,
-				functions,
-				module,
-				false,
-				true );
-		}
-		function = functions.back();
+		const std::string src = headersIn[numHeaders - 1];
+		buildKernels(
+			context, funcNames, src, moduleName, headers, includeNames, options, 0, 0, funcNameSets, functions, module, false, true );
 	}
 
-	Kernel kernel( function );
+	Kernel kernel( functions.back() );
 	m_kernelCache[cacheName] = kernel;
 	return kernel;
 }
@@ -200,9 +93,9 @@ void Compiler::buildProgram(
 	std::vector<const char*>&		headers,
 	std::vector<const char*>&		includeNames,
 	std::vector<const char*>&		options,
-	orortcProgram&					progOut )
+	nvrtcProgram&					progOut )
 {
-	checkOrortc( orortcCreateProgram(
+	checkOrortc( nvrtcCreateProgram(
 		&progOut,
 		src.c_str(),
 		moduleName.string().c_str(),
@@ -210,21 +103,19 @@ void Compiler::buildProgram(
 		headers.data(),
 		includeNames.data() ) );
 
-	for ( size_t i = 0; i < funcNames.size(); ++i )
-		checkOrortc( orortcAddNameExpression( progOut, funcNames[i] ) );
+	for ( const char* funcName : funcNames )
+		checkOrortc( nvrtcAddNameExpression( progOut, funcName ) );
 
-	orortcResult e = orortcCompileProgram( progOut, static_cast<int>( options.size() ), options.data() );
-	if ( e != ORORTC_SUCCESS )
+	const nvrtcResult result = nvrtcCompileProgram( progOut, static_cast<int>( options.size() ), options.data() );
+	if ( result != NVRTC_SUCCESS )
 	{
-		size_t logSize;
-		checkOrortc( orortcGetProgramLogSize( progOut, &logSize ) );
+		size_t logSize = 0;
+		checkOrortc( nvrtcGetProgramLogSize( progOut, &logSize ) );
+		if ( logSize == 0 ) throw std::runtime_error( "Runtime compilation failed with an empty NVRTC log." );
 
-		if ( logSize )
-		{
-			std::string log( logSize, '\0' );
-			checkOrortc( orortcGetProgramLog( progOut, &log[0] ) );
-			throw std::runtime_error( "Runtime compilation failed:\n" + log );
-		}
+		std::string log( logSize, '\0' );
+		checkOrortc( nvrtcGetProgramLog( progOut, &log[0] ) );
+		throw std::runtime_error( "Runtime compilation failed:\n" + log );
 	}
 }
 
@@ -239,8 +130,8 @@ void Compiler::buildKernels(
 	uint32_t							 numGeomTypes,
 	uint32_t							 numRayTypes,
 	const std::vector<hiprtFuncNameSet>& funcNameSets,
-	std::vector<oroFunction>&			 functions,
-	oroModule&							 module,
+	std::vector<CUfunction>&			 functions,
+	CUmodule&							 module,
 	bool								 extended,
 	bool								 cache )
 {
@@ -255,58 +146,26 @@ void Compiler::buildKernels(
 	}
 	else
 	{
-		const std::string cacheName =
-			getCacheFilename( context, src, moduleName, options, funcNameSets, numGeomTypes, numRayTypes );
-		const bool upToDate = isCachedFileUpToDate( m_cacheDirectory / cacheName, moduleName );
+		const std::string cacheName = getCacheFilename( context, src, moduleName, options, funcNameSets, numGeomTypes, numRayTypes );
+		const bool		  upToDate  = isCachedFileUpToDate( m_cacheDirectory / cacheName, moduleName );
 
-		orortcProgram prog;
-		std::string	  binary;
+		nvrtcProgram prog = nullptr;
+		std::string	 binary;
 		if ( upToDate && cache )
 		{
-			binary = loadCacheFileToBinary( cacheName, context.getDeviceName() );
+			binary = loadCacheFileToBinary( cacheName );
 		}
 		else
 		{
-			std::vector<std::string> headerData;
-			std::string				 extSrc = src;
+			std::string extSrc = src;
 			if ( extended )
 			{
-				if constexpr ( UseBitcode && !BakedCodeIsGenerated )
-				{
-					throw std::runtime_error( "Not compiled with the baked kernel code support" );
-				}
-				if constexpr ( BakedCodeIsGenerated )
-				{
-					extSrc = "#include <hiprt_device_impl.h>\n";
-					addCustomFuncsSwitchCase( extSrc, funcNameSets, numGeomTypes, numRayTypes );
-					extSrc += "\n" + src;
-
-					const uint32_t numHeaders = sizeof( GET_ARGS( hiprt_device_impl ) ) / sizeof( void* );
-					headerData.resize( numHeaders );
-					for ( uint32_t i = 0; i < numHeaders - 1; i++ )
-					{
-						auto includeName =
-							std::find_if( includeNames.begin(), includeNames.end(), [&]( const std::string& rhs ) {
-								return GET_INC( hiprt_device_impl )[i] == rhs;
-							} );
-						if ( includeName != includeNames.end() ) continue;
-						includeNames.push_back( GET_INC( hiprt_device_impl )[i] );
-						headerData[i] = GET_ARGS( hiprt_device_impl )[i];
-						headers.push_back( headerData[i].c_str() );
-					}
-					includeNames.push_back( "hiprt_device_impl.h" );
-					headerData[numHeaders - 1] = GET_ARGS( hiprt_device_impl )[numHeaders - 1];
-					headers.push_back( headerData[numHeaders - 1].c_str() );
-				}
-				else
-				{
-					extSrc = "#include <hiprt/impl/hiprt_device_impl.h>\n";
-					addCustomFuncsSwitchCase( extSrc, funcNameSets, numGeomTypes, numRayTypes );
-					extSrc += "\n" + src;
-				}
+				extSrc = "#include <hiprt/impl/hiprt_device_impl.h>\n";
+				addCustomFuncsSwitchCase( extSrc, funcNameSets, numGeomTypes, numRayTypes );
+				extSrc += "\n" + src;
 			}
 
-			std::vector<const char*> opts		 = options;
+			std::vector<const char*> opts = options;
 			std::string				 includePath = "-I" + Utility::getRootDir().string();
 			opts.push_back( includePath.c_str() );
 			addCommonOpts( context, opts, extended );
@@ -314,147 +173,23 @@ void Compiler::buildKernels(
 			buildProgram( funcNames, extSrc, moduleName, headers, includeNames, opts, prog );
 
 			size_t binarySize = 0;
-			checkOrortc( orortcGetCodeSize( prog, &binarySize ) );
+			checkOrortc( nvrtcGetPTXSize( prog, &binarySize ) );
 			binary.resize( binarySize );
-			checkOrortc( orortcGetCode( prog, binary.data() ) );
+			checkOrortc( nvrtcGetPTX( prog, binary.data() ) );
+			checkOrortc( nvrtcDestroyProgram( &prog ) );
 
-			if ( cache ) cacheBinaryToFile( binary, cacheName, context.getDeviceName() );
-			checkOrortc( orortcDestroyProgram( &prog ) );
+			if ( cache ) cacheBinaryToFile( binary, cacheName );
 		}
 
-		checkOro( oroModuleLoadData( &module, binary.data() ) );
+		checkOro( cuModuleLoadData( &module, binary.data() ) );
 		m_moduleCache[moduleName.string()] = module;
 	}
 
-	for ( size_t i = 0; i < funcNames.size(); ++i )
+	for ( const char* funcName : funcNames )
 	{
-		oroFunction func;
-		checkOro( oroModuleGetFunction( &func, module, funcNames[i] ) );
+		CUfunction func = nullptr;
+		checkOro( cuModuleGetFunction( &func, module, funcName ) );
 		functions.push_back( func );
-	}
-}
-
-void Compiler::buildKernelsFromBitcode(
-	Context&							 context,
-	const std::vector<const char*>&		 funcNames,
-	const std::filesystem::path&		 moduleName,
-	const std::string_view				 bitcodeBinary,
-	uint32_t							 numGeomTypes,
-	uint32_t							 numRayTypes,
-	const std::vector<hiprtFuncNameSet>& funcNameSets,
-	std::vector<oroFunction>&			 functions,
-	bool								 cache )
-{
-	if constexpr ( UseBitcode )
-	{
-		if ( !std::filesystem::exists( m_cacheDirectory ) && !std::filesystem::create_directory( m_cacheDirectory ) )
-			throw std::runtime_error( "Cannot create cache directory" );
-
-		std::lock_guard<std::mutex> lock( m_moduleMutex );
-		auto						cacheEntry = m_moduleCache.find( moduleName.string() );
-		oroModule					module;
-		if ( cacheEntry != m_moduleCache.end() )
-		{
-			module = cacheEntry->second;
-		}
-		else
-		{
-			std::string cacheName = getCacheFilename(
-				context,
-				std::to_string( bitcodeBinary.size() ),
-				moduleName,
-				std::nullopt,
-				funcNameSets,
-				numGeomTypes,
-				numRayTypes );
-			bool upToDate = isCachedFileUpToDate( m_cacheDirectory / cacheName, moduleName );
-
-			std::string binary;
-			if ( upToDate && cache )
-			{
-				binary = loadCacheFileToBinary( cacheName, context.getDeviceName() );
-			}
-			else
-			{
-				std::string customFuncBitcodeBinary =
-					buildFunctionTableBitcode( context, numGeomTypes, numRayTypes, funcNameSets );
-
-				const uint32_t	 JITOptCount = 6u;
-				orortcLinkState	 rtcLinkState;
-				orortcJIT_option options[JITOptCount];
-				void*			 optionVals[JITOptCount];
-				float			 wallTime;
-
-				constexpr uint32_t LogSize = 8192u;
-				char			   errorLog[LogSize];
-				char			   infoLog[LogSize];
-
-				options[0]	  = ORORTC_JIT_WALL_TIME;
-				optionVals[0] = reinterpret_cast<void*>( &wallTime );
-
-				options[1]	  = ORORTC_JIT_INFO_LOG_BUFFER;
-				optionVals[1] = infoLog;
-
-				options[2]	  = ORORTC_JIT_INFO_LOG_BUFFER_SIZE_BYTES;
-				optionVals[2] = reinterpret_cast<void*>( static_cast<uintptr_t>( LogSize ) );
-
-				options[3]	  = ORORTC_JIT_ERROR_LOG_BUFFER;
-				optionVals[3] = errorLog;
-
-				options[4]	  = ORORTC_JIT_ERROR_LOG_BUFFER_SIZE_BYTES;
-				optionVals[4] = reinterpret_cast<void*>( static_cast<uintptr_t>( LogSize ) );
-
-				options[5]	  = ORORTC_JIT_LOG_VERBOSE;
-				optionVals[5] = reinterpret_cast<void*>( static_cast<uintptr_t>( 1 ) );
-
-				bool					 amd		= oroGetCurAPI( 0 ) == ORO_API_HIP;
-				std::filesystem::path	 bcPath		= getBitcodePath( amd );
-				const orortcJITInputType typeBc		= amd ? ORORTC_JIT_INPUT_LLVM_BUNDLED_BITCODE : ORORTC_JIT_INPUT_FATBINARY;
-				const orortcJITInputType typeUserBc = amd ? ORORTC_JIT_INPUT_LLVM_BITCODE : ORORTC_JIT_INPUT_PTX;
-
-				void* binaryPtr;
-				checkOrortc( orortcLinkCreate( JITOptCount, options, optionVals, &rtcLinkState ) );
-
-				orortcResult res = orortcLinkAddFile( rtcLinkState, typeBc, bcPath.string().c_str(), 0, 0, 0 );
-				if ( res != ORORTC_SUCCESS )
-				{
-					std::string msg = Utility::format(
-						"Orortc error: '%s' [ %d ] linking file '%s'\n",
-						orortcGetErrorString( res ),
-						static_cast<uint32_t>( res ),
-						bcPath.string().c_str() );
-					throw std::runtime_error( msg );
-				}
-				checkOrortc( res );
-
-				checkOrortc( orortcLinkAddData(
-					rtcLinkState, typeUserBc, const_cast<char*>( bitcodeBinary.data() ), bitcodeBinary.size(), 0, 0, 0, 0 ) );
-				checkOrortc( orortcLinkAddData(
-					rtcLinkState, typeUserBc, customFuncBitcodeBinary.data(), customFuncBitcodeBinary.size(), 0, 0, 0, 0 ) );
-
-				size_t binarySize = 0;
-				checkOrortc( orortcLinkComplete( rtcLinkState, &binaryPtr, &binarySize ) );
-				binary = std::string( reinterpret_cast<char*>( binaryPtr ), binarySize );
-
-				if ( cache ) cacheBinaryToFile( binary, cacheName, context.getDeviceName() );
-
-				checkOrortc( orortcLinkDestroy( rtcLinkState ) );
-			}
-
-			checkOro( oroModuleLoadData( &module, binary.data() ) );
-			m_moduleCache[moduleName.string()] = module;
-		}
-
-		for ( size_t i = 0; i < funcNames.size(); ++i )
-		{
-			oroFunction func;
-			checkOro( oroModuleGetFunction( &func, module, funcNames[i] ) );
-			functions.push_back( func );
-		}
-	}
-	else
-	{
-		throw std::runtime_error( "Not compiled with the bitcode linking support" );
 	}
 }
 
@@ -475,17 +210,18 @@ std::string Compiler::kernelNameSufix( const std::string& traits )
 std::string
 Compiler::readSourceCode( const std::filesystem::path& path, std::optional<std::vector<std::filesystem::path>> includes )
 {
-	std::string	  src;
 	std::ifstream file( path );
 	if ( !file.is_open() )
 	{
 		const std::string msg = Utility::format( "Unable to open '%s'", path.string().c_str() );
 		throw std::runtime_error( msg );
 	}
-	size_t sizeFile;
+
 	file.seekg( 0, std::ifstream::end );
-	size_t size = sizeFile = static_cast<size_t>( file.tellg() );
+	const size_t size = static_cast<size_t>( file.tellg() );
 	file.seekg( 0, std::ifstream::beg );
+
+	std::string src;
 	if ( includes )
 	{
 		std::string line;
@@ -493,11 +229,9 @@ Compiler::readSourceCode( const std::filesystem::path& path, std::optional<std::
 		{
 			if ( line.find( "#include" ) != std::string::npos )
 			{
-				const size_t	  pa  = line.find( "<" );
-				const size_t	  pb  = line.find( ">" );
-				const std::string buf = line.substr( pa + 1, pb - pa - 1 );
-				includes.value().push_back( buf );
-				src += line + '\n';
+				const size_t pa = line.find( "<" );
+				const size_t pb = line.find( ">" );
+				includes.value().push_back( line.substr( pa + 1, pb - pa - 1 ) );
 			}
 			src += line + '\n';
 		}
@@ -507,18 +241,13 @@ Compiler::readSourceCode( const std::filesystem::path& path, std::optional<std::
 		src.resize( size, ' ' );
 		file.read( &src[0], size );
 	}
+
 	return src;
 }
 
 void Compiler::addCommonOpts( Context& context, std::vector<const char*>& opts, bool extended )
 {
-	if ( !extended ) // do not use fast math for trace kernel (the fast math option can be passed from the application)
-	{
-		if ( context.getDeviceName().find( "NVIDIA" ) != std::string::npos )
-			opts.push_back( "--use_fast_math" );
-		else
-			opts.push_back( "-ffast-math" );
-	}
+	if ( !extended ) opts.push_back( "--use_fast_math" );
 
 	const uint32_t rtip = context.getRtip();
 	if ( rtip > 0 )
@@ -527,39 +256,10 @@ void Compiler::addCommonOpts( Context& context, std::vector<const char*>& opts, 
 		opts.push_back( m_rtipStr.c_str() );
 	}
 
-	opts.push_back( "-D__USE_HIP__" );
-	opts.push_back( "-std=c++17" );
-}
-
-std::filesystem::path Compiler::getBitcodePath( bool amd )
-{
-	const std::string hipSdkVersion = "_" + std::string( HIP_VERSION_STR );
-	std::string		  filename		= "hiprt" + std::string( HIPRT_VERSION_STR );
-
-	if ( amd ) filename += hipSdkVersion;
-
-	if ( amd )
-#if !defined( __GNUC__ )
-		filename += "_amd_lib_win.bc";
-#else
-		 filename += "_amd_lib_linux.bc";
+#if defined( HIPRT_CUDA_INCLUDE_DIR )
+	opts.push_back( "-I" HIPRT_CUDA_INCLUDE_DIR );
 #endif
-	else
-		filename += "_nv_lib.fatbin";
-	return Utility::getCurrentDir() / std::filesystem::path( filename );
-}
-
-std::filesystem::path Compiler::getFatbinPath( bool amd )
-{
-	const std::string hipSdkVersion = "_" + std::string( HIP_VERSION_STR );
-	std::string		  filename		= "hiprt" + std::string( HIPRT_VERSION_STR );
-	if ( amd ) filename += hipSdkVersion;
-
-	if ( amd )
-		filename += "_amd.hipfb";
-	else
-		filename += "_nv.fatbin";
-	return Utility::getCurrentDir() / std::filesystem::path( filename );
+	opts.push_back( "-std=c++17" );
 }
 
 bool Compiler::isCachedFileUpToDate( const std::filesystem::path& cachedFile, const std::filesystem::path& moduleName )
@@ -618,6 +318,7 @@ void Compiler::addCustomFuncsSwitchCase(
 			}
 		}
 	}
+
 	intersectFuncDef += "\t\t default: { return false; }\n\t}\n}\n";
 	filterFuncDef += "\t\t default: { return false; }\n\t}\n}\n";
 	extSrc += "\n" + funcDecls + "\n" + intersectFuncDef + "\n" + filterFuncDef;
@@ -646,7 +347,7 @@ std::string Compiler::getCacheFilename(
 		{
 			for ( uint32_t j = 0; j < numGeomTypes; ++j )
 			{
-				uint32_t k = numGeomTypes * i + j;
+				const uint32_t k = numGeomTypes * i + j;
 				if ( funcNameSets.value()[k].intersectFuncName != nullptr )
 					optionHash += funcNameSets.value()[k].intersectFuncName;
 				if ( funcNameSets.value()[k].filterFuncName != nullptr ) optionHash += funcNameSets.value()[k].filterFuncName;
@@ -666,12 +367,12 @@ std::string Compiler::getCacheFilename(
 		   std::to_string( 8 * sizeof( void* ) ) + ".bin";
 }
 
-std::string Compiler::loadCacheFileToBinary( const std::string& cacheName, const std::string& deviceName )
+std::string Compiler::loadCacheFileToBinary( const std::string& cacheName )
 {
 	long long checksumValue = 0;
 	{
-		std::filesystem::path path = m_cacheDirectory / ( cacheName + ".check" );
-		std::ifstream		  file( path, std::ios::in | std::ios::binary );
+		const std::filesystem::path path = m_cacheDirectory / ( cacheName + ".check" );
+		std::ifstream				  file( path, std::ios::in | std::ios::binary );
 		if ( !file.is_open() )
 		{
 			const std::string msg = Utility::format( "Unable to open '%s'", path.string().c_str() );
@@ -679,201 +380,58 @@ std::string Compiler::loadCacheFileToBinary( const std::string& cacheName, const
 		}
 		file.read( reinterpret_cast<char*>( &checksumValue ), sizeof( long long ) );
 	}
+
 	if ( checksumValue == 0 ) throw std::runtime_error( "Checksum is zero" );
 
 	std::string binary;
 	{
-		std::filesystem::path path = m_cacheDirectory / cacheName;
-		std::ifstream		  file( path, std::ios::in | std::ios::binary | std::ios::ate );
+		const std::filesystem::path path = m_cacheDirectory / cacheName;
+		std::ifstream				  file( path, std::ios::in | std::ios::binary | std::ios::ate );
 		if ( !file.is_open() )
 		{
 			const std::string msg = Utility::format( "Unable to open '%s'", path.string().c_str() );
 			throw std::runtime_error( msg );
 		}
-		size_t binarySize = file.tellg();
+		const size_t binarySize = static_cast<size_t>( file.tellg() );
 		file.clear();
 		file.seekg( 0, std::ios::beg );
 		binary.resize( binarySize );
 		file.read( binary.data(), binary.size() );
 	}
 
-	long long hash = Utility::hashString( binary );
+	const long long hash = Utility::hashString( binary );
 	if ( hash != checksumValue )
 	{
-		std::string msg = Utility::format( "Checksum doesn't match %llx : %llx", hash, checksumValue );
+		const std::string msg = Utility::format( "Checksum doesn't match %llx : %llx", hash, checksumValue );
 		throw std::runtime_error( msg );
-	}
-
-	if constexpr ( !UseBitcode )
-	{
-		if ( deviceName.find( "NVIDIA" ) != std::string::npos )
-		{
-			std::lock_guard<std::mutex> lockMutex( m_binMutex );
-			if ( m_binCache.find( cacheName ) != m_binCache.end() )
-			{
-				binary = m_binCache[cacheName];
-			}
-			else
-			{
-				m_binCache[cacheName] = binary;
-			}
-		}
 	}
 
 	return binary;
 }
 
-void Compiler::cacheBinaryToFile( const std::string& binaryIn, const std::string& cacheName, const std::string& deviceName )
+void Compiler::cacheBinaryToFile( const std::string& binary, const std::string& cacheName )
 {
-	std::string binary = binaryIn;
-
 	{
-		std::filesystem::path path = m_cacheDirectory / cacheName;
-		std::ofstream		  file( path, std::ios::out | std::ios::binary );
+		const std::filesystem::path path = m_cacheDirectory / cacheName;
+		std::ofstream				  file( path, std::ios::out | std::ios::binary );
 		if ( !file.is_open() )
 		{
-			std::string msg = Utility::format( "Unable to open '%s'", path.string().c_str() );
+			const std::string msg = Utility::format( "Unable to open '%s'", path.string().c_str() );
 			throw std::runtime_error( msg );
 		}
 		file.write( binary.data(), binary.size() );
 	}
 
-	long long hash = Utility::hashString( binary );
+	const long long hash = Utility::hashString( binary );
 	{
-		std::filesystem::path path = m_cacheDirectory / ( cacheName + ".check" );
-		std::ofstream		  file( path, std::ios::out | std::ios::binary );
+		const std::filesystem::path path = m_cacheDirectory / ( cacheName + ".check" );
+		std::ofstream				  file( path, std::ios::out | std::ios::binary );
 		if ( !file.is_open() )
 		{
-			std::string msg = Utility::format( "Unable to open '%s'", path.string().c_str() );
+			const std::string msg = Utility::format( "Unable to open '%s'", path.string().c_str() );
 			throw std::runtime_error( msg );
 		}
-		file.write( reinterpret_cast<char*>( &hash ), sizeof( long long ) );
-	}
-}
-
-oroFunction Compiler::getFunctionFromPrecompiledBinary( const std::string& funcName )
-{
-	bool						amd	 = oroGetCurAPI( 0 ) == ORO_API_HIP;
-	const std::filesystem::path path = getFatbinPath( amd );
-
-	std::lock_guard<std::mutex> lock( m_moduleMutex );
-	auto						cacheEntry = m_moduleCache.find( path.string() );
-	oroModule					module	   = nullptr;
-	if ( cacheEntry != m_moduleCache.end() )
-	{
-		module = cacheEntry->second;
-	}
-	else
-	{
-		std::ifstream file( path, std::ios::binary | std::ios::in );
-		if ( !file.is_open() )
-		{
-			// Note: even if 'HIPRT_BAKE_COMPILED_KERNEL' is enable, if the file exists, it overrides the embedded precompiled
-			// kernel.
-			if constexpr ( UseBakedCompiledKernel )
-			{
-				std::vector<unsigned char> binary;
-				OrochiUtils::HandlePrecompiled(
-					binary,
-					bvh_build_array_h,
-					bvh_build_array_h_size,
-					bvh_build_array_h_isCompressed ? std::optional<size_t>{ bvh_build_array_h_size_uncompressed }
-												   : std::nullopt );
-				checkOro( oroModuleLoadData( &module, binary.data() ) );
-			}
-			else
-			{
-				std::string msg = Utility::format( "Unable to open '%s'\n", path.string().c_str() );
-				throw std::runtime_error( msg );
-			}
-		}
-		else
-		{
-
-			size_t sizeFile;
-			file.seekg( 0, std::fstream::end );
-			size_t size = sizeFile = static_cast<size_t>( file.tellg() );
-
-			std::vector<char> binary;
-			binary.resize( size );
-			file.seekg( 0, std::fstream::beg );
-			file.read( binary.data(), size );
-
-			checkOro( oroModuleLoadData( &module, binary.data() ) );
-		}
-
-		m_moduleCache[path.string()] = module;
-	}
-
-	oroFunction function;
-	checkOro( oroModuleGetFunction( &function, module, funcName.c_str() ) );
-
-	return function;
-}
-
-std::string Compiler::buildFunctionTableBitcode(
-	Context& context, uint32_t numGeomTypes, uint32_t numRayTypes, const std::vector<hiprtFuncNameSet>& funcNameSets )
-{
-	if constexpr ( BakedCodeIsGenerated )
-	{
-		bool amd = oroGetCurAPI( 0 ) == ORO_API_HIP;
-
-		std::vector<const char*> options;
-		std::string				 includePath = "-I" + Utility::getRootDir().string();
-		options.push_back( includePath.c_str() );
-		addCommonOpts( context, options, false );
-
-		if ( amd )
-		{
-			options.push_back( "-fgpu-rdc" ); // relocatable device code
-			options.push_back( "-Xclang" );
-			options.push_back( "-mno-constructor-aliases" );
-		}
-		else
-		{
-			options.push_back( "--device-c" ); // relocatable device code
-		}
-
-		const uint32_t			 numHeaders = sizeof( GET_ARGS( hiprt_device ) ) / sizeof( void* );
-		std::vector<const char*> includeNames;
-		std::vector<const char*> headers;
-		std::vector<std::string> headerData( numHeaders );
-		for ( uint32_t i = 0; i < numHeaders - 1; ++i )
-		{
-			includeNames.push_back( GET_INC( hiprt_device )[i] );
-			headerData[i] = GET_ARGS( hiprt_device )[i];
-			headers.push_back( headerData[i].c_str() );
-		}
-		includeNames.push_back( "hiprt_device.h" );
-		headerData[numHeaders - 1] = GET_ARGS( hiprt_device )[numHeaders - 1];
-		headers.push_back( headerData[numHeaders - 1].c_str() );
-
-		std::string src = "#include <hiprt_device.h>\n";
-		addCustomFuncsSwitchCase( src, funcNameSets, numGeomTypes, numRayTypes );
-
-		std::vector<const char*> funcNames;
-		orortcProgram			 prog;
-
-		buildProgram( funcNames, src, std::string(), headers, includeNames, options, prog );
-
-		size_t size = 0;
-		if ( amd )
-			checkOrortc( orortcGetBitcodeSize( prog, &size ) );
-		else
-			checkOrortc( orortcGetCodeSize( prog, &size ) );
-
-		std::string binary;
-		binary.resize( size );
-		if ( amd )
-			checkOrortc( orortcGetBitcode( prog, binary.data() ) );
-		else
-			checkOrortc( orortcGetCode( prog, binary.data() ) );
-		checkOrortc( orortcDestroyProgram( &prog ) );
-		return binary;
-	}
-	else
-	{
-		throw std::runtime_error( "Not compiled with the baked kernel code support" );
+		file.write( reinterpret_cast<const char*>( &hash ), sizeof( long long ) );
 	}
 }
 } // namespace hiprt

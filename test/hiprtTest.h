@@ -24,8 +24,10 @@
 
 #pragma once
 #define NOMINMAX
+#include <cuda_runtime_api.h>
+#include <cuda.h>
+#include <nvrtc.h>
 #include <hiprt/hiprt.h>
-#include <Orochi/Orochi.h>
 #include <embree4/rtcore.h>
 #include <optional>
 #include <filesystem>
@@ -50,22 +52,17 @@
 #endif
 
 #include <test/shared.h>
+// #include <cuda_runtime.h>
 
-void checkOro( oroError res, const source_location& location = source_location::current() );
-void checkOrortc( orortcResult res, const source_location& location = source_location::current() );
+using cudaFunction_t = CUfunction;
+
+void checkOro( cudaError res, const source_location& location = source_location::current() );
+void checkOro( CUresult res, const source_location& location = source_location::current() );
+void checkOrortc( nvrtcResult res, const source_location& location = source_location::current() );
 void checkHiprt( hiprtError res, const source_location& location = source_location::current() );
 
 std::string			  getEnvVariable( const std::string& key );
 std::filesystem::path getRootDir();
-
-namespace
-{
-#if defined( HIPRT_BITCODE_LINKING )
-constexpr bool UseBitcode = true;
-#else
-constexpr bool UseBitcode = false;
-#endif
-} // namespace
 
 struct CmdArguments
 {
@@ -73,7 +70,6 @@ struct CmdArguments
 	uint32_t			  m_wh					   = 512u;
 	std::filesystem::path m_referencePath		   = getRootDir() / "test/references/";
 	uint32_t			  m_deviceIdx			   = 0u;
-	bool				  m_usePrecompiledBitcodes = false;
 };
 
 extern CmdArguments g_parsedArgs;
@@ -90,7 +86,7 @@ class hiprtTest : public ::testing::Test
 {
   public:
 	void SetUp();
-	void TearDown() { checkOro( oroCtxDestroy( m_oroCtx ) ); }
+	void TearDown() { }
 
   protected:
 	void buildBvh( hiprtGeometryBuildInput& buildInput );
@@ -117,7 +113,7 @@ class hiprtTest : public ::testing::Test
 
 	void writeImage( const std::filesystem::path& imgPath, uint32_t width, uint32_t height, uint8_t* data );
 
-	void waitForCompletion( oroStream stream = 0 ) { checkOro( oroStreamSynchronize( stream ) ); }
+	void waitForCompletion( cudaStream_t stream = 0 ) { checkOro( cudaStreamSynchronize( stream ) ); }
 
 	hiprtError buildTraceKernels(
 		hiprtContext								 ctxt,
@@ -133,88 +129,68 @@ class hiprtTest : public ::testing::Test
 		hiprtContext								 ctxt,
 		const std::filesystem::path&				 srcPath,
 		const std::string&							 functionName,
-		oroFunction&								 functionOut,
+		cudaFunction_t&								 functionOut,
 		std::optional<std::vector<const char*>>		 opts		  = std::nullopt,
 		std::optional<std::vector<hiprtFuncNameSet>> funcNameSets = std::nullopt,
 		uint32_t									 numGeomTypes = 0u,
 		uint32_t									 numRayTypes  = 1u );
 
-	hiprtError buildTraceKernelsFromBitcode(
-		hiprtContext								 ctxt,
-		const std::filesystem::path&				 srcPath,
-		std::vector<const char*>					 functionNames,
-		std::vector<hiprtApiFunction>&				 functionsOut,
-		std::optional<std::vector<const char*>>		 opts		  = std::nullopt,
-		std::optional<std::vector<hiprtFuncNameSet>> funcNameSets = std::nullopt,
-		uint32_t									 numGeomTypes = 0u,
-		uint32_t									 numRayTypes  = 1u );
-
-	hiprtError buildTraceKernelFromBitcode(
-		hiprtContext								 ctxt,
-		const std::filesystem::path&				 srcPath,
-		const std::string&							 functionName,
-		oroFunction&								 functionOut,
-		std::optional<std::vector<const char*>>		 opts		  = std::nullopt,
-		std::optional<std::vector<hiprtFuncNameSet>> funcNameSets = std::nullopt,
-		uint32_t									 numGeomTypes = 0u,
-		uint32_t									 numRayTypes  = 1u );
-
-	void launchKernel( oroFunction func, uint32_t nx, uint32_t ny, void** args, uint32_t sharedMemoryBytes = 0 );
+	void launchKernel( cudaFunction_t func, uint32_t nx, uint32_t ny, void** args, uint32_t sharedMemoryBytes = 0 );
 	void launchKernel(
-		oroFunction func, uint32_t nx, uint32_t ny, uint32_t tx, uint32_t ty, void** args, uint32_t sharedMemoryBytes = 0 );
+		cudaFunction_t func, uint32_t nx, uint32_t ny, uint32_t tx, uint32_t ty, void** args, uint32_t sharedMemoryBytes = 0 );
 
 	template <typename T>
 	void malloc( T*& ptr, size_t n )
 	{
-		checkOro( oroMalloc( reinterpret_cast<oroDeviceptr*>( &ptr ), sizeof( T ) * n ) );
+		checkOro( cudaMalloc( reinterpret_cast<void **>( &ptr ), sizeof( T ) * n ) );
 	}
 
-	void free( void* ptr ) { checkOro( oroFree( reinterpret_cast<oroDeviceptr>( ptr ) ) ); }
+	void free( void* ptr ) { checkOro( cudaFree( reinterpret_cast<void *>( ptr ) ) ); }
 
-	void memset( void* ptr, int val, size_t n ) { checkOro( oroMemsetD8( reinterpret_cast<oroDeviceptr>( ptr ), val, n ) ); }
+	void memset( void* ptr, int val, size_t n ) { checkOro( cuMemsetD8( reinterpret_cast<size_t>( ptr ), val, n ) ); }
 
 	template <typename T>
 	void copyHtoD( T* dst, const T* src, size_t n )
 	{
-		checkOro( oroMemcpyHtoD( reinterpret_cast<oroDeviceptr>( dst ), const_cast<T*>( src ), sizeof( T ) * n ) );
+		checkOro( cuMemcpyHtoD( reinterpret_cast<size_t>( dst ), src, sizeof( T ) * n ) );
 	}
 
 	template <typename T>
 	void copyDtoH( T* dst, T* src, size_t n )
 	{
-		checkOro( oroMemcpyDtoH( dst, reinterpret_cast<oroDeviceptr>( src ), sizeof( T ) * n ) );
+		checkOro( cuMemcpyDtoH( dst, reinterpret_cast<size_t>( src ), sizeof( T ) * n ) );
 	}
 
 	template <typename T>
 	void copyDtoD( T* dst, T* src, size_t n )
 	{
 		checkOro(
-			oroMemcpyDtoD( reinterpret_cast<oroDeviceptr>( dst ), reinterpret_cast<oroDeviceptr>( src ), sizeof( T ) * n ) );
+			cuMemcpyDtoD( reinterpret_cast<size_t>( dst ), reinterpret_cast<size_t>( src ), sizeof( T ) * n ) );
 	}
 
 	template <typename T>
-	void copyHtoDAsync( T* dst, const T* src, size_t n, oroStream stream )
+	void copyHtoDAsync( T* dst, const T* src, size_t n, cudaStream_t stream )
 	{
-		checkOro( oroMemcpyHtoDAsync( reinterpret_cast<oroDeviceptr>( dst ), const_cast<T*>( src ), sizeof( T ) * n, stream ) );
+		checkOro( cuMemcpyHtoDAsync( reinterpret_cast<size_t>( dst ), src, sizeof( T ) * n, stream ) );
 	}
 
 	template <typename T>
-	void copyDtoHAsync( T* dst, T* src, size_t n, oroStream stream )
+	void copyDtoHAsync( T* dst, T* src, size_t n, cudaStream_t stream )
 	{
-		checkOro( oroMemcpyDtoHAsync( dst, reinterpret_cast<oroDeviceptr>( src ), sizeof( T ) * n, stream ) );
+		checkOro( cuMemcpyDtoHAsync( dst, reinterpret_cast<size_t>( src ), sizeof( T ) * n, stream ) );
 	}
 
 	template <typename T>
-	void copyDtoDAsync( T* dst, T* src, size_t n, oroStream stream )
+	void copyDtoDAsync( T* dst, T* src, size_t n, cudaStream_t stream )
 	{
-		checkOro( oroMemcpyDtoDAsync(
-			reinterpret_cast<oroDeviceptr>( dst ), reinterpret_cast<oroDeviceptr>( src ), sizeof( T ) * n, stream ) );
+		checkOro( cuMemcpyDtoDAsync(
+			reinterpret_cast<size_t>( dst ), reinterpret_cast<size_t>( src ), sizeof( T ) * n, stream ) );
 	}
 
   protected:
 	hiprtContextCreationInput m_ctxtInput;
-	oroCtx					  m_oroCtx;
-	oroDevice				  m_oroDevice;
+	CUcontext					  m_Ctx;
+	int				  m_cudaDevice;
 };
 
 enum class TestCasesType

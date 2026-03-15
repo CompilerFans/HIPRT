@@ -807,7 +807,7 @@ typedef enum cudaResourceViewFormat hipResourceViewFormat;
 #define HIPRTC_JIT_FAST_COMPILE CU_JIT_FAST_COMPILE
 #define HIPRTC_JIT_NUM_OPTIONS CU_JIT_NUM_OPTIONS
 
-typedef cudaEvent_t hipEvent_t;
+typedef cudaEvent_t  hipEvent_t;
 typedef cudaStream_t hipStream_t;
 typedef cudaIpcEventHandle_t hipIpcEventHandle_t;
 typedef cudaIpcMemHandle_t hipIpcMemHandle_t;
@@ -3488,8 +3488,8 @@ inline static hipError_t hipModuleLoadDataEx_cu4oro(hipModule_t* module, const v
         cuModuleLoadDataEx(module, image, numOptions, options, optionValues));
 }
 
-inline static hipError_t hipLaunchKernel_cu4oro(const void* function_address, dim3 numBlocks,
-                                         dim3 dimBlocks, void** args, size_t sharedMemBytes,
+inline static hipError_t hipLaunchKernel_cu4oro(const void* function_address, _3dim numBlocks,
+                                         _3dim dimBlocks, void** args, size_t sharedMemBytes,
                                          hipStream_t stream) {
     return hipCUDAErrorTohipError(
         cudaLaunchKernel(function_address, numBlocks, dimBlocks, args, sharedMemBytes, stream));
@@ -3590,7 +3590,7 @@ inline static hipError_t hipGetChannelDesc_cu4oro(hipChannelFormatDesc* desc, hi
     return hipCUDAErrorTohipError(cudaGetChannelDesc(desc,array));
 }
 
-inline static hipError_t hipLaunchCooperativeKernel_cu4oro(const void* f, dim3 gridDim, dim3 blockDim,
+inline static hipError_t hipLaunchCooperativeKernel_cu4oro(const void* f, _3dim gridDim, _3dim blockDim,
                                       void** kernelParams, unsigned int sharedMemBytes,
                                       hipStream_t stream) {
     return hipCUDAErrorTohipError(
@@ -3875,7 +3875,7 @@ inline static hipChannelFormatDesc hipCreateChannelDesc_cu4oro() {
 }
 
 template <class T>
-inline static hipError_t hipLaunchCooperativeKernel_cu4oro(T f, dim3 gridDim, dim3 blockDim,
+inline static hipError_t hipLaunchCooperativeKernel_cu4oro(T f, _3dim gridDim, _3dim blockDim,
                                              void** kernelParams, unsigned int sharedMemBytes, hipStream_t stream) {
     return hipCUDAErrorTohipError(
             cudaLaunchCooperativeKernel(reinterpret_cast<const void*>(f), gridDim, blockDim, kernelParams, sharedMemBytes, stream));

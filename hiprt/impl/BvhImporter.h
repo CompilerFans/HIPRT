@@ -68,7 +68,7 @@ class BvhImporter
 		const hiprtGeometryBuildInput& buildInput,
 		const hiprtBuildOptions		   buildOptions,
 		hiprtDevicePtr				   temporaryBuffer,
-		oroStream					   stream,
+		cudaStream_t					   stream,
 		hiprtDevicePtr				   buffer );
 
 	static void build(
@@ -76,7 +76,7 @@ class BvhImporter
 		const hiprtSceneBuildInput& buildInput,
 		const hiprtBuildOptions		buildOptions,
 		hiprtDevicePtr				temporaryBuffer,
-		oroStream					stream,
+		cudaStream_t					stream,
 		hiprtDevicePtr				buffer );
 
 	template <typename BoxNode, typename PrimitiveNode, typename PrimitiveContainer>
@@ -87,7 +87,7 @@ class BvhImporter
 		const hiprtBuildOptions buildOptions,
 		uint32_t				geomType,
 		MemoryArena&			temporaryMemoryArena,
-		oroStream				stream,
+		cudaStream_t				stream,
 		MemoryArena&			storageMemoryArena );
 
 	static void update(
@@ -95,7 +95,7 @@ class BvhImporter
 		const hiprtGeometryBuildInput& buildInput,
 		const hiprtBuildOptions		   buildOptions,
 		hiprtDevicePtr				   temporaryBuffer,
-		oroStream					   stream,
+		cudaStream_t					   stream,
 		hiprtDevicePtr				   buffer );
 
 	static void update(
@@ -103,7 +103,7 @@ class BvhImporter
 		const hiprtSceneBuildInput& buildInput,
 		const hiprtBuildOptions		buildOptions,
 		hiprtDevicePtr				temporaryBuffer,
-		oroStream					stream,
+		cudaStream_t					stream,
 		hiprtDevicePtr				buffer );
 
 	template <typename BoxNode, typename PrimitiveNode, typename PrimitiveContainer>
@@ -112,7 +112,7 @@ class BvhImporter
 		PrimitiveContainer&		primitives,
 		const NodeList&			nodes,
 		const hiprtBuildOptions buildOptions,
-		oroStream				stream,
+		cudaStream_t				stream,
 		MemoryArena&			storageMemoryArena );
 };
 
@@ -139,13 +139,13 @@ void BvhImporter::build(
 	const hiprtBuildOptions buildOptions,
 	uint32_t				geomType,
 	MemoryArena&			temporaryMemoryArena,
-	oroStream				stream,
+	cudaStream_t				stream,
 	MemoryArena&			storageMemoryArena )
 {
-	using Header = typename std::conditional<
+	typedef typename std::conditional<
 		std::is_same<PrimitiveNode, UserInstanceNode>::value || std::is_same<PrimitiveNode, HwInstanceNode>::value,
 		SceneHeader,
-		GeomHeader>::type;
+		GeomHeader>::type Header;
 
 	const uint32_t maxBoxNodeCount =
 		static_cast<uint32_t>( getMaxBoxNodeCount<BoxNode, PrimitiveNode>( nodes.getReferenceCount() ) );
@@ -235,8 +235,8 @@ void BvhImporter::build(
 		uint32_t* updateCounters = reinterpret_cast<uint32_t*>( taskQueue );
 		uint32_t* parentAddrs	 = updateCounters + nodes.getReferenceCount();
 		uint32_t* triangleCounts = parentAddrs + 2 * nodes.getReferenceCount();
-		checkOro( oroMemsetD8Async(
-			reinterpret_cast<oroDeviceptr>( updateCounters ), 0, sizeof( uint32_t ) * nodes.getReferenceCount(), stream ) );
+		checkOro( cuMemsetD8Async(
+			reinterpret_cast<size_t>( updateCounters ), 0, sizeof( uint32_t ) * nodes.getReferenceCount(), stream ) );
 
 		Kernel computeParentAddrsKernel = compiler.getKernel(
 			context,
@@ -260,9 +260,9 @@ void BvhImporter::build(
 
 	// STEP 3: Collapse
 	uint3 rootCollapseTask = { RootIndex, 0, 0 };
-	checkOro( oroMemcpyHtoDAsync( reinterpret_cast<oroDeviceptr>( taskQueue ), &rootCollapseTask, sizeof( uint3 ), stream ) );
-	checkOro( oroMemsetD8Async(
-		reinterpret_cast<oroDeviceptr>( reinterpret_cast<uint3*>( taskQueue ) + 1 ),
+	checkOro( cuMemcpyHtoDAsync( reinterpret_cast<size_t>( taskQueue ), &rootCollapseTask, sizeof( uint3 ), stream ) );
+	checkOro( cuMemsetD8Async(
+		reinterpret_cast<size_t>( reinterpret_cast<uint3*>( taskQueue ) + 1 ),
 		0xFF,
 		sizeof( uint3 ) * ( nodes.getReferenceCount() - 1 ),
 		stream ) );
@@ -285,9 +285,9 @@ void BvhImporter::build(
 	collapseKernel.launch( context.getBranchingFactor() * maxBoxNodeCount, stream );
 
 	uint32_t boxNodeCount{};
-	checkOro( oroMemcpyDtoHAsync(
-		&boxNodeCount, reinterpret_cast<oroDeviceptr>( &header->m_boxNodeCount ), sizeof( uint32_t ), stream ) );
-	checkOro( oroStreamSynchronize( stream ) );
+	checkOro( cuMemcpyDtoHAsync(
+		&boxNodeCount, reinterpret_cast<size_t>( &header->m_boxNodeCount ), sizeof( uint32_t ), stream ) );
+	checkOro( cudaStreamSynchronize( stream ) );
 
 	Kernel compactTasksKernel = compiler.getKernel(
 		context,
@@ -299,8 +299,8 @@ void BvhImporter::build(
 	compactTasksKernel.launch( BvhBuilderCompactionBlockSize, BvhBuilderCompactionBlockSize, stream );
 
 	uint32_t taskCount{};
-	checkOro( oroMemcpyDtoHAsync( &taskCount, reinterpret_cast<oroDeviceptr>( taskCounter ), sizeof( uint32_t ), stream ) );
-	checkOro( oroStreamSynchronize( stream ) );
+	checkOro( cuMemcpyDtoHAsync( &taskCount, reinterpret_cast<size_t>( taskCounter ), sizeof( uint32_t ), stream ) );
+	checkOro( cudaStreamSynchronize( stream ) );
 
 	Kernel packLeavesKernel = compiler.getKernel(
 		context,
@@ -320,8 +320,8 @@ void BvhImporter::build(
 	{
 		uint32_t* updateCounters = reinterpret_cast<uint32_t*>( taskCounter );
 		Kdop*	  kdops			 = reinterpret_cast<Kdop*>( updateCounters + boxNodeCount );
-		checkOro( oroMemsetD8Async(
-			reinterpret_cast<oroDeviceptr>( updateCounters ), 0, sizeof( uint32_t ) * boxNodeCount, stream ) );
+		checkOro( cuMemsetD8Async(
+			reinterpret_cast<size_t>( updateCounters ), 0, sizeof( uint32_t ) * boxNodeCount, stream ) );
 		Kernel fitOrientedBoundsKernel = compiler.getKernel(
 			context,
 			Utility::getRootDir() / "hiprt/impl/BvhBuilderKernels.h",
@@ -336,11 +336,11 @@ void BvhImporter::build(
 	if constexpr ( LogBvhCost )
 	{
 		uint32_t boxNodeCount;
-		checkOro( oroMemcpyDtoHAsync(
-			&boxNodeCount, reinterpret_cast<oroDeviceptr>( &header->m_boxNodeCount ), sizeof( uint32_t ), stream ) );
-		checkOro( oroStreamSynchronize( stream ) );
+		checkOro( cuMemcpyDtoHAsync(
+			&boxNodeCount, reinterpret_cast<size_t>( &header->m_boxNodeCount ), sizeof( uint32_t ), stream ) );
+		checkOro( cudaStreamSynchronize( stream ) );
 
-		checkOro( oroMemsetD8Async( reinterpret_cast<oroDeviceptr>( taskCounter ), 0, sizeof( float ), stream ) );
+		checkOro( cuMemsetD8Async( reinterpret_cast<size_t>( taskCounter ), 0, sizeof( float ), stream ) );
 		Kernel computeCostKernel = compiler.getKernel(
 			context,
 			Utility::getRootDir() / "hiprt/impl/BvhBuilderKernels.h",
@@ -351,8 +351,8 @@ void BvhImporter::build(
 		computeCostKernel.launch( boxNodeCount, ReductionBlockSize, stream );
 
 		float cost;
-		checkOro( oroMemcpyDtoHAsync( &cost, reinterpret_cast<oroDeviceptr>( taskCounter ), sizeof( float ), stream ) );
-		checkOro( oroStreamSynchronize( stream ) );
+		checkOro( cuMemcpyDtoHAsync( &cost, reinterpret_cast<size_t>( taskCounter ), sizeof( float ), stream ) );
+		checkOro( cudaStreamSynchronize( stream ) );
 
 		std::cout << "Bvh cost: " << cost << std::endl;
 	}
@@ -364,19 +364,19 @@ void BvhImporter::update(
 	PrimitiveContainer&		primitives,
 	const NodeList&			nodes,
 	const hiprtBuildOptions buildOptions,
-	oroStream				stream,
+	cudaStream_t				stream,
 	MemoryArena&			storageMemoryArena )
 {
-	using Header = typename std::conditional<
+	typedef typename std::conditional<
 		std::is_same<PrimitiveNode, UserInstanceNode>::value || std::is_same<PrimitiveNode, HwInstanceNode>::value,
 		SceneHeader,
-		GeomHeader>::type;
+		GeomHeader>::type Header;
 
 	Header* header = storageMemoryArena.allocate<Header>();
 
 	Header h;
-	checkOro( oroMemcpyDtoHAsync( &h, reinterpret_cast<oroDeviceptr>( header ), sizeof( Header ), stream ) );
-	checkOro( oroStreamSynchronize( stream ) );
+	checkOro( cuMemcpyDtoHAsync( &h, reinterpret_cast<size_t>( header ), sizeof( Header ), stream ) );
+	checkOro( cudaStreamSynchronize( stream ) );
 
 	if ( !( buildOptions.buildFlags & hiprtBuildFlagBitDisableSpatialSplits ) || primitives.getCount() != h.m_referenceCount )
 		throw std::runtime_error( "Update is not supported for an imported BVH with spatial splits." );

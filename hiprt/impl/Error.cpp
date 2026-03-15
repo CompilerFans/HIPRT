@@ -28,12 +28,12 @@
 
 namespace hiprt
 {
-void checkOro( oroError res, const source_location& location )
+void checkOro( cudaError_t res, const source_location& location )
 {
-	if ( res != oroSuccess )
+	if ( res != cudaSuccess )
 	{
 		const char* errStr;
-		oroGetErrorString( res, &errStr );
+		errStr = cudaGetErrorString( res);
 		std::string msg = Utility::format(
 			"Orochi error: '%s' [ %d ] on line %d in '%s'.",
 			errStr,
@@ -44,13 +44,29 @@ void checkOro( oroError res, const source_location& location )
 	}
 }
 
-void checkOrortc( orortcResult res, const source_location& location )
+void checkOro( CUresult res, const source_location& location )
 {
-	if ( res != ORORTC_SUCCESS )
+	if ( res != cudaSuccess )
+	{
+		const char* errStr;
+		cuGetErrorString( res, &errStr );
+		std::string msg = Utility::format(
+			"Orochi error: '%s' [ %d ] on line %d in '%s'.",
+			errStr,
+			static_cast<uint32_t>( res ),
+			location.line(),
+			location.file_name() );
+		throw std::runtime_error( msg );
+	}
+}
+
+void checkOrortc( nvrtcResult res, const source_location& location )
+{
+	if ( res != NVRTC_SUCCESS )
 	{
 		std::string msg = Utility::format(
 			"Orortc error: '%s' [ %d ] on line %d in '%s'.",
-			orortcGetErrorString( res ),
+			nvrtcGetErrorString( res ),
 			static_cast<uint32_t>( res ),
 			location.line(),
 			location.file_name() );

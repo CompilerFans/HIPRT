@@ -86,7 +86,7 @@ class PlocBuilder
 		const hiprtGeometryBuildInput& buildInput,
 		const hiprtBuildOptions		   buildOptions,
 		hiprtDevicePtr				   temporaryBuffer,
-		oroStream					   stream,
+		cudaStream_t					   stream,
 		hiprtDevicePtr				   buffer );
 
 	static void build(
@@ -94,7 +94,7 @@ class PlocBuilder
 		const hiprtSceneBuildInput& buildInput,
 		const hiprtBuildOptions		buildOptions,
 		hiprtDevicePtr				temporaryBuffer,
-		oroStream					stream,
+		cudaStream_t					stream,
 		hiprtDevicePtr				buffer );
 
 	template <typename BoxNode, typename PrimitiveNode, typename PrimitiveContainer>
@@ -104,7 +104,7 @@ class PlocBuilder
 		const hiprtBuildOptions buildOptions,
 		const uint32_t			geomType,
 		MemoryArena&			temporaryMemoryArena,
-		oroStream				stream,
+		cudaStream_t				stream,
 		MemoryArena&			storageMemoryArena );
 
 	static void update(
@@ -112,7 +112,7 @@ class PlocBuilder
 		const hiprtGeometryBuildInput& buildInput,
 		const hiprtBuildOptions		   buildOptions,
 		hiprtDevicePtr				   temporaryBuffer,
-		oroStream					   stream,
+		cudaStream_t					   stream,
 		hiprtDevicePtr				   buffer );
 
 	static void update(
@@ -120,7 +120,7 @@ class PlocBuilder
 		const hiprtSceneBuildInput& buildInput,
 		const hiprtBuildOptions		buildOptions,
 		hiprtDevicePtr				temporaryBuffer,
-		oroStream					stream,
+		cudaStream_t					stream,
 		hiprtDevicePtr				buffer );
 
 	template <typename BoxNode, typename PrimitiveNode, typename PrimitiveContainer>
@@ -128,7 +128,7 @@ class PlocBuilder
 		Context&				context,
 		PrimitiveContainer&		primitives,
 		const hiprtBuildOptions buildOptions,
-		oroStream				stream,
+		cudaStream_t				stream,
 		MemoryArena&			storageMemoryArena );
 };
 
@@ -139,13 +139,13 @@ void PlocBuilder::build(
 	const hiprtBuildOptions buildOptions,
 	uint32_t				geomType,
 	MemoryArena&			temporaryMemoryArena,
-	oroStream				stream,
+	cudaStream_t				stream,
 	MemoryArena&			storageMemoryArena )
 {
-	using Header = typename std::conditional<
+	typedef typename std::conditional<
 		std::is_same<PrimitiveNode, UserInstanceNode>::value || std::is_same<PrimitiveNode, HwInstanceNode>::value,
 		SceneHeader,
-		GeomHeader>::type;
+		GeomHeader>::type Header;
 
 	const uint32_t maxBoxNodeCount =
 		static_cast<uint32_t>( getMaxBoxNodeCount<BoxNode, PrimitiveNode>( primitives.getCount() ) );
@@ -172,8 +172,9 @@ void PlocBuilder::build(
 	uint32_t* mortonCodeValues[2];
 	mortonCodeValues[0] = reinterpret_cast<uint32_t*>( boxNodes ) + 2 * primitives.getCount();
 	mortonCodeValues[1] = reinterpret_cast<uint32_t*>( boxNodes ) + 3 * primitives.getCount();
-
-	RadixSort sort( context.getDevice(), stream, context.getOrochiUtils() );
+	RadixSort	 sort( context.getDevice() );
+	const size_t radixSortTempStorageSize = RadixSort::getTemporaryStorageSize( primitives.getCount() );
+	uint8_t*	 radixSortTempStorage = temporaryMemoryArena.allocate<uint8_t>( radixSortTempStorageSize );
 	Timer	  timer;
 
 	Compiler&				 compiler = context.getCompiler();
@@ -247,7 +248,7 @@ void PlocBuilder::build(
 		if ( pairTriangles )
 		{
 			uint2* pairIndices = temporaryMemoryArena.allocate<uint2>( primitives.getCount() );
-			checkOro( oroMemsetD8Async( reinterpret_cast<oroDeviceptr>( taskCounter ), 0, sizeof( uint32_t ), stream ) );
+			checkOro( cuMemsetD8Async( reinterpret_cast<size_t>( taskCounter ), 0, sizeof( uint32_t ), stream ) );
 			Kernel pairTrianglesKernel = compiler.getKernel(
 				context,
 				Utility::getRootDir() / "hiprt/impl/BvhBuilderKernels.h",
@@ -259,15 +260,15 @@ void PlocBuilder::build(
 
 			uint32_t pairCount = 0;
 			checkOro(
-				oroMemcpyDtoHAsync( &pairCount, reinterpret_cast<oroDeviceptr>( taskCounter ), sizeof( uint32_t ), stream ) );
-			checkOro( oroStreamSynchronize( stream ) );
+				cuMemcpyDtoHAsync( &pairCount, reinterpret_cast<size_t>( taskCounter ), sizeof( uint32_t ), stream ) );
+			checkOro( cudaStreamSynchronize( stream ) );
 			primitives.setPairs( pairCount, pairIndices );
 		}
 	}
 
 	// STEP 2: Calculate centroid bounding box by reduction
 	Aabb emptyBox;
-	checkOro( oroMemcpyHtoDAsync( reinterpret_cast<oroDeviceptr>( centroidBox ), &emptyBox, sizeof( Aabb ), stream ) );
+	checkOro( cuMemcpyHtoDAsync( reinterpret_cast<size_t>( centroidBox ), &emptyBox, sizeof( Aabb ), stream ) );
 
 	Kernel computeCentroidBoxKernel = compiler.getKernel(
 		context,
@@ -293,7 +294,14 @@ void PlocBuilder::build(
 	// STEP 4: Sort Morton codes
 	timer.measure( SortTime, [&]() {
 		sort.sort(
-			mortonCodeKeys[0], mortonCodeValues[0], mortonCodeKeys[1], mortonCodeValues[1], primitives.getCount(), stream );
+			radixSortTempStorage,
+			radixSortTempStorageSize,
+			mortonCodeKeys[0],
+			mortonCodeValues[0],
+			mortonCodeKeys[1],
+			mortonCodeValues[1],
+			primitives.getCount(),
+			stream );
 	} );
 
 	// STEP 5: Setup initial clusters from leaves
@@ -307,9 +315,9 @@ void PlocBuilder::build(
 	timer.measure( SetupClustersTime, [&]() { setupClustersKernel.launch( primitives.getCount(), stream ); } );
 
 	// STEP 6: Clustering
-	checkOro( oroMemsetD8Async( reinterpret_cast<oroDeviceptr>( taskCounter ), 0, sizeof( uint32_t ), stream ) );
-	checkOro( oroMemsetD8Async(
-		reinterpret_cast<oroDeviceptr>( updateCounters ), 0xFF, sizeof( uint32_t ) * primitives.getCount(), stream ) );
+	checkOro( cuMemsetD8Async( reinterpret_cast<size_t>( taskCounter ), 0, sizeof( uint32_t ), stream ) );
+	checkOro( cuMemsetD8Async(
+		reinterpret_cast<size_t>( updateCounters ), 0xFF, sizeof( uint32_t ) * primitives.getCount(), stream ) );
 
 	Kernel hplocKernel = compiler.getKernel(
 		context, Utility::getRootDir() / "hiprt/impl/PlocBuilderKernels.h", "HPloc", opts, GET_ARG_LIST( PlocBuilderKernels ) );
@@ -325,8 +333,8 @@ void PlocBuilder::build(
 		uint32_t* updateCounters = reinterpret_cast<uint32_t*>( taskQueue );
 		uint32_t* parentAddrs	 = updateCounters + primitives.getCount();
 		uint32_t* triangleCounts = parentAddrs + primitives.getCount();
-		checkOro( oroMemsetD8Async(
-			reinterpret_cast<oroDeviceptr>( updateCounters ), 0, sizeof( uint32_t ) * primitives.getCount(), stream ) );
+		checkOro( cuMemsetD8Async(
+			reinterpret_cast<size_t>( updateCounters ), 0, sizeof( uint32_t ) * primitives.getCount(), stream ) );
 
 		Kernel computeParentAddrsKernel = compiler.getKernel(
 			context,
@@ -349,9 +357,9 @@ void PlocBuilder::build(
 
 	// STEP 8: Collapse
 	uint3 rootCollapseTask = { RootIndex, 0, 0 };
-	checkOro( oroMemcpyHtoDAsync( reinterpret_cast<oroDeviceptr>( taskQueue ), &rootCollapseTask, sizeof( uint3 ), stream ) );
-	checkOro( oroMemsetD8Async(
-		reinterpret_cast<oroDeviceptr>( taskQueue + 1 ), 0xFF, sizeof( uint3 ) * ( primitives.getCount() - 1 ), stream ) );
+	checkOro( cuMemcpyHtoDAsync( reinterpret_cast<size_t>( taskQueue ), &rootCollapseTask, sizeof( uint3 ), stream ) );
+	checkOro( cuMemsetD8Async(
+		reinterpret_cast<size_t>( taskQueue + 1 ), 0xFF, sizeof( uint3 ) * ( primitives.getCount() - 1 ), stream ) );
 
 	Kernel collapseKernel = compiler.getKernel(
 		context,
@@ -364,9 +372,9 @@ void PlocBuilder::build(
 	timer.measure( CollapseTime, [&]() { collapseKernel.launch( context.getBranchingFactor() * maxBoxNodeCount, stream ); } );
 
 	uint32_t boxNodeCount{};
-	checkOro( oroMemcpyDtoHAsync(
-		&boxNodeCount, reinterpret_cast<oroDeviceptr>( &header->m_boxNodeCount ), sizeof( uint32_t ), stream ) );
-	checkOro( oroStreamSynchronize( stream ) );
+	checkOro( cuMemcpyDtoHAsync(
+		&boxNodeCount, reinterpret_cast<size_t>( &header->m_boxNodeCount ), sizeof( uint32_t ), stream ) );
+	checkOro( cudaStreamSynchronize( stream ) );
 
 	Kernel compactTasksKernel = compiler.getKernel(
 		context,
@@ -380,8 +388,8 @@ void PlocBuilder::build(
 	} );
 
 	uint32_t taskCount{};
-	checkOro( oroMemcpyDtoHAsync( &taskCount, reinterpret_cast<oroDeviceptr>( taskCounter ), sizeof( uint32_t ), stream ) );
-	checkOro( oroStreamSynchronize( stream ) );
+	checkOro( cuMemcpyDtoHAsync( &taskCount, reinterpret_cast<size_t>( taskCounter ), sizeof( uint32_t ), stream ) );
+	checkOro( cudaStreamSynchronize( stream ) );
 
 	Kernel packLeavesKernel = compiler.getKernel(
 		context,
@@ -400,7 +408,7 @@ void PlocBuilder::build(
 	// STEP 9: BVH cost
 	if constexpr ( LogBvhCost )
 	{
-		checkOro( oroMemsetD8Async( reinterpret_cast<oroDeviceptr>( taskCounter ), 0, sizeof( float ), stream ) );
+		checkOro( cuMemsetD8Async( reinterpret_cast<size_t>( taskCounter ), 0, sizeof( float ), stream ) );
 		Kernel computeCostKernel = compiler.getKernel(
 			context,
 			Utility::getRootDir() / "hiprt/impl/BvhBuilderKernels.h",
@@ -411,19 +419,19 @@ void PlocBuilder::build(
 		computeCostKernel.launch( boxNodeCount, ReductionBlockSize, stream );
 
 		float cost;
-		checkOro( oroMemcpyDtoHAsync( &cost, reinterpret_cast<oroDeviceptr>( taskCounter ), sizeof( float ), stream ) );
-		checkOro( oroStreamSynchronize( stream ) );
+		checkOro( cuMemcpyDtoHAsync( &cost, reinterpret_cast<size_t>( taskCounter ), sizeof( float ), stream ) );
+		checkOro( cudaStreamSynchronize( stream ) );
 		std::cout << "Bvh cost: " << cost << std::endl;
 	}
 
 	if constexpr ( Timer::EnableTimer )
 	{
-		const float time = timer.getTimeRecord( PairTrianglesTime ) + timer.getTimeRecord( ComputeCentroidBoxTime ) +
-						   timer.getTimeRecord( ComputeMortonCodesTime ) + timer.getTimeRecord( SortTime ) +
-						   timer.getTimeRecord( SetupClustersTime ) + timer.getTimeRecord( PlocTime ) +
-						   timer.getTimeRecord( ComputeParentAddrsTime ) + timer.getTimeRecord( ComputeFatLeavesTime ) +
-						   timer.getTimeRecord( CollapseTime ) + timer.getTimeRecord( CompactTasksTime ) +
-						   timer.getTimeRecord( PackLeavesTime );
+		float time = timer.getTimeRecord( PairTrianglesTime ) + timer.getTimeRecord( ComputeCentroidBoxTime ) +
+					 timer.getTimeRecord( ComputeMortonCodesTime ) + timer.getTimeRecord( SortTime ) +
+					 timer.getTimeRecord( SetupClustersTime ) + timer.getTimeRecord( PlocTime ) +
+					 timer.getTimeRecord( ComputeParentAddrsTime ) + timer.getTimeRecord( ComputeFatLeavesTime ) +
+					 timer.getTimeRecord( CollapseTime ) + timer.getTimeRecord( CompactTasksTime ) +
+					 timer.getTimeRecord( PackLeavesTime );
 		std::cout << "Ploc total construction time: " << time << " ms" << std::endl;
 		std::cout << "\tpair triangles time: " << timer.getTimeRecord( PairTrianglesTime ) << " ms" << std::endl;
 		std::cout << "\tcompute centroid box time: " << timer.getTimeRecord( ComputeCentroidBoxTime ) << " ms" << std::endl;
@@ -444,19 +452,19 @@ void PlocBuilder::update(
 	Context&				context,
 	PrimitiveContainer&		primitives,
 	const hiprtBuildOptions buildOptions,
-	oroStream				stream,
+	cudaStream_t				stream,
 	MemoryArena&			storageMemoryArena )
 {
-	using Header = typename std::conditional<
+	typedef typename std::conditional<
 		std::is_same<PrimitiveNode, UserInstanceNode>::value || std::is_same<PrimitiveNode, HwInstanceNode>::value,
 		SceneHeader,
-		GeomHeader>::type;
+		GeomHeader>::type Header;
 
 	Header* header = storageMemoryArena.allocate<Header>();
 
 	Header h;
-	checkOro( oroMemcpyDtoHAsync( &h, reinterpret_cast<oroDeviceptr>( header ), sizeof( Header ), stream ) );
-	checkOro( oroStreamSynchronize( stream ) );
+	checkOro( cuMemcpyDtoHAsync( &h, reinterpret_cast<size_t>( header ), sizeof( Header ), stream ) );
+	checkOro( cudaStreamSynchronize( stream ) );
 
 	BoxNode*	   boxNodes	 = reinterpret_cast<BoxNode*>( h.m_boxNodes );
 	PrimitiveNode* primNodes = reinterpret_cast<PrimitiveNode*>( h.m_primNodes );

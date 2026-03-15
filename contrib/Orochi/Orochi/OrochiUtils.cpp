@@ -180,7 +180,7 @@ struct OrochiUtilsImpl
 		return false;
 	}
 
-	static void getCacheFileName( oroDevice device, const char* moduleName, const char* functionName, const char* options, std::string& binFileName, const std::string& cacheDirectory )
+	static void getCacheFileName( int device, const char* moduleName, const char* functionName, const char* options, std::string& binFileName, const std::string& cacheDirectory )
 	{
 		auto hashBin = []( const char* s, const size_t size )
 		{
@@ -221,11 +221,11 @@ struct OrochiUtilsImpl
 			return oriptr;
 		};
 
-		oroDeviceProp props;
-		oroGetDeviceProperties( &props, device );
+		cudaDeviceProp props;
+		cudaGetDeviceProperties( &props, device );
 
 		int v = 0;
-		oroDriverGetVersion( &v );
+		cudaDriverGetVersion( &v );
 		std::string deviceName = props.name;
 		std::string driverVersion = std::to_string( v );
 		char optionHash[9] = "0x0";
@@ -417,18 +417,18 @@ struct OrochiUtilsImpl
 	static std::string getCacheName( const std::string& path, const std::string& kernelname ) noexcept { return path + kernelname; }
 };
 
-void OrochiUtils::unloadKernelCache() 
+void OrochiUtils::unloadKernelCache()
 {
-	for ( auto& instance : m_kernelMap ) 
+	for ( auto& instance : m_kernelMap )
 	{
-		oroError e = oroModuleUnload( instance.second.module );
-		OROASSERT( e == oroSuccess, 0 );
+		CUresult e = cuModuleUnload( instance.second.module );
+		OROASSERT( e == cudaSuccess, 0 );
 	}
 	m_kernelMap.clear();
 	return;
 }
 
-OrochiUtils::~OrochiUtils() 
+OrochiUtils::~OrochiUtils()
 {
 	// it's safer to not call unloadKernelCache automatically in the destructor ( better to have a leak than manipulating bad pointers )
 	// Just inform the developer.
@@ -436,27 +436,27 @@ OrochiUtils::~OrochiUtils()
 		printf("Warning: OrochiUtils::unloadKernelCache should be called for good practice.\n");
 }
 
-// setup a base option list used in OrochiUtils 
+// setup a base option list used in OrochiUtils
 void SetupCompileOptions(
-	oroDevice device, 
-	const std::vector<const char*>* optsIn, 
-	std::string* optionalArchitectureTarget, // if this string is given, it must stay alive until it's used into orortcCompileProgram. ( otherwise its "c_str()" becomes an invalid pointer )
+	int device,
+	const std::vector<const char*>* optsIn,
+	std::string* optionalArchitectureTarget, // if this string is given, it must stay alive until it's used into nvrtcCompileProgram. ( otherwise its "c_str()" becomes an invalid pointer )
 	std::vector<const char*>& opts
 	)
 {
 	opts.push_back( "-std=c++17" );
 
-	if( optionalArchitectureTarget && oroGetCurAPI( 0 ) == ORO_API_HIP )
+	if( optionalArchitectureTarget /* && cudaGetCurAPI( 0 ) == ORO_API_HIP */ )
 	{
-		oroDeviceProp props;
+		cudaDeviceProp props;
 		::memset(&props,0,sizeof(props));
-		oroGetDeviceProperties( &props, device );
-		if ( props.gcnArchName && props.gcnArchName[0] != '\0' )
-		{
-			*optionalArchitectureTarget = "--gpu-architecture=";
-			*optionalArchitectureTarget += props.gcnArchName;
-			opts.push_back( optionalArchitectureTarget->c_str() );
-		}
+		cudaGetDeviceProperties( &props, device );
+		// if ( props.gcnArchName && props.gcnArchName[0] != '\0' )
+		// {
+		// 	*optionalArchitectureTarget = "--gpu-architecture=";
+		// 	*optionalArchitectureTarget += props.gcnArchName;
+		// 	opts.push_back( optionalArchitectureTarget->c_str() );
+		// }
 	}
 
 	if( optsIn )
@@ -469,26 +469,26 @@ void SetupCompileOptions(
 // base program compilation, used in several components of OrochiUtils
 // returns 0 if success.
 // if fails, returns a non-zero value
-int CreateAndCompileProgram(const char* code, const char* programName, std::vector<const char*>& opts, const char* nameExpression, 
+int CreateAndCompileProgram(const char* code, const char* programName, std::vector<const char*>& opts, const char* nameExpression,
 							int numHeaders, const char** headers, const char** includeNames,
-							orortcProgram* prog)
+							nvrtcProgram* prog)
 {
-	orortcResult e;
-	e = orortcCreateProgram( prog, code, programName, numHeaders, headers, includeNames );
+	nvrtcResult e;
+	e = nvrtcCreateProgram( prog, code, programName, numHeaders, headers, includeNames );
 
 	if ( nameExpression )
-		e = orortcAddNameExpression( *prog, nameExpression );
+		e = nvrtcAddNameExpression( *prog, nameExpression );
 
-	e = orortcCompileProgram( *prog, static_cast<int>( opts.size() ), opts.data() );
-	if( e != ORORTC_SUCCESS )
+	e = nvrtcCompileProgram( *prog, static_cast<int>( opts.size() ), opts.data() );
+	if( e != NVRTC_SUCCESS )
 	{
-		std::cout << "ERROR: orortcCompileProgram failed with log:\n";
+		std::cout << "ERROR: nvrtcCompileProgram failed with log:\n";
 		size_t logSize = 0;
-		orortcGetProgramLogSize( *prog, &logSize );
+		nvrtcGetProgramLogSize( *prog, &logSize );
 		if( logSize )
 		{
 			std::string log( logSize, '\0' );
-			orortcGetProgramLog( *prog, &log[0] );
+			nvrtcGetProgramLog( *prog, &log[0] );
 			std::cout << log << '\n';
 		}
 		else
@@ -496,21 +496,21 @@ int CreateAndCompileProgram(const char* code, const char* programName, std::vect
 			std::cout << "<NO LOG>\n";
 		}
 
-		// Even if orortcCompileProgram failed, let's return 'success' because there's a known issue where this function returns ORORTC_ERROR_COMPILATION even though the program might have been compiled correctly.
+		// Even if nvrtcCompileProgram failed, let's return 'success' because there's a known issue where this function returns ORORTC_ERROR_COMPILATION even though the program might have been compiled correctly.
 		//    ( example with Orochi Unit Test:  TEST_F( OroTestBase, link )   )
-		// The failure check is done at a higher level in functions like 'orortcGetBitcodeSize', so we won't miss any actual errors.
+		// The failure check is done at a higher level in functions like 'nvrtcGetBitcodeSize', so we won't miss any actual errors.
 		return 0;
 	}
 	return 0; // success code
 }
 
-bool OrochiUtils::readSourceCode( const std::string& path, std::string& sourceCode, std::vector<std::string>* includes ) 
+bool OrochiUtils::readSourceCode( const std::string& path, std::string& sourceCode, std::vector<std::string>* includes )
 {
-	return OrochiUtilsImpl::readSourceCode( path, sourceCode, includes ); 
+	return OrochiUtilsImpl::readSourceCode( path, sourceCode, includes );
 }
 
 // returns nullptr if failed
-oroFunction OrochiUtils::getFunctionFromFile( oroDevice device, const char* path, const char* funcName, std::vector<const char*>* optsIn )
+cudaFunction_t OrochiUtils::getFunctionFromFile( int device, const char* path, const char* funcName, std::vector<const char*>* optsIn )
 {
 	std::lock_guard<std::recursive_mutex> lock( m_mutex );
 
@@ -521,14 +521,14 @@ oroFunction OrochiUtils::getFunctionFromFile( oroDevice device, const char* path
 	}
 
 	std::string source;
-	if( !OrochiUtilsImpl::readSourceCode( path, source, 0 ) ) 
+	if( !OrochiUtilsImpl::readSourceCode( path, source, 0 ) )
 	{
 		printf("WARNING: getFunctionFromFile of file %s failed.\n", path);
 		return 0;
 	}
 
-	oroModule module = nullptr;
-	oroFunction f = getFunction( device, source.c_str(), path, funcName, optsIn, 0, nullptr, nullptr, &module );
+	CUmodule module = nullptr;
+	cudaFunction_t f = getFunction( device, source.c_str(), path, funcName, optsIn, 0, nullptr, nullptr, &module );
 
 	if ( f )
 	{
@@ -539,7 +539,7 @@ oroFunction OrochiUtils::getFunctionFromFile( oroDevice device, const char* path
 	return f;
 }
 
-oroFunction OrochiUtils::getFunctionFromString( oroDevice device, const char* source, const char* path, const char* funcName, std::vector<const char*>* optsIn, int numHeaders, const char** headers, const char** includeNames )
+cudaFunction_t OrochiUtils::getFunctionFromString( int device, const char* source, const char* path, const char* funcName, std::vector<const char*>* optsIn, int numHeaders, const char** headers, const char** includeNames )
 {
 	std::lock_guard<std::recursive_mutex> lock( m_mutex );
 
@@ -549,20 +549,20 @@ oroFunction OrochiUtils::getFunctionFromString( oroDevice device, const char* so
 		return m_kernelMap[cacheName].function;
 	}
 
-	oroModule module;
+	CUmodule module;
 
-	oroFunction f = getFunction( device, source, path, funcName, optsIn, numHeaders, headers, includeNames, &module );
+	cudaFunction_t f = getFunction( device, source, path, funcName, optsIn, numHeaders, headers, includeNames, &module );
 
 	if ( f )
 	{
 		m_kernelMap[cacheName].function = f;
 		m_kernelMap[cacheName].module = module;
 	}
-	
+
 	return f;
 }
 
-oroFunction OrochiUtils::getFunctionFromPrecompiledBinary_asData( const unsigned char* precompData, size_t dataSizeInBytes, const std::string& funcName )
+cudaFunction_t OrochiUtils::getFunctionFromPrecompiledBinary_asData( const unsigned char* precompData, size_t dataSizeInBytes, const std::string& funcName )
 {
 	std::lock_guard<std::recursive_mutex> lock( m_mutex );
 
@@ -572,24 +572,24 @@ oroFunction OrochiUtils::getFunctionFromPrecompiledBinary_asData( const unsigned
 		return m_kernelMap[cacheName].function;
 	}
 
-	oroModule module = nullptr;
-	oroError e = oroModuleLoadData( &module, precompData );
-	if ( e != oroSuccess )
+	CUmodule module = nullptr;
+	CUresult e = cuModuleLoadData( &module, precompData );
+	if ( e != cudaSuccess )
 	{
 		// add some verbose info to help debugging missing data
-		printf("oroModuleLoadData FAILED (error = %d) loading baked precomp data: %s\n", e, funcName.c_str());
+		printf("cuModuleLoadData FAILED (error = %d) loading baked precomp data: %s\n", e, funcName.c_str());
 		return nullptr;
 	}
 
-	oroFunction functionOut{};
-	e = oroModuleGetFunction( &functionOut, module, funcName.c_str() );
-	if ( e != oroSuccess )
+	CUfunction functionOut{};
+	e = cuModuleGetFunction( &functionOut, module, funcName.c_str() );
+	if ( e != cudaSuccess )
 	{
 		// add some verbose info to help debugging missing data
-		printf("oroModuleGetFunction FAILED (error = %d) loading baked precomp data: %s\n", e, funcName.c_str());
+		printf("cuModuleGetFunction FAILED (error = %d) loading baked precomp data: %s\n", e, funcName.c_str());
 		return nullptr;
 	}
-	OROASSERT( e == oroSuccess, 0 );
+	OROASSERT( e == cudaSuccess, 0 );
 
 	m_kernelMap[cacheName].function = functionOut;
 	m_kernelMap[cacheName].module = module;
@@ -597,7 +597,7 @@ oroFunction OrochiUtils::getFunctionFromPrecompiledBinary_asData( const unsigned
 	return functionOut;
 }
 
-oroFunction OrochiUtils::getFunctionFromPrecompiledBinary( const std::string& path, const std::string& funcName )
+cudaFunction_t OrochiUtils::getFunctionFromPrecompiledBinary( const std::string& path, const std::string& funcName )
 {
 	std::lock_guard<std::recursive_mutex> lock( m_mutex );
 
@@ -616,19 +616,19 @@ oroFunction OrochiUtils::getFunctionFromPrecompiledBinary( const std::string& pa
 
 	std::vector<char> binary( ( std::istreambuf_iterator<char>( instream ) ), std::istreambuf_iterator<char>() );
 
-	oroModule module = nullptr;
-	oroFunction functionOut{};
-	oroError e = oroModuleLoadData( &module, binary.data() );
-	if ( e != oroSuccess )
+	CUmodule module = nullptr;
+	CUfunction functionOut{};
+	CUresult e = cuModuleLoadData( &module, binary.data() );
+	if ( e != cudaSuccess )
 	{
 		// add some verbose info to help debugging missing file
-		printf("oroModuleLoadData FAILED (error = %d) loading file: %s\n", e, path.c_str());
+		printf("cuModuleLoadData FAILED (error = %d) loading file: %s\n", e, path.c_str());
 		return nullptr;
 	}
-	OROASSERT( e == oroSuccess, 0 );
+	OROASSERT( e == cudaSuccess, 0 );
 
-	e = oroModuleGetFunction( &functionOut, module, funcName.c_str() );
-	OROASSERT( e == oroSuccess, 0 );
+	e = cuModuleGetFunction( &functionOut, module, funcName.c_str() );
+	OROASSERT( e == cudaSuccess, 0 );
 
 	m_kernelMap[cacheName].function = functionOut;
 	m_kernelMap[cacheName].module = module;
@@ -637,14 +637,14 @@ oroFunction OrochiUtils::getFunctionFromPrecompiledBinary( const std::string& pa
 }
 
 // returns nullptr if failed
-oroFunction OrochiUtils::getFunction( oroDevice device, const char* code, const char* path, const char* funcName, std::vector<const char*>* optsIn, int numHeaders, const char** headers, const char** includeNames, oroModule* loadedModule)
+cudaFunction_t OrochiUtils::getFunction( int device, const char* code, const char* path, const char* funcName, std::vector<const char*>* optsIn, int numHeaders, const char** headers, const char** includeNames, CUmodule* loadedModule)
 {
 	std::lock_guard<std::recursive_mutex> lock( m_mutex );
 
 	std::vector<const char*> opts;
 	SetupCompileOptions(device, optsIn, nullptr, opts);
 
-	oroFunction function;
+	CUfunction function;
 	std::vector<char> codec;
 
 	std::string cacheFile;
@@ -661,39 +661,39 @@ oroFunction OrochiUtils::getFunction( oroDevice device, const char* code, const 
 	}
 	else
 	{
-		orortcProgram prog = nullptr;
+		nvrtcProgram prog = nullptr;
 		int createProgramErrorCode = CreateAndCompileProgram(code, funcName, opts, nullptr, numHeaders, headers, includeNames, &prog);
 
 		// if CreateAndCompileProgram failed
 		if ( createProgramErrorCode != 0 )
 		{
 			if ( prog )
-				orortcDestroyProgram( &prog );
+				nvrtcDestroyProgram( &prog );
 			return nullptr;
 		}
 
 		size_t codeSize;
-		orortcResult e;
-		e = orortcGetCodeSize( prog, &codeSize );
-		OROASSERT( e == ORORTC_SUCCESS, 0 );
+		nvrtcResult e;
+		e = nvrtcGetPTXSize( prog, &codeSize );
+		OROASSERT( e == NVRTC_SUCCESS, 0 );
 
 		codec.resize( codeSize );
-		e = orortcGetCode( prog, codec.data() );
-		OROASSERT( e == ORORTC_SUCCESS, 0 );
-		e = orortcDestroyProgram( &prog );
-		OROASSERT( e == ORORTC_SUCCESS, 0 );
+		e = nvrtcGetPTX( prog, codec.data() );
+		OROASSERT( e == NVRTC_SUCCESS, 0 );
+		e = nvrtcDestroyProgram( &prog );
+		OROASSERT( e == NVRTC_SUCCESS, 0 );
 
 		// store cache
 		OrochiUtilsImpl::createDirectory( m_cacheDirectory.c_str() );
 		OrochiUtilsImpl::cacheBinaryToFile( codec, cacheFile );
 	}
-	oroModule module;
-	oroError ee = oroModuleLoadData( &module, codec.data() );
-	OROASSERT( ee == oroSuccess, 0 );
-	ee = oroModuleGetFunction( &function, module, funcName );
-	OROASSERT( ee == oroSuccess, 0 );
+	CUmodule module;
+	CUresult ee = cuModuleLoadData( &module, codec.data() );
+	OROASSERT( ee == cudaSuccess, 0 );
+	ee = cuModuleGetFunction( &function, module, funcName );
+	OROASSERT( ee == cudaSuccess, 0 );
 
-	if ( loadedModule ) 
+	if ( loadedModule )
 	{
 		*loadedModule = module;
 	}
@@ -701,40 +701,40 @@ oroFunction OrochiUtils::getFunction( oroDevice device, const char* code, const 
 	return function;
 }
 
-void OrochiUtils::getData( oroDevice device, const char* code, const char* path, std::vector<const char*>* optsIn, std::vector<char>& dst )
+void OrochiUtils::getData( int device, const char* code, const char* path, std::vector<const char*>* optsIn, std::vector<char>& dst )
 {
-	orortcProgram prog = nullptr;
+	nvrtcProgram prog = nullptr;
 	int getProgErrorCode = getProgram( device, code, path, optsIn, nullptr, &prog );
 	if ( getProgErrorCode != 0 )
 	{
 		printf("WARNING: getProgram failed.\n");
 		if ( prog )
-			orortcDestroyProgram( &prog );
+			nvrtcDestroyProgram( &prog );
 		return;
 	}
 
-	orortcResult e = ORORTC_SUCCESS;
+	nvrtcResult e = NVRTC_SUCCESS;
 	size_t codeSize = 0;
-	e = orortcGetBitcodeSize( prog, &codeSize );
-	if ( e != ORORTC_SUCCESS || codeSize == 0 )
+	// e = nvrtcGetBitcodeSize( prog, &codeSize );
+	if ( e != NVRTC_SUCCESS || codeSize == 0 )
 	{
-		printf("WARNING: orortcGetBitcodeSize failed.\n");
+		printf("WARNING: nvrtcGetBitcodeSize failed.\n");
 		if ( prog )
-			orortcDestroyProgram( &prog );
+			nvrtcDestroyProgram( &prog );
 		return;
 	}
 
 	std::vector<char>& codec = dst;
 	codec.resize( codeSize );
-	e = orortcGetBitcode( prog, codec.data() );
-	e = orortcDestroyProgram( &prog );
-	
+	// e = nvrtcGetBitcode( prog, codec.data() );
+	e = nvrtcDestroyProgram( &prog );
+
 	return;
 }
 
 // returns 0 if SUCCEED
 // return non-zero value if FAILED
-int OrochiUtils::getProgram( oroDevice device, const char* code, const char* path, std::vector<const char*>* optsIn, const char* funcName, orortcProgram* prog )
+int OrochiUtils::getProgram( int device, const char* code, const char* path, std::vector<const char*>* optsIn, const char* funcName, nvrtcProgram* prog )
 {
 	std::vector<const char*> opts;
 	std::string architectureTarget;
@@ -743,55 +743,55 @@ int OrochiUtils::getProgram( oroDevice device, const char* code, const char* pat
 	return createProgramErrorCode;
 }
 
-void OrochiUtils::getModule( oroDevice device, const char* code, const char* path, std::vector<const char*>* optsIn, const char* funcName, oroModule* moduleOut ) 
-{ 
-	orortcProgram prog = nullptr;
+void OrochiUtils::getModule( int device, const char* code, const char* path, std::vector<const char*>* optsIn, const char* funcName, CUmodule* moduleOut )
+{
+	nvrtcProgram prog = nullptr;
 	int getProgErrorCode = getProgram( device, code, path, optsIn, funcName, &prog );
 	if ( getProgErrorCode != 0 )
 	{
 		printf("WARNING: getProgram failed.\n");
 		if ( prog )
-			orortcDestroyProgram( &prog );
+			nvrtcDestroyProgram( &prog );
 		return;
 	}
 
 	size_t codeSize = 0;
-	orortcResult e = ORORTC_SUCCESS;
+	nvrtcResult e = NVRTC_SUCCESS;
 	std::vector<char> codec;
-	e = orortcGetCodeSize( prog, &codeSize );
-	if ( e != ORORTC_SUCCESS || codeSize == 0 )
+	e = nvrtcGetPTXSize( prog, &codeSize );
+	if ( e != NVRTC_SUCCESS || codeSize == 0 )
 	{
-		printf("WARNING: orortcGetCodeSize failed.\n");
+		printf("WARNING: nvrtcGetPTXSize failed.\n");
 		if ( prog )
-			orortcDestroyProgram( &prog );
+			nvrtcDestroyProgram( &prog );
 		return;
 	}
 
 	codec.resize( codeSize );
-	e = orortcGetCode( prog, codec.data() );
-	OROASSERT( e == ORORTC_SUCCESS, 0 );
-	e = orortcDestroyProgram( &prog );
-	OROASSERT( e == ORORTC_SUCCESS, 0 );
+	e = nvrtcGetPTX( prog, codec.data() );
+	OROASSERT( e == NVRTC_SUCCESS, 0 );
+	e = nvrtcDestroyProgram( &prog );
+	OROASSERT( e == NVRTC_SUCCESS, 0 );
 
-	oroError ee = oroModuleLoadData( moduleOut, codec.data() );
-	OROASSERT( ee == oroSuccess, 0 );
+	CUresult ee = cuModuleLoadData( moduleOut, codec.data() );
+	OROASSERT( ee == cudaSuccess, 0 );
 	return;
 }
 
-void OrochiUtils::launch1D( oroFunction func, int nx, const void** args, int wgSize, unsigned int sharedMemBytes, oroStream stream ) 
+void OrochiUtils::launch1D( cudaFunction_t func, int nx, const void** args, int wgSize, unsigned int sharedMemBytes, cudaStream_t stream )
 {
 	int4 tpb = { wgSize, 1, 0 };
 	int4 nb = { ( nx + tpb.x - 1 ) / tpb.x, 1, 0 };
-	oroError e = oroModuleLaunchKernel( func, nb.x, nb.y, 1, tpb.x, tpb.y, 1, sharedMemBytes, stream, (void**)args, 0 );
-	OROASSERT( e == oroSuccess, 0 );
+	cudaError e = cudaLaunchKernel( func, dim3(nb.x, nb.y, 1), dim3(tpb.x, tpb.y, 1), (void**)args, sharedMemBytes, stream );
+	OROASSERT( e == cudaSuccess, 0 );
 }
 
-void OrochiUtils::launch2D( oroFunction func, int nx, int ny, const void** args, int wgSizeX, int wgSizeY, unsigned int sharedMemBytes, oroStream stream )
+void OrochiUtils::launch2D( cudaFunction_t func, int nx, int ny, const void** args, int wgSizeX, int wgSizeY, unsigned int sharedMemBytes, cudaStream_t stream )
 {
 	int4 tpb = { wgSizeX, wgSizeY, 0 };
 	int4 nb = { ( nx + tpb.x - 1 ) / tpb.x, ( ny + tpb.y - 1 ) / tpb.y, 0 };
-	oroError e = oroModuleLaunchKernel( func, nb.x, nb.y, 1, tpb.x, tpb.y, 1, sharedMemBytes, stream, (void**)args, 0 );
-	OROASSERT( e == oroSuccess, 0 );
+	cudaError e = cudaLaunchKernel( func, dim3(nb.x, nb.y, 1), dim3(tpb.x, tpb.y, 1), (void**)args, sharedMemBytes, stream );
+	OROASSERT( e == cudaSuccess, 0 );
 }
 
 void OrochiUtils::HandlePrecompiled(std::vector<unsigned char>& out, const CompressedBuffer& buffer)
@@ -799,13 +799,13 @@ void OrochiUtils::HandlePrecompiled(std::vector<unsigned char>& out, const Compr
 	#ifdef ORO_LINK_ZSTD
 		out.assign(buffer.uncompressedSize,0);
 
-		size_t decompressedSize = ZSTD_decompress(    
+		size_t decompressedSize = ZSTD_decompress(
 			out.data(), // final uncompressed buffer
 			out.size(), // final size
 			buffer.data, // compressed buffer
 			buffer.size // compressed buffer - size
 			);
-		
+
 		if ( decompressedSize != buffer.uncompressedSize )
 			throw std::runtime_error( "ERROR: ZSTD_decompress FAILED." );
 	#else

@@ -562,18 +562,10 @@ HIPRT_API hiprtError hiprtBuildTraceKernels(
 	hiprtApiModule*	  moduleOut,
 	bool			  cache );
 
-/** \brief Get function instance with HIPRT routines.
- * \param context The HIPRT API context.
- * \param numFunctions The number of functions to compile.
- * \param funcNames Functions to to be returned, cannot be nullptr.
- * \param moduleName The name of the bitcode module.
- * \param bitcodeBinary The user compiled bitcode.
- * \param bitcodeBinarySize The size of the compiled bitcode.
- * \param numGeomTypes The number of geometry types.
- * \param numRayTypes The number of ray types.
- * \param funcNameSets The table of custom function names (numRayTypes x numGeomTypes).
- * \param functionsOut The output function instances.
- * \return A HIPRT error in case of a failure, hiprtSuccess otherwise.
+/** \brief Legacy precompiled-kernel entry kept for source compatibility.
+ *
+ * The CUDA-only backend does not support the historical bitcode workflow and
+ * returns `hiprtErrorNotImplemented`.
  */
 HIPRT_API hiprtError hiprtBuildTraceKernelsFromBitcode(
 	hiprtContext	  context,

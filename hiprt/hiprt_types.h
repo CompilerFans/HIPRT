@@ -311,10 +311,12 @@ struct hiprtFuncNameSet
  */
 enum hiprtDeviceType
 {
-	/*!< AMD device */
+	/*!< Legacy AMD entry kept for source compatibility. */
 	hiprtDeviceAMD,
-	/*!< Nvidia device */
+	/*!< NVIDIA / CUDA backend. */
 	hiprtDeviceNVIDIA,
+	/*!< Optional CUDA alias. */
+	hiprtDeviceCUDA = hiprtDeviceNVIDIA,
 };
 
 /** \brief Context creation input.

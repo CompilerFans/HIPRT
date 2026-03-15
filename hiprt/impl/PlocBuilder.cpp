@@ -35,7 +35,8 @@ size_t PlocBuilder::getTemporaryBufferSize( const size_t count )
 {
 	return RoundUp( sizeof( Aabb ), DefaultAlignment ) + 4 * RoundUp( sizeof( uint32_t ) * count, DefaultAlignment ) +
 		   RoundUp( count * sizeof( ScratchNode ), DefaultAlignment ) +
-		   RoundUp( count * sizeof( ReferenceNode ), DefaultAlignment ) + RoundUp( sizeof( uint32_t ), DefaultAlignment );
+		   RoundUp( count * sizeof( ReferenceNode ), DefaultAlignment ) + RoundUp( sizeof( uint32_t ), DefaultAlignment ) +
+		   RoundUp( RadixSort::getTemporaryStorageSize( count ), DefaultAlignment );
 }
 
 size_t PlocBuilder::getTemporaryBufferSize(
@@ -85,7 +86,7 @@ void PlocBuilder::build(
 	const hiprtGeometryBuildInput& buildInput,
 	const hiprtBuildOptions		   buildOptions,
 	hiprtDevicePtr				   temporaryBuffer,
-	oroStream					   stream,
+	cudaStream_t					   stream,
 	hiprtDevicePtr				   buffer )
 {
 	const size_t storageSize = getStorageBufferSize( context, buildInput, buildOptions );
@@ -125,7 +126,7 @@ void PlocBuilder::build(
 	const hiprtSceneBuildInput& buildInput,
 	const hiprtBuildOptions		buildOptions,
 	hiprtDevicePtr				temporaryBuffer,
-	oroStream					stream,
+	cudaStream_t					stream,
 	hiprtDevicePtr				buffer )
 {
 	const size_t storageSize = getStorageBufferSize( context, buildInput, buildOptions );
@@ -165,7 +166,7 @@ void PlocBuilder::update(
 	const hiprtGeometryBuildInput&	buildInput,
 	const hiprtBuildOptions			buildOptions,
 	[[maybe_unused]] hiprtDevicePtr temporaryBuffer,
-	oroStream						stream,
+	cudaStream_t						stream,
 	hiprtDevicePtr					buffer )
 {
 	const size_t storageSize = getStorageBufferSize( context, buildInput, buildOptions );
@@ -199,7 +200,7 @@ void PlocBuilder::update(
 	const hiprtSceneBuildInput&		buildInput,
 	const hiprtBuildOptions			buildOptions,
 	[[maybe_unused]] hiprtDevicePtr temporaryBuffer,
-	oroStream						stream,
+	cudaStream_t						stream,
 	hiprtDevicePtr					buffer )
 {
 	const size_t storageSize = getStorageBufferSize( context, buildInput, buildOptions );

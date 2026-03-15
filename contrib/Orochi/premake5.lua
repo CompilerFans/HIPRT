@@ -105,12 +105,6 @@ workspace "YamatanoOrochi"
 	end
 
 
-	-- try to enable CUDA if possible.
-	include "./Orochi/enable_cuew"
-
-
-
-
    include "./UnitTest"
    group "Demos"
    	include "./Test"

@@ -1,7 +1,31 @@
 # HIPRT
 
+## 中文说明
+
+HIPRT 当前仓库保留 `HIPRT` 项目名称以及 `hiprt*` 公开 API 命名，但底层实现已经收敛为 CUDA-only。
+
+- 保留：`hiprt.h`、`hiprtew.h`、`hiprtCreateContext` 等公开接口
+- 去除：AMD HIP runtime、ROCm toolchain、`hipcc`、运行时 HIP 动态加载路径、旧 bitcode / 预编译链路
+- 当前构建方式：仅支持 `CMake + CUDA Toolkit`
+
+快速构建：
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release -j
+```
+
+一键脚本：
+
+```bash
+./scripts/build.sh
+./scripts/build_and_test.sh
+```
+
+如需更完整的中文改造说明，请查看 `docs/cuda-only-build-zh.md`。
+
 ## About 
-HIP RT is a ray tracing library for HIP, making it easy to write ray-tracing applications in HIP. The APIs and library are designed to be minimal, lower level, and simple to use and integrate into any existing HIP applications.
+HIP RT is a low-level ray tracing library. This repository now targets a CUDA/NVRTC runtime path and no longer depends on HIP toolchains, HIP runtime loaders, or compatibility layers.
 
 Although there are other ray tracing APIs which introduce many new things, we designed HIP RT in a slightly different way so you do not need to learn many new kernel types.
 
@@ -12,6 +36,15 @@ HIP RT library is developed and maintained by ARR, [Advanced Rendering Research 
 
 This is the main repository for the source code for HIPRT.
 
+## Current Status
+
+- The public project name remains `HIPRT`, and public API names such as `hiprtCreateContext` are intentionally preserved.
+- The backend is now CUDA-only. AMD HIP runtime, ROCm toolchains, `hipcc`, runtime loader paths, and legacy precompiled-bitcode build flows are not part of the build anymore.
+- `hiprtew.h` is kept as a compatibility header, but it now calls linked HIPRT APIs directly instead of resolving symbols at runtime.
+- The vendored `contrib/Orochi` subtree has been trimmed to the pieces still needed by the current build. Historical HIP loader code, Orochi tests, and Orochi helper scripts are no longer kept in the repository.
+
+For a concise Chinese description of the current build and migration boundaries, see `docs/cuda-only-build-zh.md`.
+
 ## Cloning and Building 
 
 1. `git clone https://github.com/GPUOpen-LibrariesAndSDKs/HIPRT.git`
@@ -19,38 +52,22 @@ This is the main repository for the source code for HIPRT.
 3. `git submodule update --init --recursive`
 4. `git lfs fetch` (To get resources for running performance tests)
 
-Then, you can use either premake or cmake.
-   
-&nbsp;&nbsp;&nbsp;On Windows with premake:  
-&nbsp;&nbsp;&nbsp;5. `set HIP_PATH=C:\Program Files\AMD\ROCm\6.2\`  (optional: change default HIP SDK path)  
-&nbsp;&nbsp;&nbsp;6. `.\tools\premake5\win\premake5.exe vs2022`  
-&nbsp;&nbsp;&nbsp;7. `Open build\hiprt.sln with Visual Studio 2022.`  
+Build with CMake only.
 
-&nbsp;&nbsp;&nbsp;On Linux with premake:  
-&nbsp;&nbsp;&nbsp;5. `export HIP_PATH=/opt/rocm`  (optional: change default HIP SDK path)  
-&nbsp;&nbsp;&nbsp;6. `./tools/premake5/linux64/premake5 gmake`  
-&nbsp;&nbsp;&nbsp;7. `make -C build -j config=release_x64`  
+&nbsp;&nbsp;&nbsp;Example on Windows:
+&nbsp;&nbsp;&nbsp;5. `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release`
+&nbsp;&nbsp;&nbsp;6. `cmake --build build --config Release`
 
-&nbsp;&nbsp;&nbsp;Example with Cmake on Windows:  
-&nbsp;&nbsp;&nbsp;5. `mkdir build`  
-&nbsp;&nbsp;&nbsp;6. `cmake -DCMAKE_BUILD_TYPE=Release -DBITCODE=OFF -DHIP_PATH="C:\Program Files\AMD\ROCm\5.7" -S . -B build`  
-&nbsp;&nbsp;&nbsp;7. `Open build\hiprt.sln with Visual Studio 2022.`  
+&nbsp;&nbsp;&nbsp;Example on Linux:
+&nbsp;&nbsp;&nbsp;5. `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release`
+&nbsp;&nbsp;&nbsp;6. `cmake --build build --config Release -j`
 
-&nbsp;&nbsp;&nbsp;Example with Cmake on Linux:  
-&nbsp;&nbsp;&nbsp;5. `mkdir build`  
-&nbsp;&nbsp;&nbsp;6. `cmake -DCMAKE_BUILD_TYPE=Release -DBITCODE=OFF -DHIP_PATH="/opt/rocm" -S . -B build`  
-&nbsp;&nbsp;&nbsp;7. `cmake --build build --config Release`  
+### Build Notes
 
-
-
-
-### Using Bitcode
-Add the option `--bitcode` in premake, or `-DBITCODE=ON` in cmake to enable precompiled bitcode. 
-
-#### Generation of bitcode
-- After premake, go to `scripts/bitcodes`, then run `python compile.py` which compiles kernels to bitcode and fatbinary.
-- Or pass `--precompile` to premake, or `-DPRECOMPILE=ON` in cmake . It executes the `compile.py` during premake. Note that you cannot do it in git bash on windows (because of hipcc...)
-
+- `CUDAToolkit` is required. CMake configures the project in CUDA mode only.
+- `CMAKE_CUDA_ARCHITECTURES` is cache-configurable. Example: `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_ARCHITECTURES=89`.
+- Unit tests are built by default. Disable them with `-DNO_UNITTEST=ON`.
+- Generated binaries are written to `dist/bin/<Config>/`.
 
 ## Running Unit Tests
 
@@ -61,13 +78,11 @@ There are three types of tests.
 
 Example: `..\dist\bin\Release\unittest64.exe --width=512 --height=512 --referencePath=.\references\ --gtest_filter=hiprt*:Obj*" `
 
-## Developing HIPRT
+Linux helper scripts:
+- `cd scripts && ./unittest.sh`
+- `cd scripts && ./unittest_perf.sh`
 
-### Compiling Bundled Bitcode and Fatbinary 
-- Clone `hipSdk` repo to the root directory.
-- Go to `scripts/bitcodes`, run `python compile.py` which uses `hipcc` from the `hipSdk` directory. (todo. make it more general, maybe search for `hipcc` from path, if it's not found, use the directory above or something like this)
-	- Note use python version 3.*+.
-	- Git bash shell is not supported for compile.py.
+## Developing HIPRT
 
 ### Coding Guidelines
 - Resolve compiler warnings.

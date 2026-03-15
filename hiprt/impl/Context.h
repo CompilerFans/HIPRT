@@ -23,15 +23,19 @@
 //////////////////////////////////////////////////////////////////////////////////////////
 
 #pragma once
-#include <Orochi/Orochi.h>
+#include <cuda_runtime_api.h>
+#include <cuda.h>
+#include <cuda_profiler_api.h>
+#include <nvrtc.h>
 #include <hiprt/hiprt_types.h>
 #include <hiprt/impl/Compiler.h>
 #include <hiprt/impl/Error.h>
 #include <hiprt/impl/Logger.h>
-#include <ParallelPrimitives/RadixSort.h>
 
 namespace hiprt
 {
+using cudaDeviceptr = void*;
+
 class Context
 {
   public:
@@ -47,20 +51,20 @@ class Context
 		const std::vector<hiprtGeometryBuildInput>& buildInputs,
 		const hiprtBuildOptions						buildOptions,
 		hiprtDevicePtr								temporaryBuffer,
-		oroStream									stream,
+		cudaStream_t									stream,
 		std::vector<hiprtDevicePtr>&				buffers );
 
 	void updateGeometries(
 		const std::vector<hiprtGeometryBuildInput>& buildInputs,
 		const hiprtBuildOptions						buildOptions,
 		hiprtDevicePtr								temporaryBuffer,
-		oroStream									stream,
+		cudaStream_t									stream,
 		std::vector<hiprtDevicePtr>&				buffers );
 
 	size_t getGeometriesBuildTempBufferSize(
 		const std::vector<hiprtGeometryBuildInput>& buildInputs, const hiprtBuildOptions buildOptions );
 
-	std::vector<hiprtGeometry> compactGeometries( const std::vector<hiprtGeometry>& geometries, oroStream stream );
+	std::vector<hiprtGeometry> compactGeometries( const std::vector<hiprtGeometry>& geometries, cudaStream_t stream );
 
 	std::vector<hiprtScene>
 	createScenes( const std::vector<hiprtSceneBuildInput>& buildInputs, const hiprtBuildOptions buildOptions );
@@ -71,20 +75,20 @@ class Context
 		const std::vector<hiprtSceneBuildInput>& buildInputs,
 		const hiprtBuildOptions					 buildOptions,
 		hiprtDevicePtr							 temporaryBuffer,
-		oroStream								 stream,
+		cudaStream_t								 stream,
 		std::vector<hiprtDevicePtr>&			 buffers );
 
 	void updateScenes(
 		const std::vector<hiprtSceneBuildInput>& buildInputs,
 		const hiprtBuildOptions					 buildOptions,
 		hiprtDevicePtr							 temporaryBuffer,
-		oroStream								 stream,
+		cudaStream_t								 stream,
 		std::vector<hiprtDevicePtr>&			 buffers );
 
 	size_t
 	getScenesBuildTempBufferSize( const std::vector<hiprtSceneBuildInput>& buildInputs, const hiprtBuildOptions buildOptions );
 
-	std::vector<hiprtScene> compactScenes( const std::vector<hiprtScene>& scenes, oroStream stream );
+	std::vector<hiprtScene> compactScenes( const std::vector<hiprtScene>& scenes, cudaStream_t stream );
 
 	hiprtFuncTable createFuncTable( uint32_t numGeomTypes, uint32_t numRayTypes );
 	void		   setFuncTable( hiprtFuncTable funcTable, uint32_t geomType, uint32_t rayType, hiprtFuncDataSet set );
@@ -112,18 +116,8 @@ class Context
 		uint32_t							 numGeomTypes,
 		uint32_t							 numRayTypes,
 		const std::vector<hiprtFuncNameSet>& funcNameSets,
-		std::vector<oroFunction>&			 functions,
-		oroModule&							 module,
-		bool								 cache );
-
-	void buildKernelsFromBitcode(
-		const std::vector<const char*>&		 funcNames,
-		const std::filesystem::path&		 moduleName,
-		const std::string_view				 bitcodeBinary,
-		uint32_t							 numGeomTypes,
-		uint32_t							 numRayTypes,
-		const std::vector<hiprtFuncNameSet>& funcNameSets,
-		std::vector<oroFunction>&			 functions,
+		std::vector<CUfunction>&			 functions,
+		CUmodule&							 module,
 		bool								 cache );
 
 	void setCacheDir( const std::filesystem::path& path );
@@ -155,8 +149,8 @@ class Context
 	std::string getGcnArchName() const;
 	std::string getDriverVersion() const;
 
-	oroDevice	 getDevice() const noexcept { return m_device; }
-	OrochiUtils& getOrochiUtils() { return m_oroutils; }
+	int	 getDevice() const noexcept { return m_device; }
+	void setDevice( int d ) { m_device = d; }
 	Compiler&	 getCompiler() { return m_compiler; }
 
 	uint32_t getRtip() const;
@@ -167,13 +161,12 @@ class Context
 	size_t	 getInstanceNodeSize() const;
 
   private:
-	oroDevice	m_device;
-	oroCtx		m_ctxt;
-	OrochiUtils m_oroutils;
-	Compiler	m_compiler;
-	Logger		m_logger;
+	int		  m_device;
+	CUcontext m_ctxt = nullptr;
+	Compiler  m_compiler;
+	Logger	  m_logger;
 
 	std::mutex											m_poolMutex;
-	std::map<std::pair<oroDeviceptr, size_t>, uint32_t> m_poolHeads;
+	std::map<std::pair<cudaDeviceptr, size_t>, uint32_t> m_poolHeads;
 };
 } // namespace hiprt

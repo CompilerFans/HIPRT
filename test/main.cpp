@@ -298,50 +298,6 @@ TEST_F( ObjTestCases, RotateCornellBox )
 	deleteScene( m_scene );
 }
 
-TEST_F( ObjTestCases, BvhUpdateCornellBox )
-{
-	constexpr uint32_t Option	  = VisualizeColor;
-	constexpr uint32_t FrameCount = 7;
-	constexpr bool	   Timings	  = true;
-	const std::string  kernelName = "PrimaryRayKernel_" + std::to_string( Option );
-
-	hiprtFrameSRT transform;
-	transform.translation = { 0.0f, 0.0f, -3.0f };
-	transform.scale		  = { 1.0f, 1.0f, 1.0f };
-	Camera camera		  = createCamera<TestCasesType::TestCornellBox>();
-
-	float angle = 0.0f;
-	for ( uint32_t i = 0; i < FrameCount; i++, angle += 0.1 )
-	{
-		transform.rotation = { 0.0f, 1.0f, 0.0f, angle };
-		setupScene(
-			camera,
-			getRootDir() / "test/common/meshes/cornellbox/cornellBox.obj",
-			false,
-			transform,
-			hiprtBuildFlagBitPreferFastBuild,
-			Timings );
-		render( std::nullopt, getRootDir() / "test/kernels/PrimaryRayKernel.h", kernelName, std::nullopt, Timings );
-		deleteScene( m_scene );
-	}
-
-	transform.rotation = { 0.0f, 1.0f, 0.0f, angle };
-	setupScene(
-		camera,
-		getRootDir() / "test/common/meshes/cornellbox/cornellBox.obj",
-		false,
-		transform,
-		hiprtBuildFlagBitPreferFastBuild,
-		Timings );
-	render(
-		"BvhUpdateCornellBox.png",
-		getRootDir() / "test/kernels/PrimaryRayKernel.h",
-		kernelName,
-		"BvhUpdateCornellBox.png",
-		Timings );
-	deleteScene( m_scene );
-}
-
 TEST_F( ObjTestCases, BvhFastCornellBox )
 {
 	constexpr uint32_t Option	  = VisualizeColor;
@@ -381,29 +337,6 @@ TEST_F( ObjTestCases, BvhHighQCornellBox )
 		Timings );
 	render(
 		"BvhHighQCornellBox.png",
-		getRootDir() / "test/kernels/PrimaryRayKernel.h",
-		kernelName,
-		"PrimaryRayCornellBox.png",
-		Timings );
-	deleteScene( m_scene );
-}
-
-TEST_F( ObjTestCases, BvhBalancedCornellBox )
-{
-	constexpr uint32_t Option	  = VisualizeColor;
-	constexpr bool	   Timings	  = true;
-	const std::string  kernelName = "PrimaryRayKernel_" + std::to_string( Option );
-
-	Camera camera = createCamera<TestCasesType::TestCornellBox>();
-	setupScene(
-		camera,
-		getRootDir() / "test/common/meshes/cornellbox/cornellBox.obj",
-		false,
-		std::nullopt,
-		hiprtBuildFlagBitPreferBalancedBuild,
-		Timings );
-	render(
-		"BvhBalancedCornellBox.png",
 		getRootDir() / "test/kernels/PrimaryRayKernel.h",
 		kernelName,
 		"PrimaryRayCornellBox.png",
@@ -462,18 +395,6 @@ TEST_F( ObjTestCases, AoRayEmbreeCornellBox )
 	deleteScene( m_scene );
 }
 
-TEST_F( ObjTestCases, PrimaryRayCornellBox )
-{
-	constexpr uint32_t Option	  = VisualizeColor;
-	const std::string  kernelName = "PrimaryRayKernel_" + std::to_string( Option );
-
-	Camera camera = createCamera<TestCasesType::TestCornellBox>();
-	setupScene( camera, getRootDir() / "test/common/meshes/cornellbox/cornellBox.obj" );
-	render(
-		"PrimaryRayCornellBox.png", getRootDir() / "test/kernels/PrimaryRayKernel.h", kernelName, "PrimaryRayCornellBox.png" );
-	deleteScene( m_scene );
-}
-
 TEST_F( ObjTestCases, UvsCornellBox )
 {
 	constexpr uint32_t Option	  = VisualizeUv;
@@ -518,13 +439,91 @@ TEST_F( ObjTestCases, NormalsCornellBox )
 	deleteScene( m_scene );
 }
 
+TEST_F( ObjTestCases, BvhUpdateCornellBox )
+{
+	constexpr uint32_t Option	  = VisualizeColor;
+	constexpr uint32_t FrameCount = 7;
+	constexpr bool	   Timings	  = true;
+	const std::string  kernelName = "PrimaryRayKernel_" + std::to_string( Option );
+
+	hiprtFrameSRT transform;
+	transform.translation = { 0.0f, 0.0f, -3.0f };
+	transform.scale		  = { 1.0f, 1.0f, 1.0f };
+	Camera camera		  = createCamera<TestCasesType::TestCornellBox>();
+
+	float angle = 0.0f;
+	for ( uint32_t i = 0; i < FrameCount; i++, angle += 0.1 )
+	{
+		transform.rotation = { 0.0f, 1.0f, 0.0f, angle };
+		setupScene(
+			camera,
+			getRootDir() / "test/common/meshes/cornellbox/cornellBox.obj",
+			false,
+			transform,
+			hiprtBuildFlagBitPreferFastBuild,
+			Timings );
+		render( std::nullopt, getRootDir() / "test/kernels/PrimaryRayKernel.h", kernelName, std::nullopt, Timings );
+		deleteScene( m_scene );
+	}
+
+	transform.rotation = { 0.0f, 1.0f, 0.0f, angle };
+	setupScene(
+		camera,
+		getRootDir() / "test/common/meshes/cornellbox/cornellBox.obj",
+		false,
+		transform,
+		hiprtBuildFlagBitPreferFastBuild,
+		Timings );
+	render(
+		"BvhUpdateCornellBox.png",
+		getRootDir() / "test/kernels/PrimaryRayKernel.h",
+		kernelName,
+		"BvhUpdateCornellBox.png",
+		Timings );
+	deleteScene( m_scene );
+}
+
+TEST_F( ObjTestCases, BvhBalancedCornellBox )
+{
+	constexpr uint32_t Option	  = VisualizeColor;
+	constexpr bool	   Timings	  = true;
+	const std::string  kernelName = "PrimaryRayKernel_" + std::to_string( Option );
+
+	Camera camera = createCamera<TestCasesType::TestCornellBox>();
+	setupScene(
+		camera,
+		getRootDir() / "test/common/meshes/cornellbox/cornellBox.obj",
+		false,
+		std::nullopt,
+		hiprtBuildFlagBitPreferBalancedBuild,
+		Timings );
+	render(
+		"BvhBalancedCornellBox.png",
+		getRootDir() / "test/kernels/PrimaryRayKernel.h",
+		kernelName,
+		"PrimaryRayCornellBox.png",
+		Timings );
+	deleteScene( m_scene );
+}
+
+TEST_F( ObjTestCases, PrimaryRayCornellBox )
+{
+	constexpr uint32_t Option	  = VisualizeColor;
+	const std::string  kernelName = "PrimaryRayKernel_" + std::to_string( Option );
+
+	Camera camera = createCamera<TestCasesType::TestCornellBox>();
+	setupScene( camera, getRootDir() / "test/common/meshes/cornellbox/cornellBox.obj" );
+	render(
+		"PrimaryRayCornellBox.png", getRootDir() / "test/kernels/PrimaryRayKernel.h", kernelName, "PrimaryRayCornellBox.png" );
+	deleteScene( m_scene );
+}
+
 TEST_F( hiprtTest, CudaEnabled )
 {
-// this unit test is just to inform if CUEW is disabled.
-// if it fails, this means that you should install the CUDA SDK, add its include path to this project, and enable
-// OROCHI_ENABLE_CUEW. ( if the CUDA SDK is installed, the premake script should automatically enable CUEW )
-#ifndef OROCHI_ENABLE_CUEW
-	printf( "This build may not be able to run on NVIDIA.\n" );
+// This build now targets CUDA directly, so the only hard requirement is that the
+// CUDA toolkit include path is injected for runtime NVRTC compilation.
+#ifndef HIPRT_CUDA_INCLUDE_DIR
+	printf( "This build is missing the CUDA toolkit include path.\n" );
 	ASSERT_TRUE( false );
 #endif
 }
@@ -573,17 +572,9 @@ TEST_F( hiprtTest, MinimumCornellBox )
 	// for the previous slots, use empty functions.
 	std::vector<hiprtFuncNameSet> funcNameSets = { funcName_unused, funcName_unused, funcNameSet };
 
-	oroFunction func;
-	if constexpr ( UseBitcode )
-	{
-		buildTraceKernelFromBitcode(
+	cudaFunction_t func;
+	buildTraceKernel(
 			ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "CornellBoxKernel", func, std::nullopt, funcNameSets, 3, 1 );
-	}
-	else
-	{
-		buildTraceKernel(
-			ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "CornellBoxKernel", func, std::nullopt, funcNameSets, 3, 1 );
-	}
 
 	hiprtFuncDataSet funcDataSet;
 	hiprtFuncTable	 funcTable;
@@ -663,17 +654,9 @@ TEST_F( hiprtTest, Compaction )
 	// for the previous slots, use empty functions.
 	std::vector<hiprtFuncNameSet> funcNameSets = { funcName_unused, funcName_unused, funcNameSet };
 
-	oroFunction func;
-	if constexpr ( UseBitcode )
-	{
-		buildTraceKernelFromBitcode(
+	cudaFunction_t func;
+	buildTraceKernel(
 			ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "CornellBoxKernel", func, std::nullopt, funcNameSets, 3, 1 );
-	}
-	else
-	{
-		buildTraceKernel(
-			ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "CornellBoxKernel", func, std::nullopt, funcNameSets, 3, 1 );
-	}
 
 	hiprtFuncDataSet funcDataSet;
 	hiprtFuncTable	 funcTable;
@@ -749,17 +732,9 @@ TEST_F( hiprtTest, BatchCornellBox )
 	funcNameSet.filterFuncName				   = "duplicityFilter";
 	std::vector<hiprtFuncNameSet> funcNameSets = { funcNameSet };
 
-	oroFunction func;
-	if constexpr ( UseBitcode )
-	{
-		buildTraceKernelFromBitcode(
+	cudaFunction_t func;
+	buildTraceKernel(
 			ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "CornellBoxKernel", func, std::nullopt, funcNameSets, 1, 1 );
-	}
-	else
-	{
-		buildTraceKernel(
-			ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "CornellBoxKernel", func, std::nullopt, funcNameSets, 1, 1 );
-	}
 
 	hiprtFuncDataSet funcDataSet;
 	hiprtFuncTable	 funcTable;
@@ -882,13 +857,9 @@ TEST_F( hiprtTest, CustomBvhImport )
 	funcNameSet.filterFuncName				   = "duplicityFilter";
 	std::vector<hiprtFuncNameSet> funcNameSets = { funcNameSet };
 
-	oroFunction func;
+	cudaFunction_t func;
 
-	if constexpr ( UseBitcode )
-		buildTraceKernelFromBitcode(
-			ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "CornellBoxKernel", func, std::nullopt, funcNameSets, 1, 1 );
-	else
-		buildTraceKernel(
+	buildTraceKernel(
 			ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "CornellBoxKernel", func, std::nullopt, funcNameSets, 1, 1 );
 
 	hiprtFuncDataSet funcDataSet;
@@ -968,7 +939,7 @@ TEST_F( hiprtTest, BvhIoApi )
 	checkHiprt( hiprtLoadGeometry( ctxt, outGeom, filename ) );
 	checkHiprt( hiprtDestroyGeometry( ctxt, inGeom ) );
 
-	oroFunction		 func;
+	cudaFunction_t		 func;
 	hiprtFuncDataSet funcDataSet;
 	hiprtFuncTable	 funcTable;
 	checkHiprt( hiprtCreateFuncTable( ctxt, 1, 1, funcTable ) );
@@ -978,11 +949,7 @@ TEST_F( hiprtTest, BvhIoApi )
 	funcNameSet.filterFuncName				   = "duplicityFilter";
 	std::vector<hiprtFuncNameSet> funcNameSets = { funcNameSet };
 
-	if constexpr ( UseBitcode )
-		buildTraceKernelFromBitcode(
-			ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "CornellBoxKernel", func, std::nullopt, funcNameSets, 1, 1 );
-	else
-		buildTraceKernel(
+	buildTraceKernel(
 			ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "CornellBoxKernel", func, std::nullopt, funcNameSets, 1, 1 );
 
 	uint8_t* dst;
@@ -1047,11 +1014,8 @@ TEST_F( hiprtTest, MeshIntersection )
 	checkHiprt( hiprtCreateGeometry( ctxt, geomInput, options, geom ) );
 	checkHiprt( hiprtBuildGeometry( ctxt, hiprtBuildOperationBuild, geomInput, options, geomTemp, 0, geom ) );
 
-	oroFunction func;
-	if constexpr ( UseBitcode )
-		buildTraceKernelFromBitcode( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "MeshIntersectionKernel", func );
-	else
-		buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "MeshIntersectionKernel", func );
+	cudaFunction_t func;
+	buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "MeshIntersectionKernel", func );
 
 	uint8_t* dst;
 	malloc( dst, g_parsedArgs.m_ww * g_parsedArgs.m_wh * 4 );
@@ -1098,11 +1062,8 @@ TEST_F( hiprtTest, MeshIntersectionNonIndexed )
 	checkHiprt( hiprtCreateGeometry( ctxt, geomInput, options, geom ) );
 	checkHiprt( hiprtBuildGeometry( ctxt, hiprtBuildOperationBuild, geomInput, options, geomTemp, 0, geom ) );
 
-	oroFunction func;
-	if constexpr ( UseBitcode )
-		buildTraceKernelFromBitcode( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "MeshIntersectionKernel", func );
-	else
-		buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "MeshIntersectionKernel", func );
+	cudaFunction_t func;
+	buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "MeshIntersectionKernel", func );
 
 	uint8_t* dst;
 	malloc( dst, g_parsedArgs.m_ww * g_parsedArgs.m_wh * 4 );
@@ -1191,11 +1152,8 @@ TEST_F( hiprtTest, PairTriangles )
 	checkHiprt( hiprtCreateScene( ctxt, sceneInput, options, scene ) );
 	checkHiprt( hiprtBuildScene( ctxt, hiprtBuildOperationBuild, sceneInput, options, sceneTemp, 0, scene ) );
 
-	oroFunction func;
-	if constexpr ( UseBitcode )
-		buildTraceKernelFromBitcode( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "PairTrianglesKernel", func );
-	else
-		buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "PairTrianglesKernel", func );
+	cudaFunction_t func;
+	buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "PairTrianglesKernel", func );
 
 	uint8_t* dst;
 	malloc( dst, g_parsedArgs.m_ww * g_parsedArgs.m_wh * 4 );
@@ -1261,14 +1219,8 @@ TEST_F( hiprtTest, Cutout )
 	// for the previous slots, use empty functions.
 	std::vector<hiprtFuncNameSet> funcNameSets = { funcName_unused, funcName_unused, funcName_unused, funcNameSet };
 
-	oroFunction func;
-
-	// note : precompiled bitcode path is not used for this test
-	if constexpr ( UseBitcode )
-		buildTraceKernelFromBitcode(
-			ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "CutoutKernel", func, std::nullopt, funcNameSets, 4, 1 );
-	else
-		buildTraceKernel(
+	cudaFunction_t func;
+	buildTraceKernel(
 			ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "CutoutKernel", func, std::nullopt, funcNameSets, 4, 1 );
 
 	hiprtFuncDataSet funcDataSet;
@@ -1333,19 +1285,8 @@ TEST_F( hiprtTest, CustomIntersection )
 	funcNameSet.intersectFuncName			   = "intersectCircle";
 	std::vector<hiprtFuncNameSet> funcNameSets = { funcNameSet };
 
-	oroFunction func;
-	if constexpr ( UseBitcode )
-		buildTraceKernelFromBitcode(
-			ctxt,
-			getRootDir() / "test/kernels/HiprtTestKernel.h",
-			"CustomIntersectionKernel",
-			func,
-			std::nullopt,
-			funcNameSets,
-			1,
-			1 );
-	else
-		buildTraceKernel(
+	cudaFunction_t func;
+	buildTraceKernel(
 			ctxt,
 			getRootDir() / "test/kernels/HiprtTestKernel.h",
 			"CustomIntersectionKernel",
@@ -1455,12 +1396,8 @@ TEST_F( hiprtTest, SceneIntersectionSingleton )
 	checkHiprt( hiprtCreateScene( ctxt, sceneInput, options, scene ) );
 	checkHiprt( hiprtBuildScene( ctxt, hiprtBuildOperationBuild, sceneInput, options, sceneTemp, 0, scene ) );
 
-	oroFunction func;
-	if constexpr ( UseBitcode )
-		buildTraceKernelFromBitcode(
-			ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "SceneIntersectionSingleton", func );
-	else
-		buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "SceneIntersectionSingleton", func );
+	cudaFunction_t func;
+	buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "SceneIntersectionSingleton", func );
 
 	uint8_t* dst;
 	malloc( dst, g_parsedArgs.m_ww * g_parsedArgs.m_wh * 4 );
@@ -1608,20 +1545,9 @@ TEST_F( hiprtTest, SceneIntersection )
 	funcNameSet.intersectFuncName			   = "intersectCircle";
 	std::vector<hiprtFuncNameSet> funcNameSets = { funcNameSet };
 
-	oroFunction func;
+	cudaFunction_t func;
 
-	if constexpr ( UseBitcode )
-		buildTraceKernelFromBitcode(
-			ctxt,
-			getRootDir() / "test/kernels/HiprtTestKernel.h",
-			"SceneIntersectionKernel",
-			func,
-			std::nullopt,
-			funcNameSets,
-			1,
-			1 );
-	else
-		buildTraceKernel(
+	buildTraceKernel(
 			ctxt,
 			getRootDir() / "test/kernels/HiprtTestKernel.h",
 			"SceneIntersectionKernel",
@@ -1833,21 +1759,8 @@ TEST_F( hiprtTest, SceneIntersectionMlas )
 	funcNameSet.intersectFuncName			   = "intersectCircle";
 	std::vector<hiprtFuncNameSet> funcNameSets = { funcNameSet };
 
-	oroFunction func;
-
-	// note : precompiled bitcode path is not used for this test
-	if constexpr ( UseBitcode )
-		buildTraceKernelFromBitcode(
-			ctxt,
-			getRootDir() / "test/kernels/HiprtTestKernel.h",
-			"SceneIntersectionKernel",
-			func,
-			std::nullopt,
-			funcNameSets,
-			1,
-			1 );
-	else
-		buildTraceKernel(
+	cudaFunction_t func;
+	buildTraceKernel(
 			ctxt,
 			getRootDir() / "test/kernels/HiprtTestKernel.h",
 			"SceneIntersectionKernel",
@@ -1965,12 +1878,8 @@ TEST_F( hiprtTest, Shear )
 	checkHiprt( hiprtCreateScene( ctxt, sceneInput, options, scene ) );
 	checkHiprt( hiprtBuildScene( ctxt, hiprtBuildOperationBuild, sceneInput, options, sceneTemp, 0, scene ) );
 
-	oroFunction func;
-	if constexpr ( UseBitcode )
-		buildTraceKernelFromBitcode(
-			ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "SceneIntersectionSingleton", func );
-	else
-		buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "SceneIntersectionSingleton", func );
+	cudaFunction_t func;
+	buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "SceneIntersectionSingleton", func );
 
 	uint8_t* dst;
 	malloc( dst, g_parsedArgs.m_ww * g_parsedArgs.m_wh * 4 );
@@ -2135,11 +2044,8 @@ TEST_F( hiprtTest, MotionBlur )
 		checkHiprt( hiprtBuildScene( ctxt, hiprtBuildOperationBuild, sceneInput, options, sceneTemp, 0, scene ) );
 	}
 
-	oroFunction func;
-	if constexpr ( UseBitcode )
-		buildTraceKernelFromBitcode( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "MotionBlurKernel", func );
-	else
-		buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "MotionBlurKernel", func );
+	cudaFunction_t func;
+	buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "MotionBlurKernel", func );
 
 	uint8_t* dst;
 	malloc( dst, g_parsedArgs.m_ww * g_parsedArgs.m_wh * 4 );
@@ -2340,11 +2246,8 @@ TEST_F( hiprtTest, MotionBlurMatrix )
 		checkHiprt( hiprtBuildScene( ctxt, hiprtBuildOperationBuild, sceneInput, options, sceneTemp, 0, scene ) );
 	}
 
-	oroFunction func;
-	if constexpr ( UseBitcode )
-		buildTraceKernelFromBitcode( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "MotionBlurKernel", func );
-	else
-		buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "MotionBlurKernel", func );
+	cudaFunction_t func;
+	buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "MotionBlurKernel", func );
 
 	uint8_t* dst;
 	malloc( dst, g_parsedArgs.m_ww * g_parsedArgs.m_wh * 4 );
@@ -2454,21 +2357,8 @@ TEST_F( hiprtTest, MotionBlurSlerp )
 	// use 'funcNameSet' at slot 'geomType_SPHERE'
 	// for the previous slot, use empty functions.
 	std::vector<hiprtFuncNameSet> funcNameSets = { funcName_unused, funcNameSet };
-
-	// note : precompiled bitcode path is not used for this test
-	oroFunction func;
-	if constexpr ( UseBitcode )
-		buildTraceKernelFromBitcode(
-			ctxt,
-			getRootDir() / "test/kernels/HiprtTestKernel.h",
-			"MotionBlurSlerpKernel",
-			func,
-			std::nullopt,
-			funcNameSets,
-			2,
-			1 );
-	else
-		buildTraceKernel(
+	cudaFunction_t func;
+	buildTraceKernel(
 			ctxt,
 			getRootDir() / "test/kernels/HiprtTestKernel.h",
 			"MotionBlurSlerpKernel",
@@ -2552,11 +2442,8 @@ TEST_F( hiprtTest, Rebuild )
 	checkHiprt( hiprtCreateGeometry( ctxt, geomInput, options, geom ) );
 	checkHiprt( hiprtBuildGeometry( ctxt, hiprtBuildOperationBuild, geomInput, options, geomTemp, 0, geom ) );
 
-	oroFunction func;
-	if constexpr ( UseBitcode )
-		buildTraceKernelFromBitcode( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "MeshIntersectionKernel", func );
-	else
-		buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "MeshIntersectionKernel", func );
+	cudaFunction_t func;
+	buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "MeshIntersectionKernel", func );
 
 	uint8_t* dst;
 	malloc( dst, g_parsedArgs.m_ww * g_parsedArgs.m_wh * 4 );
@@ -2622,11 +2509,8 @@ TEST_F( hiprtTest, Update )
 	checkHiprt( hiprtCreateGeometry( ctxt, geomInput, options, geom ) );
 	checkHiprt( hiprtBuildGeometry( ctxt, hiprtBuildOperationBuild, geomInput, options, geomTemp, 0, geom ) );
 
-	oroFunction func;
-	if constexpr ( UseBitcode )
-		buildTraceKernelFromBitcode( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "MeshIntersectionKernel", func );
-	else
-		buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "MeshIntersectionKernel", func );
+	cudaFunction_t func;
+	buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "MeshIntersectionKernel", func );
 
 	uint8_t* dst;
 	malloc( dst, g_parsedArgs.m_ww * g_parsedArgs.m_wh * 4 );
@@ -2650,70 +2534,6 @@ TEST_F( hiprtTest, Update )
 	free( dst );
 	checkHiprt( hiprtDestroyGeometry( ctxt, geom ) );
 	checkHiprt( hiprtDestroyContext( ctxt ) );
-}
-
-TEST_F( hiprtTest, BatchConstruction )
-{
-	hiprtContext ctxt;
-	hiprtCreateContext( HIPRT_API_VERSION, m_ctxtInput, ctxt );
-
-	hiprtTriangleMeshPrimitive mesh;
-	mesh.triangleCount	= 2;
-	mesh.triangleStride = sizeof( uint3 );
-	malloc( reinterpret_cast<uint3*&>( mesh.triangleIndices ), mesh.triangleCount );
-	uint32_t idx[] = { 0, 1, 2, 3, 4, 5 };
-	copyHtoD( reinterpret_cast<uint3*>( mesh.triangleIndices ), reinterpret_cast<uint3*>( idx ), mesh.triangleCount );
-
-	mesh.vertexCount  = 6;
-	mesh.vertexStride = sizeof( float3 );
-	malloc( reinterpret_cast<float3*&>( mesh.vertices ), mesh.vertexCount );
-	float3 v[] = {
-		{ 0.0f, 0.0f, 0.0f },
-		{ 1.0f, 0.0f, 0.0f },
-		{ 0.5f, 1.0f, 0.0f },
-		{ 0.0f, 0.0f, 1.0f },
-		{ 1.0f, 0.0f, 1.0f },
-		{ 0.5f, 1.0f, 1.0f } };
-	copyHtoD( reinterpret_cast<float3*>( mesh.vertices ), v, mesh.vertexCount );
-
-	constexpr size_t GeomCount = 1000000;
-
-	std::vector<hiprtGeometryBuildInput> geomInputs( GeomCount );
-	for ( hiprtGeometryBuildInput& geomInput : geomInputs )
-	{
-		geomInput.type					 = hiprtPrimitiveTypeTriangleMesh;
-		geomInput.primitive.triangleMesh = mesh;
-		geomInput.geomType				 = 0;
-	}
-
-	hiprtBuildOptions options;
-	options.buildFlags			   = hiprtBuildFlagBitPreferFastBuild;
-	options.batchBuildMaxPrimCount = 64u;
-
-	hiprtDevicePtr tempGeomBuffer = nullptr;
-	size_t		   tempGeomSize;
-	checkHiprt( hiprtGetGeometriesBuildTemporaryBufferSize( ctxt, GeomCount, geomInputs.data(), options, tempGeomSize ) );
-	malloc( reinterpret_cast<uint8_t*&>( tempGeomBuffer ), tempGeomSize );
-
-	std::vector<hiprtGeometry>	geometries( GeomCount );
-	std::vector<hiprtGeometry*> geomAddrs( GeomCount );
-	for ( size_t i = 0; i < GeomCount; ++i )
-		geomAddrs[i] = &geometries[i];
-	checkHiprt( hiprtCreateGeometries( ctxt, GeomCount, geomInputs.data(), options, geomAddrs.data() ) );
-
-	std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-	checkHiprt( hiprtBuildGeometries(
-		ctxt, hiprtBuildOperationBuild, GeomCount, geomInputs.data(), options, tempGeomBuffer, 0, geometries.data() ) );
-	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-
-	std::chrono::nanoseconds bvhBuildTime = end - begin;
-	std::cout << "Bvh batch build time " << std::chrono::duration_cast<std::chrono::seconds>( bvhBuildTime ).count() << " s"
-			  << std::endl;
-
-	free( mesh.triangleIndices );
-	free( mesh.vertices );
-	free( tempGeomBuffer );
-	checkHiprt( hiprtDestroyGeometries( ctxt, GeomCount, geometries.data() ) );
 }
 
 TEST_F( hiprtTest, PlocFallback )
@@ -2782,20 +2602,81 @@ TEST_F( hiprtTest, TraceKernel )
 	opts.push_back( blockSizeDef.c_str() );
 	opts.push_back( sharedStackSizeDef.c_str() );
 
-	oroFunction func;
-	if constexpr ( UseBitcode )
-		buildTraceKernelFromBitcode( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "TraceKernel", func, opts );
-	else
-		buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "TraceKernel", func, opts );
+	cudaFunction_t func;
+	buildTraceKernel( ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "TraceKernel", func, opts );
 	int numRegs;
-	checkOro( oroFuncGetAttribute( &numRegs, ORO_FUNC_ATTRIBUTE_NUM_REGS, func ) );
+	// checkOro( cudaFuncGetAttribute( &numRegs, ORO_FUNC_ATTRIBUTE_NUM_REGS, func ) );
 
 	int numSmem;
-	checkOro( oroFuncGetAttribute( &numSmem, ORO_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES, func ) );
+	// checkOro( cudaFuncGetAttribute( &numSmem, ORO_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES, func ) );
 
 	std::cout << "Trace kernel: registers " << numRegs << ", shared memory " << numSmem << std::endl;
 
 	checkHiprt( hiprtDestroyContext( ctxt ) );
+}
+
+TEST_F( hiprtTest, BatchConstruction )
+{
+	hiprtContext ctxt;
+	hiprtCreateContext( HIPRT_API_VERSION, m_ctxtInput, ctxt );
+
+	hiprtTriangleMeshPrimitive mesh;
+	mesh.triangleCount	= 2;
+	mesh.triangleStride = sizeof( uint3 );
+	malloc( reinterpret_cast<uint3*&>( mesh.triangleIndices ), mesh.triangleCount );
+	uint32_t idx[] = { 0, 1, 2, 3, 4, 5 };
+	copyHtoD( reinterpret_cast<uint3*>( mesh.triangleIndices ), reinterpret_cast<uint3*>( idx ), mesh.triangleCount );
+
+	mesh.vertexCount  = 6;
+	mesh.vertexStride = sizeof( float3 );
+	malloc( reinterpret_cast<float3*&>( mesh.vertices ), mesh.vertexCount );
+	float3 v[] = {
+		{ 0.0f, 0.0f, 0.0f },
+		{ 1.0f, 0.0f, 0.0f },
+		{ 0.5f, 1.0f, 0.0f },
+		{ 0.0f, 0.0f, 1.0f },
+		{ 1.0f, 0.0f, 1.0f },
+		{ 0.5f, 1.0f, 1.0f } };
+	copyHtoD( reinterpret_cast<float3*>( mesh.vertices ), v, mesh.vertexCount );
+
+	constexpr size_t GeomCount = 1000000;
+
+	std::vector<hiprtGeometryBuildInput> geomInputs( GeomCount );
+	for ( hiprtGeometryBuildInput& geomInput : geomInputs )
+	{
+		geomInput.type					 = hiprtPrimitiveTypeTriangleMesh;
+		geomInput.primitive.triangleMesh = mesh;
+		geomInput.geomType				 = 0;
+	}
+
+	hiprtBuildOptions options;
+	options.buildFlags			   = hiprtBuildFlagBitPreferFastBuild;
+	options.batchBuildMaxPrimCount = 64u;
+
+	hiprtDevicePtr tempGeomBuffer = nullptr;
+	size_t		   tempGeomSize;
+	checkHiprt( hiprtGetGeometriesBuildTemporaryBufferSize( ctxt, GeomCount, geomInputs.data(), options, tempGeomSize ) );
+	malloc( reinterpret_cast<uint8_t*&>( tempGeomBuffer ), tempGeomSize );
+
+	std::vector<hiprtGeometry>	geometries( GeomCount );
+	std::vector<hiprtGeometry*> geomAddrs( GeomCount );
+	for ( size_t i = 0; i < GeomCount; ++i )
+		geomAddrs[i] = &geometries[i];
+	checkHiprt( hiprtCreateGeometries( ctxt, GeomCount, geomInputs.data(), options, geomAddrs.data() ) );
+
+	std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+	checkHiprt( hiprtBuildGeometries(
+		ctxt, hiprtBuildOperationBuild, GeomCount, geomInputs.data(), options, tempGeomBuffer, 0, geometries.data() ) );
+	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+
+	std::chrono::nanoseconds bvhBuildTime = end - begin;
+	std::cout << "Bvh batch build time " << std::chrono::duration_cast<std::chrono::seconds>( bvhBuildTime ).count() << " s"
+			  << std::endl;
+
+	free( mesh.triangleIndices );
+	free( mesh.vertices );
+	free( tempGeomBuffer );
+	checkHiprt( hiprtDestroyGeometries( ctxt, GeomCount, geometries.data() ) );
 }
 
 int main( int argc, const char* argv[] )
@@ -2809,7 +2690,6 @@ int main( int argc, const char* argv[] )
 	parser.add_argument().names( { "-h", "--height" } ).description( "height" ).required( false );
 	parser.add_argument().names( { "-r", "--referencePath" } ).description( "path for reference images" ).required( false );
 	parser.add_argument().names( { "-d", "--device" } ).description( "device" ).required( false );
-	parser.add_argument().names( { "-p", "--precompiled" } ).description( "use precompiled bitcodes" ).required( false );
 	parser.parse( argc, argv );
 	parser.print_help();
 
@@ -2828,10 +2708,6 @@ int main( int argc, const char* argv[] )
 	if ( parser.exists( "d" ) )
 	{
 		parsedArgs.m_deviceIdx = parser.get<uint32_t>( "d" );
-	}
-	if ( parser.exists( "p" ) )
-	{
-		parsedArgs.m_usePrecompiledBitcodes = true;
 	}
 
 	::testing::AddGlobalTestEnvironment( new InitCommandlineArgs( parsedArgs ) );

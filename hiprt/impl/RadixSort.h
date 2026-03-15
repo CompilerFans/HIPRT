@@ -24,7 +24,9 @@
 
 #pragma once
 
-#include <ParallelPrimitives/RadixSort.h>
+#include <cuda_runtime_api.h>
+#include <cstddef>
+#include <cstdint>
 
 namespace hiprt
 {
@@ -32,17 +34,22 @@ namespace hiprt
 class RadixSort final
 {
   public:
-	RadixSort( oroDevice device, oroStream stream, OrochiUtils& oroutils );
+	explicit RadixSort( int device ) : m_device( device ) {}
+
+	static size_t getTemporaryStorageSize( size_t count );
 
 	void sort(
-		uint32_t*	 inputKeys,
-		uint32_t*	 inputValues,
-		uint32_t*	 outputKeys,
-		uint32_t*	 outputValues,
-		const size_t size,
-		oroStream	 stream ) noexcept;
+		void*			temporaryStorage,
+		size_t			temporaryStorageSize,
+		uint32_t*		inputKeys,
+		uint32_t*		inputValues,
+		uint32_t*		outputKeys,
+		uint32_t*		outputValues,
+		size_t			count,
+		cudaStream_t	stream ) const noexcept;
 
   private:
-	Oro::RadixSort m_sort;
+	int m_device = 0;
 };
+
 } // namespace hiprt
