@@ -164,13 +164,15 @@ template <typename T>
 HIPRT_DEVICE T warpOffset( bool warpVal, T* counter )
 {
 	const uint32_t laneIndex  = threadIdx.x & ( WarpSize - 1 );
-	const uint64_t warpBallot = hiprt::ballot( warpVal );
-	const T		   warpCount  = __popcll( warpBallot );
-	const T		   warpSum	  = __popcll( warpBallot & ( ( 1ull << laneIndex ) - 1ull ) );
+	const LaneMask warpBallot = hiprt::ballot( warpVal );
+	if ( warpBallot == 0 ) return static_cast<T>( 0 );
+	const T		   warpCount  = hiprt::laneMaskPopCount( warpBallot );
+	const T		   warpSum	  = hiprt::laneMaskLowerCount( warpBallot, laneIndex );
 	T			   warpOffset;
-	if ( laneIndex == __ffsll( static_cast<unsigned long long>( warpBallot ) ) - 1 )
+	const uint32_t firstLane = hiprt::laneMaskFirstSet( warpBallot );
+	if ( laneIndex == firstLane )
 		warpOffset = atomicAdd( counter, warpCount );
-	warpOffset = shfl( warpOffset, __ffsll( static_cast<unsigned long long>( warpBallot ) ) - 1 );
+	warpOffset = shfl( warpOffset, firstLane );
 	return warpOffset + warpSum;
 }
 
@@ -289,9 +291,9 @@ HIPRT_DEVICE T blockScan( bool blockVal, T* blockCache )
 	const uint32_t warpsPerBlock = DivideRoundUp( static_cast<uint32_t>( blockDim.x ), WarpSize );
 
 	T			   blockValue = blockVal;
-	const uint64_t warpBallot = hiprt::ballot( blockVal );
-	const T		   warpCount  = __popcll( warpBallot );
-	const T		   warpSum	  = __popcll( warpBallot & ( ( 1ull << laneIndex ) - 1ull ) );
+	const LaneMask warpBallot = hiprt::ballot( blockVal );
+	const T		   warpCount  = hiprt::laneMaskPopCount( warpBallot );
+	const T		   warpSum	  = hiprt::laneMaskLowerCount( warpBallot, laneIndex );
 
 	if ( laneIndex == 0 ) blockCache[warpIndex] = warpCount;
 

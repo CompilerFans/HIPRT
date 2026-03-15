@@ -141,8 +141,7 @@ HIPRT_DEVICE HIPRT_INLINE void openNodes(
 	const uint32_t laneIndex	= threadIdx.x % WarpSize;
 	const uint32_t sublaneIndex = laneIndex % BranchingFactor;
 	const uint32_t subwarpIndex = laneIndex / BranchingFactor;
-	const uint64_t subwarpMask	= ( ( 1 << BranchingFactor ) - 1 )
-								 << static_cast<uint64_t>( ( BranchingFactor * subwarpIndex ) );
+	const LaneMask subwarpMask	= hiprt::subLaneMask( BranchingFactor, subwarpIndex );
 
 	bool done = childCount == BranchingFactor;
 	while ( hiprt::ballot( !done ) )
@@ -164,8 +163,7 @@ HIPRT_DEVICE HIPRT_INLINE void openNodes(
 			maxArea = hiprt::max( maxArea, shfl_xor( maxArea, i ) );
 		if ( maxArea < 0.0f ) done = true;
 
-		const uint32_t maxLaneIndex =
-			__ffsll( static_cast<unsigned long long>( hiprt::ballot( maxArea == area ) ) & subwarpMask ) - 1;
+		const uint32_t maxLaneIndex = hiprt::laneMaskFirstSet( hiprt::ballot( maxArea == area ) & subwarpMask );
 		const uint32_t maxIndex		 = maxLaneIndex % BranchingFactor;
 		const uint32_t maxChildIndex = shfl( childIndex, maxLaneIndex );
 
@@ -377,7 +375,7 @@ extern "C" __global__ void PairTriangles( TriangleMesh mesh, uint2* pairIndices,
 
 	bool	 valid		 = index < mesh.getCount();
 	uint32_t pairedIndex = InvalidValue;
-	uint64_t activeMask	 = hiprt::ballot( valid );
+	LaneMask activeMask	 = hiprt::ballot( valid );
 
 	uint3 triIndices;
 	if ( valid ) triIndices = mesh.fetchTriangleIndices( index );
@@ -386,7 +384,7 @@ extern "C" __global__ void PairTriangles( TriangleMesh mesh, uint2* pairIndices,
 	{
 		activeMask = shfl( activeMask, 0 );
 
-		const uint64_t broadcastLane = __ffsll( static_cast<unsigned long long>( activeMask ) ) - 1;
+		const uint32_t broadcastLane = hiprt::laneMaskFirstSet( activeMask );
 		if ( laneIndex == broadcastLane ) valid = false;
 
 		activeMask &= activeMask - 1;
@@ -399,10 +397,10 @@ extern "C" __global__ void PairTriangles( TriangleMesh mesh, uint2* pairIndices,
 		if ( index != broadcastIndex && valid )
 			pairable = tryPairTriangles( triIndicesBroadcast, triIndices ).x != InvalidValue;
 
-		const uint32_t firstPairedLane = __ffsll( static_cast<unsigned long long>( hiprt::ballot( pairable ) ) ) - 1;
+		const uint32_t firstPairedLane = hiprt::laneMaskFirstSet( hiprt::ballot( pairable ) );
 		if ( firstPairedLane < WarpSize )
 		{
-			activeMask &= ~( 1u << firstPairedLane );
+			activeMask = hiprt::laneMaskClear( activeMask, firstPairedLane );
 			if ( laneIndex == firstPairedLane ) valid = false;
 
 			const uint32_t secondIndex = shfl( index, firstPairedLane );
@@ -706,8 +704,7 @@ __device__ void FitBounds( Header* header, PrimitiveContainer& primitives, BoxNo
 	const uint32_t laneIndex	= threadIdx.x % WarpSize;
 	const uint32_t sublaneIndex = laneIndex % BranchingFactor;
 	const uint32_t subwarpIndex = laneIndex / BranchingFactor;
-	const uint64_t subwarpMask	= ( ( 1 << BranchingFactor ) - 1 )
-								 << static_cast<uint64_t>( ( BranchingFactor * subwarpIndex ) );
+	const LaneMask subwarpMask	= hiprt::subLaneMask( BranchingFactor, subwarpIndex );
 
 	uint32_t index = threadIndex / BranchingFactor;
 
@@ -723,7 +720,7 @@ __device__ void FitBounds( Header* header, PrimitiveContainer& primitives, BoxNo
 		internal   = sublaneIndex < childCount && node.getChildType( sublaneIndex ) == BoxType;
 	}
 
-	uint32_t internalCount = __popcll( hiprt::ballot( internal ) & subwarpMask );
+	uint32_t internalCount = hiprt::laneMaskPopCount( hiprt::ballot( internal ) & subwarpMask );
 	if ( internalCount > 0 ) done = true;
 
 	while ( hiprt::any( !done ) )
@@ -761,7 +758,7 @@ __device__ void FitBounds( Header* header, PrimitiveContainer& primitives, BoxNo
 			internal   = sublaneIndex < childCount && node.getChildType( sublaneIndex ) == BoxType;
 		}
 
-		internalCount = __popcll( hiprt::ballot( internal ) & subwarpMask );
+		internalCount = hiprt::laneMaskPopCount( hiprt::ballot( internal ) & subwarpMask );
 
 		__threadfence();
 
@@ -834,7 +831,7 @@ __device__ void FitOrientedBounds(
 	uint32_t childCount = node.getChildCount();
 	bool	 internal	= laneIndex < childCount && node.getChildType( laneIndex ) == BoxType;
 
-	uint32_t internalCount = __popcll( hiprt::ballot( internal ) );
+	uint32_t internalCount = hiprt::laneMaskPopCount( hiprt::ballot( internal ) );
 
 	bool done = internalCount > 0;
 
@@ -866,7 +863,7 @@ __device__ void FitOrientedBounds(
 			}
 
 			const float	   minArea	= warpMin( minAreaLane );
-			const uint32_t minIndex = __ffsll( static_cast<unsigned long long>( hiprt::ballot( minAreaLane == minArea ) ) ) - 1;
+			const uint32_t minIndex = hiprt::laneMaskFirstSet( hiprt::ballot( minAreaLane == minArea ) );
 			const uint32_t matrixIndex = shfl( minIndexLane, minIndex );
 
 			Aabb	 childBox;
@@ -912,7 +909,7 @@ __device__ void FitOrientedBounds(
 		childCount = node.getChildCount();
 		internal   = laneIndex < childCount && node.getChildType( laneIndex ) == BoxType;
 
-		internalCount = __popcll( hiprt::ballot( internal ) );
+		internalCount = hiprt::laneMaskPopCount( hiprt::ballot( internal ) );
 
 		__threadfence();
 
@@ -1101,8 +1098,7 @@ __device__ void Collapse(
 	const uint32_t taskIndex	= index / BranchingFactor;
 	const uint32_t sublaneIndex = laneIndex % BranchingFactor;
 	const uint32_t subwarpIndex = laneIndex / BranchingFactor;
-	const uint64_t subwarpMask	= ( ( 1 << BranchingFactor ) - 1 )
-								 << static_cast<uint64_t>( ( BranchingFactor * subwarpIndex ) );
+	const LaneMask subwarpMask	= hiprt::subLaneMask( BranchingFactor, subwarpIndex );
 
 	bool done = taskIndex >= maxBoxNodeCount || taskIndex >= referenceCount;
 
@@ -1138,7 +1134,7 @@ __device__ void Collapse(
 		if ( nodeAddr == 0 ) parentAddr = InvalidValue;
 
 		// fill inactive lanes with first valid node index
-		const uint32_t firstValidLane = __ffsll( static_cast<unsigned long long>( hiprt::ballot( valid ) ) ) - 1;
+		const uint32_t firstValidLane = hiprt::laneMaskFirstSet( hiprt::ballot( valid ) );
 		nodeIndex					  = shfl( nodeIndex, valid ? laneIndex : firstValidLane );
 
 		BinaryNode binaryNode = binaryNodes[getNodeAddr( nodeIndex )];
@@ -1189,8 +1185,8 @@ __device__ void Collapse(
 		if constexpr ( !is_same<PrimitiveNode, TrianglePacketNode>::value )
 		{
 			const bool	   leaf			 = isLeafNode( childIndex );
-			const uint64_t activeSubmask = hiprt::ballot( active && leaf ) & subwarpMask;
-			const uint32_t rangeSize	 = __popcll( activeSubmask );
+			const LaneMask activeSubmask = hiprt::ballot( active && leaf ) & subwarpMask;
+			const uint32_t rangeSize	 = hiprt::laneMaskPopCount( activeSubmask );
 			const uint32_t rangeAddr	 = warpOffset( active && leaf, &header->m_referenceCount );
 			if ( active && leaf ) referenceIndices[rangeAddr] = childIndex;
 			if ( valid && sublaneIndex == 0 && activeSubmask != 0 ) task = { rangeAddr, nodeAddr, rangeSize };
@@ -1236,8 +1232,8 @@ __device__ void Collapse(
 				}
 			}
 
-			const uint64_t activeSubmask   = hiprt::ballot( active && fatLeaf ) & subwarpMask;
-			const uint32_t lastActiveLane  = activeSubmask == 0 ? 0 : ( WarpSize - 1 ) - __clzll( activeSubmask );
+			const LaneMask activeSubmask   = hiprt::ballot( active && fatLeaf ) & subwarpMask;
+			const uint32_t lastActiveLane  = activeSubmask == 0 ? 0 : hiprt::laneMaskLastSet( activeSubmask );
 			const uint32_t lastRangeOffset = shfl( rangeOffset, lastActiveLane );
 			if ( valid && sublaneIndex == 0 && activeSubmask != 0 )
 			{
@@ -1979,18 +1975,18 @@ __device__ void PackLeavesWarp(
 		__threadfence_block();
 
 		// build packets
-		uint64_t packetMask = hiprt::ballot( taskIndex < taskCount && packet.m_triPairCount > 0 && sublaneIndex == 0 );
+		LaneMask packetMask = hiprt::ballot( taskIndex < taskCount && packet.m_triPairCount > 0 && sublaneIndex == 0 );
 		while ( packetMask )
 		{
 			const uint32_t halfWarpIndex = laneIndex / 16;
 			const uint32_t halfLaneIndex = laneIndex % 16;
 
-			const uint32_t broadcastLane0 = __ffsll( static_cast<unsigned long long>( packetMask ) ) - 1;
-			packetMask ^= 1 << broadcastLane0;
+			const uint32_t broadcastLane0 = hiprt::laneMaskFirstSet( packetMask );
+			packetMask = hiprt::laneMaskClear( packetMask, broadcastLane0 );
 
-			const uint32_t broadcastLane1 = __ffsll( static_cast<unsigned long long>( packetMask ) ) - 1;
+			const uint32_t broadcastLane1 = hiprt::laneMaskFirstSet( packetMask );
 			const bool	   secondValid	  = packetMask != 0;
-			if ( secondValid ) packetMask ^= 1 << broadcastLane1;
+			if ( secondValid ) packetMask = hiprt::laneMaskClear( packetMask, broadcastLane1 );
 
 			const uint32_t			 broadcastLane			 = ( halfWarpIndex == 0 ) ? broadcastLane0 : broadcastLane1;
 			const uint32_t			 broadcastSubwarpIndex	 = broadcastLane / LanesPerLeafPacketTask;

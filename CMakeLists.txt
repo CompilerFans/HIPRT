@@ -12,9 +12,35 @@ set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_ARCHITECTURES "89;86;80;75" CACHE STRING "CUDA architectures to build")
 
 option(NO_UNITTEST "Don't build unit tests" OFF)
+set(hiprt_runtime_kernel_cache_default ON)
+if(NOT CMAKE_BUILD_TYPE STREQUAL "Release")
+	set(hiprt_runtime_kernel_cache_default OFF)
+endif()
+option(HIPRT_ENABLE_RUNTIME_KERNEL_CACHE "Enable on-disk cache for runtime-compiled kernels" ${hiprt_runtime_kernel_cache_default})
 
 list(GET CUDAToolkit_INCLUDE_DIRS 0 CUDAToolkit_PRIMARY_INCLUDE_DIR)
 string(REPLACE "\\" "\\\\" HIPRT_CUDA_INCLUDE_DIR_ESCAPED "${CUDAToolkit_PRIMARY_INCLUDE_DIR}")
+
+set(HIPRT_USING_CU_BRIDGE OFF)
+if(CMAKE_CUDA_COMPILER MATCHES "cu-bridge" OR CUDAToolkit_PRIMARY_INCLUDE_DIR MATCHES "cu-bridge")
+	set(HIPRT_USING_CU_BRIDGE ON)
+endif()
+
+if(HIPRT_USING_CU_BRIDGE)
+	find_path(HIPRT_MACA_RUNTIME_INCLUDE_DIR
+		mc_runtime_types.h
+		HINTS
+			$ENV{MACA_PATH}/include/mcr
+			/opt/maca/include/mcr
+			/opt/maca-3.3.0/include/mcr
+	)
+	if(HIPRT_MACA_RUNTIME_INCLUDE_DIR)
+		get_filename_component(HIPRT_MACA_INCLUDE_ROOT "${HIPRT_MACA_RUNTIME_INCLUDE_DIR}" DIRECTORY)
+	endif()
+	get_filename_component(HIPRT_CU_BRIDGE_ROOT "${CUDAToolkit_PRIMARY_INCLUDE_DIR}" DIRECTORY)
+	set(HIPRT_CU_BRIDGE_LIB_DIR "${HIPRT_CU_BRIDGE_ROOT}/lib64")
+	set(HIPRT_CU_BRIDGE_STUB_DIR "${HIPRT_CU_BRIDGE_LIB_DIR}/stubs")
+endif()
 
 if(CCACHE_PROGRAM)
 	set(CMAKE_C_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
@@ -34,6 +60,17 @@ message(STATUS "Configuring HIPRT with CUDA backend only")
 message(STATUS "CUDA toolkit version: ${CUDAToolkit_VERSION}")
 message(STATUS "CUDA architectures: ${CMAKE_CUDA_ARCHITECTURES}")
 message(STATUS "Disable unit tests: ${NO_UNITTEST}")
+message(STATUS "Runtime kernel disk cache: ${HIPRT_ENABLE_RUNTIME_KERNEL_CACHE}")
+message(STATUS "Using cu-bridge toolchain: ${HIPRT_USING_CU_BRIDGE}")
+if(HIPRT_USING_CU_BRIDGE AND HIPRT_MACA_RUNTIME_INCLUDE_DIR)
+	message(STATUS "Using MACA runtime headers: ${HIPRT_MACA_RUNTIME_INCLUDE_DIR}")
+	message(STATUS "Using MACA include root: ${HIPRT_MACA_INCLUDE_ROOT}")
+elseif(HIPRT_USING_CU_BRIDGE)
+	message(STATUS "MACA runtime headers: not found")
+endif()
+if(HIPRT_USING_CU_BRIDGE)
+	message(STATUS "Using cu-bridge libs: ${HIPRT_CU_BRIDGE_LIB_DIR}")
+endif()
 if(CCACHE_PROGRAM)
 	message(STATUS "Using ccache: ${CCACHE_PROGRAM}")
 endif()
@@ -137,6 +174,8 @@ add_library(${HIPRT_NAME} SHARED)
 target_compile_definitions(${HIPRT_NAME} PRIVATE
 	HIPRT_EXPORTS
 	HIPRT_CUDA_INCLUDE_DIR="${HIPRT_CUDA_INCLUDE_DIR_ESCAPED}"
+	HIPRT_ROOT_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}"
+	HIPRT_RUNTIME_KERNEL_CACHE_DEFAULT=$<IF:$<BOOL:${HIPRT_ENABLE_RUNTIME_KERNEL_CACHE}>,1,0>
 )
 
 if(${CMAKE_BUILD_TYPE} STREQUAL "Debug")
@@ -153,6 +192,12 @@ target_include_directories(${HIPRT_NAME} PRIVATE
 	${CMAKE_CURRENT_SOURCE_DIR}
 	${CUDAToolkit_INCLUDE_DIRS}
 )
+if(HIPRT_MACA_RUNTIME_INCLUDE_DIR)
+	target_include_directories(${HIPRT_NAME} PRIVATE
+		${HIPRT_MACA_RUNTIME_INCLUDE_DIR}
+		${HIPRT_MACA_INCLUDE_ROOT}
+	)
+endif()
 
 file(GLOB_RECURSE hiprt_sources
 	"${CMAKE_CURRENT_SOURCE_DIR}/hiprt/*.h"
@@ -162,11 +207,23 @@ file(GLOB_RECURSE hiprt_sources
 )
 target_sources(${HIPRT_NAME} PRIVATE ${hiprt_sources})
 
-target_link_libraries(${HIPRT_NAME} PRIVATE
-	CUDA::cudart
-	CUDA::cuda_driver
-	CUDA::nvrtc
-)
+if(HIPRT_USING_CU_BRIDGE)
+	target_link_directories(${HIPRT_NAME} PRIVATE
+		${HIPRT_CU_BRIDGE_LIB_DIR}
+		${HIPRT_CU_BRIDGE_STUB_DIR}
+	)
+	target_link_libraries(${HIPRT_NAME} PRIVATE
+		cudart
+		cuda
+		nvrtc
+	)
+else()
+	target_link_libraries(${HIPRT_NAME} PRIVATE
+		CUDA::cudart
+		CUDA::cuda_driver
+		CUDA::nvrtc
+	)
+endif()
 
 install(TARGETS ${HIPRT_NAME} DESTINATION bin)
 
@@ -180,12 +237,25 @@ install(FILES ${HIPRT_IMPL_HEADERS} DESTINATION include/hiprt/impl)
 if(NOT NO_UNITTEST)
 	add_executable(unittest)
 
-	target_link_libraries(unittest PRIVATE
-		${HIPRT_NAME}
-		CUDA::cudart
-		CUDA::cuda_driver
-		CUDA::nvrtc
-	)
+	if(HIPRT_USING_CU_BRIDGE)
+		target_link_directories(unittest PRIVATE
+			${HIPRT_CU_BRIDGE_LIB_DIR}
+			${HIPRT_CU_BRIDGE_STUB_DIR}
+		)
+		target_link_libraries(unittest PRIVATE
+			${HIPRT_NAME}
+			cudart
+			cuda
+			nvrtc
+		)
+	else()
+		target_link_libraries(unittest PRIVATE
+			${HIPRT_NAME}
+			CUDA::cudart
+			CUDA::cuda_driver
+			CUDA::nvrtc
+		)
+	endif()
 
 	if(WIN32)
 		target_compile_options(unittest PRIVATE /wd4244)
@@ -204,7 +274,14 @@ if(NOT NO_UNITTEST)
 		${CMAKE_CURRENT_SOURCE_DIR}/contrib/gtest-1.6.0
 		${CMAKE_CURRENT_SOURCE_DIR}/contrib/embree/include
 	)
+	if(HIPRT_MACA_RUNTIME_INCLUDE_DIR)
+		target_include_directories(unittest PRIVATE
+			${HIPRT_MACA_RUNTIME_INCLUDE_DIR}
+			${HIPRT_MACA_INCLUDE_ROOT}
+		)
+	endif()
 	target_compile_definitions(unittest PRIVATE HIPRT_CUDA_INCLUDE_DIR="${HIPRT_CUDA_INCLUDE_DIR_ESCAPED}")
+	target_compile_definitions(unittest PRIVATE HIPRT_ROOT_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}")
 
 	if(UNIX)
 		target_link_libraries(unittest PRIVATE pthread dl embree4 tbb)
