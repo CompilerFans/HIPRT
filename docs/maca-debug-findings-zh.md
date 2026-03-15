@@ -105,6 +105,97 @@
      - `intersectSphere`
    - 这一步消除了 `duplicityFilter(...)`、`hiprtPointWorldToObject(...)` 等 runtime JIT 链接未定义符号
 
+### 1.2 对“三类修复”真实性的确认结论
+
+本轮恢复 `62 / 62` 非性能测试通过时，真正生效的修复可分为三类：
+
+1. cu-bridge/MACA runtime JIT 跳过 `nvrtcAddNameExpression`
+2. runtime JIT 会引用到的 device helper / filter 改成 `HIPRT_INLINE`
+3. scene instance 在 build / update 路径统一保留 `transform header`
+
+当前结论是：**这三类都是真实问题，不是偶然 workaround。**
+
+#### 结论 1：跳过 `nvrtcAddNameExpression` 是真实问题修复
+
+证据：
+
+- 在多个历史锚点提交上：
+  - `e4b1c35`
+  - `8f267ea`
+  - `c550ffe`
+  - `59e2b74`
+  - `2becf11`
+  - `da44d46`
+- 都稳定复现：
+  - `hiprtTest.MinimumCornellBox`
+  - runtime compile 阶段
+  - `CornellBoxKernel` 在自动生成的 `__mcrtc_*` 包装中不可见
+
+应用此修复后：
+
+- `CornellBoxKernel` 未声明这一层错误消失
+- `MinimumCornellBox`、`Compaction`、`TraceKernel` 能继续往后执行并恢复通过
+
+因此它不是“碰巧绕过一个 warning”，而是实际修复了 cu-bridge/MACA 的 kernel entry 自动包装兼容性问题。
+
+#### 结论 2：device helper / filter 改成 inline 是真实问题修复
+
+证据：
+
+- 在修完 `nvrtcAddNameExpression` 之后，下一层稳定暴露的错误变成：
+  - `duplicityFilter(...)` 未定义
+  - `hiprtPointWorldToObject(...)` 未定义
+- 这些符号都来自 runtime compile 单元内部引用的 device helper / filter
+
+应用 inline 收敛后：
+
+- 这些未定义符号错误消失
+- `Compaction`、`PairTriangles`、`TraceKernel` 等基础 JIT case 恢复通过
+
+因此它不是“代码风格调整”，而是实际修复了 cu-bridge/MACA runtime JIT 的符号发射 / 可见性问题。
+
+#### 结论 3：scene instance 保留 transform header 是真实问题修复
+
+证据：
+
+- 未修复前，失败面集中在同一组 scene transform / traversal / update case：
+  - `TranslateCornellBox`
+  - `ScaleCornellBox`
+  - `RotateCornellBox`
+  - `BvhUpdateCornellBox`
+  - `SceneSingletonSrtNodeUsesTransformHeader`
+  - `SceneInternalTransformRaySrt`
+  - `SceneTransformDebugSrt`
+  - `SceneInterpolatedFrameDebugSrt`
+  - `SceneInverseMatrixDebugSrt`
+  - `SceneClosestHitSingletonSrt`
+  - `SceneClosestHitSingletonSrtRecreate`
+  - `SceneTraceKernelSingletonSrt`
+  - `SceneIntersectionSingleton`
+  - `SceneIntersection`
+  - `SceneIntersectionMlas`
+  - `Shear`
+
+- 对应观测高度一致：
+  - `instanceNode.m_static == 1`
+  - `instanceNode.m_transform.frameCount == 0`
+  - 单帧 instance 被错误写回 static matrix 语义
+
+修复点包括：
+
+- `BvhNode.h` 的 instance 初始化
+- `BvhBuilderKernels.h` 的 update-leaf 写回路径
+
+应用后：
+
+- 上述 16 个 case 全部恢复
+- 相关 debug case 也恢复到：
+  - `m_static == 0`
+  - `frameCount == 1`
+  - `Transform::interpolateFrames()` 行为正确
+
+因此这不是“碰巧更像测试期望”，而是实际修复了 scene instance transform header 被覆盖的问题。
+
 ### 2. wave64 相关 bitmask 问题是第一层公共阻塞点
 
 - `PairTriangles`、`Collapse`、`subwarpMask`、`packetMask` 等路径中，原先存在典型的 32-bit mask 用法。
