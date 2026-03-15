@@ -8,7 +8,7 @@
 
 - 本次状态基线来自本地串行回归结果：
   `reports/case-report-20260314-172722-current/summary_current.tsv`
-- 统计时间基于 **2026-03-14** 的当前工作区代码状态。
+- 统计时间基于 **2026-03-15** 的当前工作区代码状态。
 - 结果口径以**串行 targeted rerun** 为准，不以并发跑批结果为准。
 
 ## 更新原则
@@ -32,9 +32,9 @@
 
 ## 当前结果概览
 
-- 总通过率：`59 / 59`，即 `100%`
+- 总通过率：`62 / 62`，即 `100%`
 - `ObjTestCases`：`21 / 21` 通过
-- `hiprtTest`：`38 / 38` 通过
+- `hiprtTest`：`41 / 41` 通过
 
 ## 当前支持的 case
 
@@ -58,6 +58,9 @@
 - `MinimumCornellBox`
 - `Compaction`
 - `BatchCornellBox`
+- `BatchGeometryCornellSweepBuildOnly`
+- `BatchGeometryIndexedQuadStripSweepBuildOnly`
+- `BatchGeometryIndexedQuadStripPrePairedSweepBuildOnly`
 - `BoundingBox`
 - `CustomBvhImport`
 - `BvhIoApi`
@@ -84,6 +87,7 @@
 - `SceneTransformDebugSrt`
 - `SceneInterpolatedFrameDebugSrt`
 - `SceneClosestHitSingletonSrt`
+- `SceneClosestHitSingletonSrtRecreate`
 - `SceneManualClosestHitSingletonSrt`
 - `GeomClosestHitScaledRay`
 - `RotateCornellBoxSmallAngleNoRef`
@@ -93,6 +97,7 @@
 - `RecreateCornellBoxTwiceSameTransformNoRef`
 - `PrimaryRayKernelRecreateStableRegs`
 - `SceneTraceKernelSingletonSrt`
+- `BvhUpdateCornellBox`
 - `SceneIntersectionSingleton`
 - `SceneIntersection`
 - `SceneIntersectionMlas`
@@ -106,7 +111,7 @@
 ## 已知“通过但需关注”的现象
 
 - `hiprtTest.MinimumCornellBox`
-  运行时间较长，当前回归约 `117.9s`
+  在当前 `maca_dev` 上串行 rerun 约 `24s`
 - `hiprtTest.TraceKernel`
   测试通过，但仍会打印运行时编译 warning
 - `MeshIntersection` / `MeshIntersectionNonIndexed` / `PairTriangles` / `Cutout`
@@ -114,13 +119,16 @@
 - `BatchCornellBox`
   当前是通过**单对象 API 不走 batch kernel** 的兼容策略打通的；多对象 batch 构建仍以 `BatchConstruction` 为主验证
 - `TranslateCornellBox` / `ScaleCornellBox` / `RotateCornellBox` / `Shear` / `SceneIntersection*`
-  已恢复通过，但当前恢复依赖 scene build 后的 instance node host-side patch
+  当前工作树下已恢复通过；恢复方式是 scene instance 在 build / update 路径统一保留 `transform header`，不再把单帧 instance 写回 static matrix 语义
 - `SceneInternalTransformRaySrt` / `SceneInverseMatrixDebugSrt`
   当前工作树下已恢复通过，继续作为 transform 内部路径的回归基线
 - `RecreateCornellBoxTwiceBuildOnly` / `RenderCornellBoxTwiceSameSceneNoRef`
   已恢复通过，说明当前问题不在“重复 build”本身，也不在“同一 scene 连续 render 两次”本身
 - `RecreateCornellBoxTwiceNoRef` / `RecreateCornellBoxTwiceSameTransformNoRef` / `PrimaryRayKernelRecreateStableRegs` / `SceneTraceKernelSingletonSrt`
   当前工作树下也已恢复通过，继续作为 recreate / stack / rebuild 稳定性回归基线
+
+- 当前 `maca_dev` 上的 runtime trace-kernel 路径在 cu-bridge/MACA 下跳过 `nvrtcAddNameExpression`
+  并通过直接的 `extern "C"` entry 名称获取 kernel；这是当前恢复 `MinimumCornellBox` / `Compaction` / `TraceKernel` 等基础 JIT case 的必要兼容修复
 
 ## 本轮修复后观察到的主要变化
 

@@ -26,6 +26,11 @@ endif()
 list(GET CUDAToolkit_INCLUDE_DIRS 0 CUDAToolkit_PRIMARY_INCLUDE_DIR)
 string(REPLACE "\\" "\\\\" HIPRT_CUDA_INCLUDE_DIR_ESCAPED "${CUDAToolkit_PRIMARY_INCLUDE_DIR}")
 
+set(HIPRT_USING_CU_BRIDGE OFF)
+if(CMAKE_CUDA_COMPILER MATCHES "cu-bridge" OR CUDAToolkit_PRIMARY_INCLUDE_DIR MATCHES "cu-bridge")
+	set(HIPRT_USING_CU_BRIDGE ON)
+endif()
+
 set(hiprt_ccache_status "disabled")
 if(HIPRT_ENABLE_CCACHE)
 	find_program(HIPRT_CCACHE_PROGRAM ccache)
@@ -71,6 +76,7 @@ message(STATUS "CUDA toolkit version: ${CUDAToolkit_VERSION}")
 message(STATUS "CUDA architectures: ${CMAKE_CUDA_ARCHITECTURES}")
 message(STATUS "Disable unit tests: ${NO_UNITTEST}")
 message(STATUS "Runtime kernel disk cache: ${HIPRT_ENABLE_RUNTIME_KERNEL_CACHE}")
+message(STATUS "Using cu-bridge toolchain: ${HIPRT_USING_CU_BRIDGE}")
 message(STATUS "ccache compiler launcher: ${hiprt_ccache_status}")
 message(STATUS "mold linker: ${hiprt_mold_status}")
 message(STATUS "HIPRT warp size override: ${HIPRT_WARP_SIZE_OVERRIDE}")
@@ -176,6 +182,7 @@ target_compile_definitions(${HIPRT_NAME} PRIVATE
 	HIPRT_CUDA_INCLUDE_DIR="${HIPRT_CUDA_INCLUDE_DIR_ESCAPED}"
 	HIPRT_ROOT_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}"
 	HIPRT_RUNTIME_KERNEL_CACHE_DEFAULT=$<IF:$<BOOL:${HIPRT_ENABLE_RUNTIME_KERNEL_CACHE}>,1,0>
+	HIPRT_CU_BRIDGE_RUNTIME_JIT_WORKAROUND=$<IF:$<BOOL:${HIPRT_USING_CU_BRIDGE}>,1,0>
 )
 
 if(${CMAKE_BUILD_TYPE} STREQUAL "Debug")
@@ -243,8 +250,11 @@ if(NOT NO_UNITTEST)
 		${CMAKE_CURRENT_SOURCE_DIR}/contrib/gtest-1.6.0
 		${CMAKE_CURRENT_SOURCE_DIR}/contrib/embree/include
 	)
-	target_compile_definitions(unittest PRIVATE HIPRT_CUDA_INCLUDE_DIR="${HIPRT_CUDA_INCLUDE_DIR_ESCAPED}")
-	target_compile_definitions(unittest PRIVATE HIPRT_ROOT_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}")
+	target_compile_definitions(unittest PRIVATE
+		HIPRT_CUDA_INCLUDE_DIR="${HIPRT_CUDA_INCLUDE_DIR_ESCAPED}"
+		HIPRT_ROOT_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}"
+		HIPRT_CU_BRIDGE_RUNTIME_JIT_WORKAROUND=$<IF:$<BOOL:${HIPRT_USING_CU_BRIDGE}>,1,0>
+	)
 
 	if(UNIX)
 		target_link_libraries(unittest PRIVATE pthread dl embree4 tbb)

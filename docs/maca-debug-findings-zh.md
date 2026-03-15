@@ -29,6 +29,82 @@
   - CMake 开关：`HIPRT_ENABLE_RUNTIME_KERNEL_CACHE`
   - 运行时环境变量：`HIPRT_DISABLE_RUNTIME_KERNEL_CACHE=1`
 
+补充验证：
+
+- 在 `maca_dev` 上，已经做过一轮“全新构建目录 + CMake 显式 `HIPRT_ENABLE_RUNTIME_KERNEL_CACHE=OFF` + 运行时 `HIPRT_DISABLE_RUNTIME_KERNEL_CACHE=1`”的最小复现实验。
+- 结果仍然稳定失败在 `hiprtTest.MinimumCornellBox` 的 runtime compile 阶段：
+  - `CornellBoxKernel` 在自动生成的 `__mcrtc_*` 包装中不可见
+- 这说明当前问题**不是旧 build 目录或 runtime kernel cache 残留**。
+
+进一步回退提交验证：
+
+- `e4b1c35`（当前 `maca_dev`）
+- `8f267ea`
+- `c550ffe`
+- `59e2b74`
+- `2becf11`
+- `da44d46`
+
+以上提交在当前 `cu-bridge + cmake_maca + Ninja` 环境下，最小用例都复现同一个 runtime compile 失败：
+
+- `hiprtTest.MinimumCornellBox`
+- `CornellBoxKernel` 在 `__mcrtc_*` 自动包装中不可见
+
+因此当前已经可以排除：
+
+1. 不是 build 目录污染
+2. 不是 runtime kernel cache 污染
+3. 不是最近 1 到 2 个提交引入的回归
+
+当前更可能是：
+
+- 现在这套 `cu-bridge/MACA runtime compile` 行为，与当时历史验证通过时的环境条件并不完全一致
+- 真实问题点在 `buildTraceKernels()` / `Compiler.cpp` 对 runtime source 的组织方式，以及 cu-bridge/MACA 自动生成 `__mcrtc_*` 包装的兼容性
+
+补充工具链对比实验：
+
+- `禁用 mold`：
+  - 最小用例失败形态不变
+  - 仍然是 `CornellBoxKernel` 在 `__mcrtc_*` 包装中不可见
+- `禁用 ccache`：
+  - 最小用例失败形态不变
+  - 仍然是同一个 runtime compile 错误
+- `禁用 Ninja`，改用 `cmake_maca + make_maca`：
+  - 早期有过一次通过观测
+  - 但后续重复实验并不稳定，复验时仍然回到同一个 runtime compile 失败
+
+因此当前可以进一步排除：
+
+4. 不是 `mold` 单独导致
+5. 不是 `ccache` 单独导致
+
+同时也不能把问题简单收敛成：
+
+- “只要不用 Ninja 就会恢复”
+
+当前更稳妥的理解是：
+
+- 不同 generator / build driver 可能会影响复现概率或暴露节奏
+- 但根因仍在 cu-bridge/MACA 的 runtime compile 与 `__mcrtc_*` 自动包装兼容性层
+
+### 1.1 当前已验证有效的 runtime JIT 兼容修复
+
+在当前 `maca_dev` 上，以下两类修复已经被串行 rerun 验证为有效：
+
+1. 在 cu-bridge/MACA 的 runtime compile 路径下，跳过 `nvrtcAddNameExpression`
+   - 直接使用 `extern "C"` kernel 名称做 `cuModuleGetFunction`
+   - 这一步恢复了 `MinimumCornellBox`、`Compaction`、`TraceKernel` 等基础 JIT case
+
+2. 将 runtime compile 中会被引用的 device helper / filter 改成 `HIPRT_INLINE`
+   - 包括：
+     - `hiprtPointWorldToObject` / `hiprtPointObjectToWorld`
+     - `hiprtVectorWorldToObject` / `hiprtVectorObjectToWorld`
+     - `duplicityFilter`
+     - `cutoutFilter`
+     - `intersectCircle`
+     - `intersectSphere`
+   - 这一步消除了 `duplicityFilter(...)`、`hiprtPointWorldToObject(...)` 等 runtime JIT 链接未定义符号
+
 ### 2. wave64 相关 bitmask 问题是第一层公共阻塞点
 
 - `PairTriangles`、`Collapse`、`subwarpMask`、`packetMask` 等路径中，原先存在典型的 32-bit mask 用法。

@@ -61,7 +61,7 @@ For a concise Chinese description of the current build and migration boundaries,
 
 ## Current MACA Test Status
 
-As of **March 14, 2026**, the current MACA + cu-bridge migration branch passes `59 / 59` non-performance unit tests, or `100%`, based on serial reruns in the current workspace.
+As of **March 15, 2026**, the current MACA + cu-bridge migration branch passes `62 / 62` non-performance unit tests, or `100%`, based on serial reruns in the current workspace.
 
 Supported cases currently include:
 - Core build / geometry cases such as `CudaEnabled`, `MinimumCornellBox`, `Compaction`, `BoundingBox`, `CustomBvhImport`, `BvhIoApi`
@@ -72,13 +72,29 @@ Supported cases currently include:
 - Focused transform diagnostics that currently pass such as `SceneInternalTransformRaySrt` and `SceneInverseMatrixDebugSrt`
 - Lifecycle diagnostics such as `RecreateCornellBoxTwiceBuildOnly` and `RenderCornellBoxTwiceSameSceneNoRef`
 - Recovered transformed-scene cases such as `TranslateCornellBox`, `ScaleCornellBox`, `RotateCornellBox`, `Shear`, `SceneIntersectionSingleton`, `SceneIntersection`, `SceneIntersectionMlas`
+- Recovered scene/update cases such as `SceneClosestHitSingletonSrt`, `SceneClosestHitSingletonSrtRecreate`, `SceneTraceKernelSingletonSrt`, and `BvhUpdateCornellBox`
 - Object-scene rendering cases such as `BvhFastCornellBox`, `BvhHighQCornellBox`, `ShadowRayCornellBox`, `AoRayCornellBox`, `AoRayEmbreeCornellBox`, `UvsCornellBox`, `PrimIdsCornellBox`, `HitDistCornellBox`, `NormalsCornellBox`, `BvhBalancedCornellBox`, `PrimaryRayCornellBox`
 
 There are no currently failing non-performance unit tests in the present MACA baseline. The recreate, stack, and transform diagnostics are still kept in the suite as regression guards.
 
-Runtime kernel disk cache now follows the original policy again: enabled by default for `Release`, disabled by default for non-`Release` builds. You can still override it with `-DHIPRT_ENABLE_RUNTIME_KERNEL_CACHE=ON|OFF`, or force-disable it at runtime with `HIPRT_DISABLE_RUNTIME_KERNEL_CACHE=1`.
+Current cu-bridge/MACA bring-up also requires one runtime JIT compatibility adjustment on this branch: the runtime trace-kernel path skips `nvrtcAddNameExpression` under cu-bridge, and relies on direct `extern "C"` entry lookup instead.
+
+Runtime kernel disk cache is currently kept configurable as before. You can override it with `-DHIPRT_ENABLE_RUNTIME_KERNEL_CACHE=ON|OFF`, or force-disable it at runtime with `HIPRT_DISABLE_RUNTIME_KERNEL_CACHE=1`.
 
 The Linux unit-test helper scripts keep runtime kernel cache enabled by default for faster repeated test runs. To debug JIT/header changes, explicitly run with `HIPRT_DISABLE_RUNTIME_KERNEL_CACHE=1`.
+
+For the current `maca_dev` branch on MACA + cu-bridge, the recommended local entrypoints are:
+
+- `scripts/build_maca_cucc.sh`
+- `scripts/build_and_test_maca_cucc.sh`
+- `scripts/unittest_maca_cucc.sh`
+
+These scripts currently default to:
+
+- `cmake_maca`
+- `make_maca`
+- `HIPRT_ENABLE_RUNTIME_KERNEL_CACHE=OFF`
+- `HIPRT_DISABLE_RUNTIME_KERNEL_CACHE=1`
 
 For the detailed Chinese status, update rules, and per-case support matrix, see `docs/maca-test-status-zh.md`.
 

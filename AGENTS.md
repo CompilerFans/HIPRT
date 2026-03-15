@@ -6,6 +6,20 @@
 ## 构建、测试与开发命令
 首次拉取后先执行 `git submodule update --init --recursive`。本仓库当前仅支持 CMake。Linux 和 Windows 下都使用 `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release`，然后执行 `cmake --build build --config Release`。如需调试构建，可改成 `-DCMAKE_BUILD_TYPE=Debug`。
 
+在 `MACA + cu-bridge` 环境下，不要把当前 runtime compile 故障简单归因到 `Ninja/ninja_maca`。
+
+目前已经完成的对比实验表明：
+
+- `cmake_maca + Ninja + ninja_maca` 下，最小用例 `hiprtTest.MinimumCornellBox` 会稳定失败在 runtime compile 阶段，表现为 `CornellBoxKernel` 在 `__mcrtc_*` 自动包装中不可见。
+- `禁用 mold`、`禁用 ccache` 都不会改变这一失败形态。
+- `cmake_maca + make_maca` 路线曾出现过一次通过观测，但重复实验并不稳定；后续复验同样回到相同的 runtime compile 失败。
+
+因此当前约束应理解为：
+
+- `make_maca` 仍然值得作为对比路径保留
+- 但不能把它当作已确认稳定的 workaround
+- 当前真正优先级仍是排查 `buildTraceKernels()` / `Compiler.cpp` 与 cu-bridge/MACA runtime compile 的兼容性
+
 ## 代码风格与命名约定
 项目使用 C++17，并遵循 `.clang-format`：制表符缩进，宽度 4，列宽上限 128，基于 LLVM 风格，左花括号单独成行。变量使用小驼峰，如 `nodeCount`；常量使用大驼峰，如 `LogSize`；非静态成员统一使用 `m_` 前缀。优先使用 `nullptr`、`override`、`std::optional`、`std::filesystem::path` 和 C++ 风格转换，避免 C 风格写法。
 
