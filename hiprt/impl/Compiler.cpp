@@ -22,7 +22,11 @@
 //
 //////////////////////////////////////////////////////////////////////////////////////////
 
+#include <array>
+#include <cstdlib>
+#include <fstream>
 #include <regex>
+#include <sstream>
 
 #include <hiprt/hiprt.h>
 #include <hiprt/impl/Compiler.h>
@@ -45,6 +49,119 @@ bool getRuntimeKernelDiskCacheEnabled()
 #else
 	return true;
 #endif
+}
+
+constexpr auto LinkLogSize = 8192u;
+
+std::string getNvrtcArchOpt( Context& context )
+{
+	int major = 0;
+	int minor = 0;
+	checkOro( cudaDeviceGetAttribute( &major, cudaDevAttrComputeCapabilityMajor, context.getDevice() ) );
+	checkOro( cudaDeviceGetAttribute( &minor, cudaDevAttrComputeCapabilityMinor, context.getDevice() ) );
+	return "--gpu-architecture=compute_" + std::to_string( major ) + std::to_string( minor );
+}
+
+bool isElfBinary( const std::string_view binary )
+{
+	return binary.size() >= 4 && static_cast<unsigned char>( binary[0] ) == 0x7F && binary[1] == 'E' && binary[2] == 'L' &&
+		   binary[3] == 'F';
+}
+
+std::string getNvrtcCompiledBinary( nvrtcProgram prog )
+{
+	size_t ptxSize = 0;
+	checkOrortc( nvrtcGetPTXSize( prog, &ptxSize ) );
+	if ( ptxSize > 0 )
+	{
+		std::string ptx( ptxSize, '\0' );
+		checkOrortc( nvrtcGetPTX( prog, ptx.data() ) );
+		return ptx;
+	}
+
+	size_t cubinSize = 0;
+	checkOrortc( nvrtcGetCUBINSize( prog, &cubinSize ) );
+	if ( cubinSize > 0 )
+	{
+		std::string cubin( cubinSize, '\0' );
+		checkOrortc( nvrtcGetCUBIN( prog, cubin.data() ) );
+		return cubin;
+	}
+
+	return {};
+}
+
+std::string quoteShellArg( const std::string& arg )
+{
+	std::string escaped = "'";
+	for ( const char ch : arg )
+	{
+		if ( ch == '\'' ) escaped += "'\\''";
+		else escaped += ch;
+	}
+	escaped += "'";
+	return escaped;
+}
+
+std::string findCudaCompiler()
+{
+	const std::vector<std::string> candidates = {
+		Utility::getEnvVariable( "HIPRT_CUDA_COMPILER" ),
+		Utility::getEnvVariable( "CUDACXX" ),
+		Utility::getEnvVariable( "CUDA_PATH" ).empty() ? std::string() : Utility::getEnvVariable( "CUDA_PATH" ) + "/bin/nvcc",
+		"/root/cu-bridge/CUDA_DIR/bin/nvcc",
+		"/opt/maca/tools/cu-bridge/bin/cucc",
+		"/opt/maca/tools/cu-bridge/CUDA_DIR/bin/nvcc",
+		"nvcc",
+	};
+
+	for ( const auto& candidate : candidates )
+	{
+		if ( candidate.empty() ) continue;
+		if ( candidate == "nvcc" ) return candidate;
+		if ( std::filesystem::exists( candidate ) ) return candidate;
+	}
+
+	throw std::runtime_error( "Unable to locate a CUDA-compatible compiler for bitcode fallback compilation." );
+}
+
+std::string compileSourceToCubin(
+	Context& context, const std::string& source, const std::vector<std::string>& extraOptions, const std::string& stem )
+{
+	const std::filesystem::path tempDir =
+		std::filesystem::temp_directory_path() /
+		Utility::format( "hiprt-bitcode-%08x", Utility::hashString( source + stem + std::to_string( std::rand() ) ) );
+	std::filesystem::create_directories( tempDir );
+
+	const std::filesystem::path srcPath = tempDir / ( stem + ".cu" );
+	const std::filesystem::path outPath = tempDir / ( stem + ".cubin" );
+
+	{
+		std::ofstream file( srcPath, std::ios::out | std::ios::binary );
+		file.write( source.data(), static_cast<std::streamsize>( source.size() ) );
+	}
+
+	const std::string compiler = findCudaCompiler();
+	std::ostringstream cmd;
+	cmd << quoteShellArg( compiler ) << " -x cu " << quoteShellArg( srcPath.string() )
+		<< " -O3 -std=c++17 --device-c -cubin --use_fast_math"
+		<< " -I" << quoteShellArg( Utility::getRootDir().string() )
+		<< " -I" << quoteShellArg( ( Utility::getRootDir() / "contrib/Orochi" ).string() );
+	for ( const auto& option : extraOptions )
+		cmd << " " << option;
+	cmd << " -o " << quoteShellArg( outPath.string() );
+
+	if ( std::system( cmd.str().c_str() ) != 0 )
+		throw std::runtime_error( "External compiler fallback failed for bitcode source: " + srcPath.string() );
+
+	std::ifstream file( outPath, std::ios::in | std::ios::binary | std::ios::ate );
+	if ( !file.is_open() ) throw std::runtime_error( "Failed to open fallback cubin: " + outPath.string() );
+
+	const size_t size = static_cast<size_t>( file.tellg() );
+	file.seekg( 0, std::ios::beg );
+	std::string cubin( size, '\0' );
+	file.read( cubin.data(), static_cast<std::streamsize>( size ) );
+	return cubin;
 }
 } // namespace
 
@@ -80,7 +197,7 @@ Kernel Compiler::getKernel(
 	std::vector<const char*>	  headers;
 	std::vector<const char*>	  includeNames;
 	std::vector<hiprtFuncNameSet> funcNameSets;
-	std::vector<CUfunction>	  functions;
+	std::vector<CUfunction>		  functions;
 	CUmodule					  module = nullptr;
 
 	if ( numHeaders == 0 )
@@ -198,10 +315,9 @@ void Compiler::buildKernels(
 
 			buildProgram( funcNames, extSrc, moduleName, headers, includeNames, opts, prog );
 
-			size_t binarySize = 0;
-			checkOrortc( nvrtcGetPTXSize( prog, &binarySize ) );
-			binary.resize( binarySize );
-			checkOrortc( nvrtcGetPTX( prog, binary.data() ) );
+			binary = getNvrtcCompiledBinary( prog );
+			if ( binary.empty() )
+				throw std::runtime_error( "Runtime compilation succeeded but emitted neither PTX nor CUBIN." );
 			checkOrortc( nvrtcDestroyProgram( &prog ) );
 
 			if ( useDiskCache ) cacheBinaryToFile( binary, cacheName );
@@ -209,6 +325,146 @@ void Compiler::buildKernels(
 
 		checkOro( cuModuleLoadData( &module, binary.data() ) );
 		m_moduleCache[moduleName.string()] = module;
+	}
+
+	for ( const char* funcName : funcNames )
+	{
+		CUfunction func = nullptr;
+		checkOro( cuModuleGetFunction( &func, module, funcName ) );
+		functions.push_back( func );
+	}
+}
+
+void Compiler::buildKernelsFromBitcode(
+	Context&							 context,
+	const std::vector<const char*>&		 funcNames,
+	const std::filesystem::path&		 moduleName,
+	const std::string_view				 bitcodeBinary,
+	uint32_t							 numGeomTypes,
+	uint32_t							 numRayTypes,
+	const std::vector<hiprtFuncNameSet>& funcNameSets,
+	std::vector<CUfunction>&			 functions,
+	bool								 cache )
+{
+	const bool useDiskCache = cache && getRuntimeKernelDiskCacheEnabled();
+	if ( useDiskCache && !std::filesystem::exists( m_cacheDirectory ) && !std::filesystem::create_directory( m_cacheDirectory ) )
+		throw std::runtime_error( "Cannot create cache directory" );
+
+	const std::string binaryKey( bitcodeBinary.data(), bitcodeBinary.size() );
+	const std::string cacheKey = "bitcode:" + moduleName.string() + ":" +
+								 Utility::format( "%08x", Utility::hashString( binaryKey + std::to_string( numGeomTypes ) +
+																			  std::to_string( numRayTypes ) ) );
+
+	std::lock_guard<std::mutex> lock( m_moduleMutex );
+	auto						cacheEntry = m_moduleCache.find( cacheKey );
+	CUmodule					module		= nullptr;
+	if ( cacheEntry != m_moduleCache.end() )
+	{
+		module = cacheEntry->second;
+	}
+	else
+	{
+		const std::string diskCacheName =
+			getCacheFilename( context, binaryKey, moduleName, std::nullopt, funcNameSets, numGeomTypes, numRayTypes );
+		const bool upToDate = isCachedFileUpToDate( m_cacheDirectory / diskCacheName, moduleName );
+
+		std::string binary;
+		if ( upToDate && useDiskCache )
+		{
+			binary = loadCacheFileToBinary( diskCacheName );
+		}
+		else
+		{
+			const std::string customFuncBitcodeBinary =
+				buildFunctionTableBitcode( context, numGeomTypes, numRayTypes, funcNameSets );
+			const std::filesystem::path bcPath = getBitcodePath();
+			const CUjitInputType		  userBinaryType =
+				isElfBinary( bitcodeBinary ) ? CU_JIT_INPUT_CUBIN : CU_JIT_INPUT_PTX;
+			const CUjitInputType customBinaryType =
+				isElfBinary( customFuncBitcodeBinary ) ? CU_JIT_INPUT_CUBIN : CU_JIT_INPUT_PTX;
+
+			std::array<char, LinkLogSize> errorLog{};
+			std::array<char, LinkLogSize> infoLog{};
+			float						  wallTime = 0.0f;
+
+			CUjit_option options[] = {
+				CU_JIT_WALL_TIME,
+				CU_JIT_INFO_LOG_BUFFER,
+				CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES,
+				CU_JIT_ERROR_LOG_BUFFER,
+				CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES,
+				CU_JIT_LOG_VERBOSE,
+			};
+			void* optionValues[] = {
+				&wallTime,
+				infoLog.data(),
+				reinterpret_cast<void*>( static_cast<uintptr_t>( infoLog.size() ) ),
+				errorLog.data(),
+				reinterpret_cast<void*>( static_cast<uintptr_t>( errorLog.size() ) ),
+				reinterpret_cast<void*>( static_cast<uintptr_t>( 1 ) ),
+			};
+
+			CUlinkState linkState = nullptr;
+			checkOro( cuLinkCreate(
+				static_cast<unsigned int>( sizeof( options ) / sizeof( options[0] ) ), options, optionValues, &linkState ) );
+
+			const auto throwLinkError = [&]( const std::string& prefix ) {
+				std::string message = prefix;
+				if ( errorLog[0] != '\0' ) message += "\n" + std::string( errorLog.data() );
+				if ( infoLog[0] != '\0' ) message += "\n" + std::string( infoLog.data() );
+				checkOro( cuLinkDestroy( linkState ) );
+				throw std::runtime_error( message );
+			};
+
+			if ( cuLinkAddFile( linkState, CU_JIT_INPUT_FATBINARY, const_cast<char*>( bcPath.string().c_str() ), 0, nullptr, nullptr ) !=
+				 CUDA_SUCCESS )
+			{
+				throwLinkError( "Failed to add HIPRT precompiled fatbin: " + bcPath.string() );
+			}
+
+			if ( cuLinkAddData(
+					 linkState,
+					 userBinaryType,
+					 const_cast<char*>( bitcodeBinary.data() ),
+					 bitcodeBinary.size(),
+					 const_cast<char*>( "user_bitcode" ),
+					 0,
+					 nullptr,
+					 nullptr )
+				 != CUDA_SUCCESS )
+			{
+				throwLinkError( "Failed to add user PTX for bitcode linking" );
+			}
+
+			if ( cuLinkAddData(
+					 linkState,
+					 customBinaryType,
+					 const_cast<char*>( customFuncBitcodeBinary.data() ),
+					 customFuncBitcodeBinary.size(),
+					 const_cast<char*>( "hiprt_custom_funcs" ),
+					 0,
+					 nullptr,
+					 nullptr )
+				 != CUDA_SUCCESS )
+			{
+				throwLinkError( "Failed to add HIPRT custom-function PTX for bitcode linking" );
+			}
+
+			void*  linkedImage = nullptr;
+			size_t linkedSize  = 0;
+			if ( cuLinkComplete( linkState, &linkedImage, &linkedSize ) != CUDA_SUCCESS )
+			{
+				throwLinkError( "Failed to complete bitcode linking" );
+			}
+
+			binary.assign( reinterpret_cast<const char*>( linkedImage ), linkedSize );
+			checkOro( cuLinkDestroy( linkState ) );
+
+			if ( useDiskCache ) cacheBinaryToFile( binary, diskCacheName );
+		}
+
+		checkOro( cuModuleLoadData( &module, binary.data() ) );
+		m_moduleCache[cacheKey] = module;
 	}
 
 	for ( const char* funcName : funcNames )
@@ -286,6 +542,62 @@ void Compiler::addCommonOpts( Context& context, std::vector<const char*>& opts, 
 	opts.push_back( "-I" HIPRT_CUDA_INCLUDE_DIR );
 #endif
 	opts.push_back( "-std=c++17" );
+}
+
+std::string Compiler::buildFunctionTableBitcode(
+	Context& context, uint32_t numGeomTypes, uint32_t numRayTypes, const std::vector<hiprtFuncNameSet>& funcNameSets )
+{
+	std::vector<const char*> headers;
+	std::vector<const char*> includeNames;
+	std::vector<const char*> options;
+	addCommonOpts( context, options, true );
+
+	std::string includePath = "-I" + Utility::getRootDir().string();
+	options.push_back( includePath.c_str() );
+
+	std::string archOpt = getNvrtcArchOpt( context );
+	options.push_back( archOpt.c_str() );
+	options.push_back( "--device-c" );
+
+	std::string bitcodeDef = "-DHIPRT_BITCODE_LINKING";
+	options.push_back( bitcodeDef.c_str() );
+
+	std::string src = "#include <hiprt/hiprt_device.h>\n";
+	addCustomFuncsSwitchCase( src, funcNameSets, numGeomTypes, numRayTypes );
+
+	std::vector<const char*> funcNames;
+	nvrtcProgram			 prog = nullptr;
+	buildProgram( funcNames, src, "hiprt_bitcode_custom_funcs.cu", headers, includeNames, options, prog );
+	std::string binary = getNvrtcCompiledBinary( prog );
+	checkOrortc( nvrtcDestroyProgram( &prog ) );
+	if ( binary.empty() )
+	{
+		binary = compileSourceToCubin( context, src, { "-DHIPRT_BITCODE_LINKING" }, "hiprt_bitcode_custom_funcs" );
+	}
+	return binary;
+}
+
+std::filesystem::path Compiler::getBitcodePath()
+{
+	const std::string filename = "hiprt" + std::string( HIPRT_VERSION_STR ) + "_nv_lib.fatbin";
+	return findArtifactPath(
+		{ Utility::getCurrentDir() / filename,
+		  Utility::getRootDir() / "dist/bin/Release" / filename,
+		  Utility::getRootDir() / "dist/bin/Debug" / filename,
+		  Utility::getRootDir() / "hiprt/bitcodes" / filename } );
+}
+
+std::filesystem::path Compiler::findArtifactPath( const std::vector<std::filesystem::path>& candidates )
+{
+	for ( const auto& candidate : candidates )
+	{
+		if ( std::filesystem::exists( candidate ) ) return candidate;
+	}
+
+	std::string message = "Unable to locate precompiled HIPRT artifact. Checked:";
+	for ( const auto& candidate : candidates )
+		message += "\n  " + candidate.string();
+	throw std::runtime_error( message );
 }
 
 bool Compiler::isCachedFileUpToDate( const std::filesystem::path& cachedFile, const std::filesystem::path& moduleName )

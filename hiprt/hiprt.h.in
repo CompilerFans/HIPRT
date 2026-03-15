@@ -562,10 +562,12 @@ HIPRT_API hiprtError hiprtBuildTraceKernels(
 	hiprtApiModule*	  moduleOut,
 	bool			  cache );
 
-/** \brief Legacy precompiled-kernel entry kept for source compatibility.
+/** \brief Builds trace kernels by linking user PTX with precompiled HIPRT fatbins.
  *
- * The CUDA-only backend does not support the historical bitcode workflow and
- * returns `hiprtErrorNotImplemented`.
+ * The current CUDA/cu-bridge backend expects `bitcodeBinary` to contain relocatable
+ * PTX produced by NVRTC-compatible compilation and requires the matching
+ * `hiprt*_nv_lib.fatbin` artifact to be available under `dist/bin/<config>/`
+ * or `hiprt/bitcodes/`.
  */
 HIPRT_API hiprtError hiprtBuildTraceKernelsFromBitcode(
 	hiprtContext	  context,

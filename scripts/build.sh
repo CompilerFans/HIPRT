@@ -9,6 +9,10 @@ BUILD_TESTS="${BUILD_TESTS:-ON}"
 GENERATOR="${GENERATOR:-Ninja}"
 CCACHE_PROGRAM="${CCACHE_PROGRAM:-$(command -v ccache || true)}"
 MOLD_PROGRAM="${MOLD_PROGRAM:-$(command -v mold || true)}"
+HIPRT_ENABLE_RUNTIME_KERNEL_CACHE="${HIPRT_ENABLE_RUNTIME_KERNEL_CACHE:-}"
+HIPRT_ENABLE_BAKE_KERNEL="${HIPRT_ENABLE_BAKE_KERNEL:-}"
+HIPRT_ENABLE_BITCODE="${HIPRT_ENABLE_BITCODE:-}"
+HIPRT_ENABLE_PRECOMPILED_TRACE_KERNEL="${HIPRT_ENABLE_PRECOMPILED_TRACE_KERNEL:-}"
 
 cmake_args=(
   -S "$ROOT_DIR"
@@ -23,6 +27,22 @@ fi
 
 if [[ "$BUILD_TESTS" == "OFF" ]]; then
   cmake_args+=(-DNO_UNITTEST=ON)
+fi
+
+if [[ -n "$HIPRT_ENABLE_RUNTIME_KERNEL_CACHE" ]]; then
+  cmake_args+=(-DHIPRT_ENABLE_RUNTIME_KERNEL_CACHE="$HIPRT_ENABLE_RUNTIME_KERNEL_CACHE")
+fi
+
+if [[ -n "$HIPRT_ENABLE_BAKE_KERNEL" ]]; then
+  cmake_args+=(-DHIPRT_ENABLE_BAKE_KERNEL="$HIPRT_ENABLE_BAKE_KERNEL")
+fi
+
+if [[ -n "$HIPRT_ENABLE_BITCODE" ]]; then
+  cmake_args+=(-DHIPRT_ENABLE_BITCODE="$HIPRT_ENABLE_BITCODE")
+fi
+
+if [[ -n "$HIPRT_ENABLE_PRECOMPILED_TRACE_KERNEL" ]]; then
+  cmake_args+=(-DHIPRT_ENABLE_PRECOMPILED_TRACE_KERNEL="$HIPRT_ENABLE_PRECOMPILED_TRACE_KERNEL")
 fi
 
 if [[ -n "$CCACHE_PROGRAM" ]]; then
@@ -43,3 +63,11 @@ fi
 
 cmake "${cmake_args[@]}"
 cmake --build "$BUILD_DIR" --config "$BUILD_TYPE" -j
+
+if [[ "${HIPRT_ENABLE_BITCODE:-}" == "ON" ]]; then
+  cmake --build "$BUILD_DIR" --config "$BUILD_TYPE" --target hiprt_compile_bitcode -j
+fi
+
+if [[ "${HIPRT_ENABLE_PRECOMPILED_TRACE_KERNEL:-}" == "ON" ]]; then
+  cmake --build "$BUILD_DIR" --config "$BUILD_TYPE" --target hiprt_precompile_trace_kernels -j
+fi

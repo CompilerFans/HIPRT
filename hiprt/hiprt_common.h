@@ -91,7 +91,20 @@
 #define HIPRT_DEVICE __device__
 #define HIPRT_HOST_DEVICE __host__ __device__
 
+// TODO: cleanup after baking / bitcode helper generation is removed.
+#if defined( HIPRT_LOAD_FROM_STRING ) || defined( HIPRT_BITCODE_LINKING )
+#define GET_ARGS( X ) ( hip::X##Args )
+#define GET_INC( X ) ( hip::X##Includes )
+#else
+#define GET_ARGS( X ) static_cast<const char**>( nullptr )
+#define GET_INC( X ) static_cast<const char**>( nullptr )
+#endif
+
+#if defined( HIPRT_LOAD_FROM_STRING )
+#define GET_ARG_LIST( X ) sizeof( GET_ARGS( X ) ) / sizeof( void* ), GET_ARGS( X ), GET_INC( X )
+#else
 #define GET_ARG_LIST( X ) 0, 0, 0
+#endif
 
 #if defined( __KERNELCC_RTC__ )
 #if defined( __has_include )

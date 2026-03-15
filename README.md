@@ -5,7 +5,7 @@
 HIPRT 当前仓库保留 `HIPRT` 项目名称以及 `hiprt*` 公开 API 命名，但底层实现已经收敛为 CUDA-only。
 
 - 保留：`hiprt.h`、`hiprtew.h`、`hiprtCreateContext` 等公开接口
-- 去除：AMD HIP runtime、ROCm toolchain、`hipcc`、运行时 HIP 动态加载路径、旧 bitcode / 预编译链路
+- 去除：AMD HIP runtime、ROCm toolchain、`hipcc`、运行时 HIP 动态加载路径
 - 当前构建方式：仅支持 `CMake + CUDA Toolkit`
 
 快速构建：
@@ -39,7 +39,7 @@ This is the main repository for the source code for HIPRT.
 ## Current Status
 
 - The public project name remains `HIPRT`, and public API names such as `hiprtCreateContext` are intentionally preserved.
-- The backend is now CUDA-only. AMD HIP runtime, ROCm toolchains, `hipcc`, runtime loader paths, and legacy precompiled-bitcode build flows are not part of the build anymore.
+- The backend is now CUDA-only. AMD HIP runtime, ROCm toolchains, `hipcc`, and historical HIP loader paths are not part of the build anymore.
 - `hiprtew.h` is kept as a compatibility header, but it now calls linked HIPRT APIs directly instead of resolving symbols at runtime.
 - The vendored `contrib/Orochi` subtree has been trimmed to the pieces still needed by the current build. Historical HIP loader code, Orochi tests, and Orochi helper scripts are no longer kept in the repository.
 
@@ -89,6 +89,20 @@ Build with CMake only.
 - `CMAKE_CUDA_ARCHITECTURES` is cache-configurable. Example: `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_ARCHITECTURES=89`.
 - Unit tests are built by default. Disable them with `-DNO_UNITTEST=ON`.
 - Generated binaries are written to `dist/bin/<Config>/`.
+- Optional bitcode / precompile switches:
+  - `-DHIPRT_ENABLE_BAKE_KERNEL=ON`: generate `hiprt/cache/Kernels.h` and `hiprt/cache/KernelArgs.h`
+  - `-DHIPRT_ENABLE_BITCODE=ON`: generate `hiprt<ver>_nv_lib.fatbin` and `hiprt<ver>_nv.fatbin`
+  - `-DHIPRT_ENABLE_PRECOMPILED_TRACE_KERNEL=ON`: generate `hiprt<ver>_nv_precompiled_bitcode.fatbin`
+
+## Current Bitcode / Precompile Status
+
+- `bake_kernel` has been restored through `HIPRT_ENABLE_BAKE_KERNEL`.
+- The CUDA/cu-bridge build can now generate the HIPRT precompiled fatbin artifacts and a precompiled trace-kernel fatbin through `scripts/bitcodes/compile.py` and `scripts/bitcodes/precompile_bitcode.py`.
+- `hiprtBuildTraceKernelsFromBitcode(...)` has been re-enabled for CUDA-side PTX/CUBIN linking against the generated `hiprt*_nv_lib.fatbin`.
+- On `MACA + cu-bridge`, the recommended path is still the precompiled workflow. Runtime `nvrtc --device-c` emission for user trace kernels is not yet stable enough to use as the primary validation path, so the related UTs are skipped on cu-bridge and the precompiled artifacts are the supported validation route there.
+- The precompiled validation route is covered by UTs that directly load the generated `hiprt*_nv_precompiled_bitcode.fatbin` and resolve both `TraceKernel` and `CutoutKernel`.
+
+For the detailed Chinese status and current MACA constraints, see `docs/bitcode-status-zh.md`.
 
 ## Running Unit Tests
 

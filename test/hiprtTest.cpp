@@ -39,6 +39,8 @@
 #include <thread>
 #include <algorithm>
 #include <numeric>
+#include <fstream>
+#include <sstream>
 
 CmdArguments g_parsedArgs;
 
@@ -84,6 +86,107 @@ void checkHiprt( hiprtError res, const source_location& location )
 		std::abort();
 	}
 }
+
+namespace
+{
+std::string getNvrtcCompiledBinaryForTest( nvrtcProgram prog )
+{
+	size_t ptxSize = 0;
+	checkOrortc( nvrtcGetPTXSize( prog, &ptxSize ) );
+	if ( ptxSize > 0 )
+	{
+		std::string ptx( ptxSize, '\0' );
+		checkOrortc( nvrtcGetPTX( prog, ptx.data() ) );
+		return ptx;
+	}
+
+	size_t cubinSize = 0;
+	checkOrortc( nvrtcGetCUBINSize( prog, &cubinSize ) );
+	if ( cubinSize > 0 )
+	{
+		std::string cubin( cubinSize, '\0' );
+		checkOrortc( nvrtcGetCUBIN( prog, cubin.data() ) );
+		return cubin;
+	}
+
+	return {};
+}
+
+std::string quoteShellArgForTest( const std::string& arg )
+{
+	std::string escaped = "'";
+	for ( const char ch : arg )
+	{
+		if ( ch == '\'' ) escaped += "'\\''";
+		else escaped += ch;
+	}
+	escaped += "'";
+	return escaped;
+}
+
+std::string findCudaCompilerForTest()
+{
+	const std::vector<std::string> candidates = {
+		getEnvVariable( "HIPRT_CUDA_COMPILER" ),
+		getEnvVariable( "CUDACXX" ),
+		getEnvVariable( "CUDA_PATH" ).empty() ? std::string() : getEnvVariable( "CUDA_PATH" ) + "/bin/nvcc",
+		"/root/cu-bridge/CUDA_DIR/bin/nvcc",
+		"/opt/maca/tools/cu-bridge/bin/cucc",
+		"/opt/maca/tools/cu-bridge/CUDA_DIR/bin/nvcc",
+		"nvcc",
+	};
+
+	for ( const auto& candidate : candidates )
+	{
+		if ( candidate.empty() ) continue;
+		if ( candidate == "nvcc" ) return candidate;
+		if ( std::filesystem::exists( candidate ) ) return candidate;
+	}
+
+	return {};
+}
+
+std::string compileSourceToCubinForTest(
+	const std::filesystem::path& srcPath, const std::vector<const char*>& options, const std::filesystem::path& rootDir )
+{
+	const std::string compiler = findCudaCompilerForTest();
+	if ( compiler.empty() ) return {};
+
+	const std::filesystem::path absoluteSrcPath  = std::filesystem::absolute( srcPath );
+	const std::filesystem::path absoluteRootPath = std::filesystem::absolute( rootDir );
+	const std::filesystem::path tempDir =
+		std::filesystem::temp_directory_path() /
+		( "hiprt-test-bitcode-" + std::to_string( std::chrono::steady_clock::now().time_since_epoch().count() ) );
+	std::filesystem::create_directories( tempDir );
+
+	const std::filesystem::path wrapperPath = tempDir / "trace_kernel.cu";
+	const std::filesystem::path cubinPath	 = tempDir / "trace_kernel.cubin";
+	{
+		std::ofstream file( wrapperPath, std::ios::out | std::ios::binary );
+		file << "#include \"" << absoluteSrcPath.string() << "\"\n";
+	}
+
+	std::ostringstream cmd;
+	cmd << quoteShellArgForTest( compiler ) << " -x cu " << quoteShellArgForTest( wrapperPath.string() )
+		<< " -O3 -std=c++17 --device-c -cubin --use_fast_math"
+		<< " -I" << quoteShellArgForTest( absoluteRootPath.string() )
+		<< " -I" << quoteShellArgForTest( ( absoluteRootPath / "contrib/Orochi" ).string() );
+	for ( const char* option : options )
+		cmd << " " << option;
+	cmd << " -o " << quoteShellArgForTest( cubinPath.string() );
+
+	if ( std::system( cmd.str().c_str() ) != 0 ) return {};
+
+	std::ifstream file( cubinPath, std::ios::in | std::ios::binary | std::ios::ate );
+	if ( !file.is_open() ) return {};
+
+	const size_t size = static_cast<size_t>( file.tellg() );
+	file.seekg( 0, std::ios::beg );
+	std::string cubin( size, '\0' );
+	file.read( cubin.data(), static_cast<std::streamsize>( size ) );
+	return cubin;
+}
+} // namespace
 
 std::string getEnvVariable( const std::string& key )
 {
@@ -722,6 +825,92 @@ hiprtError hiprtTest::buildTraceKernels(
 		true );
 }
 
+hiprtError hiprtTest::buildTraceKernelsFromBitcode(
+	hiprtContext								 ctxt,
+	const std::filesystem::path&				 srcPath,
+	std::vector<const char*>					 functionNames,
+	std::vector<hiprtApiFunction>&				 functionsOut,
+	std::optional<std::vector<const char*>>		 opts,
+	std::optional<std::vector<hiprtFuncNameSet>> funcNameSets,
+	uint32_t									 numGeomTypes,
+	uint32_t									 numRayTypes )
+{
+	std::vector<std::filesystem::path> includeNamesData;
+	std::string						   sourceCode;
+	readSourceCode( srcPath, sourceCode, &includeNamesData );
+
+	std::vector<const char*> options;
+	if ( opts ) options = *opts;
+
+	std::string includePath = "-I" + getRootDir().string();
+	options.push_back( includePath.c_str() );
+	options.push_back( "--use_fast_math" );
+	options.push_back( "--device-c" );
+	options.push_back( "-std=c++17" );
+
+	int major = 0;
+	int minor = 0;
+	checkOro( cudaDeviceGetAttribute( &major, cudaDevAttrComputeCapabilityMajor, m_cudaDevice ) );
+	checkOro( cudaDeviceGetAttribute( &minor, cudaDevAttrComputeCapabilityMinor, m_cudaDevice ) );
+	std::string archOpt = "--gpu-architecture=compute_" + std::to_string( major ) + std::to_string( minor );
+	options.push_back( archOpt.c_str() );
+
+	std::vector<std::string> headersData( includeNamesData.size() );
+	std::vector<std::string> includeNameStrings( includeNamesData.size() );
+	std::vector<const char*> headers;
+	std::vector<const char*> includeNames;
+	for ( size_t i = 0; i < includeNamesData.size(); i++ )
+	{
+		readSourceCode( getRootDir() / includeNamesData[i], headersData[i] );
+		includeNameStrings[i] = includeNamesData[i].string();
+		includeNames.push_back( includeNameStrings[i].c_str() );
+		headers.push_back( headersData[i].c_str() );
+	}
+
+	nvrtcProgram prog = nullptr;
+	checkOrortc( nvrtcCreateProgram(
+		&prog,
+		sourceCode.c_str(),
+		srcPath.string().c_str(),
+		static_cast<int>( headers.size() ),
+		headers.data(),
+		includeNames.data() ) );
+
+	const nvrtcResult compileResult = nvrtcCompileProgram( prog, static_cast<int>( options.size() ), options.data() );
+	if ( compileResult != NVRTC_SUCCESS )
+	{
+		size_t logSize = 0;
+		checkOrortc( nvrtcGetProgramLogSize( prog, &logSize ) );
+		if ( logSize != 0 )
+		{
+			std::string log( logSize, '\0' );
+			checkOrortc( nvrtcGetProgramLog( prog, &log[0] ) );
+			std::cerr << log << std::endl;
+		}
+		checkOrortc( nvrtcDestroyProgram( &prog ) );
+		return hiprtErrorInternal;
+	}
+
+	std::string binary = getNvrtcCompiledBinaryForTest( prog );
+	checkOrortc( nvrtcDestroyProgram( &prog ) );
+	if ( binary.empty() )
+		binary = compileSourceToCubinForTest( srcPath, options, getRootDir() );
+
+	functionsOut.resize( functionNames.size() );
+	return hiprtBuildTraceKernelsFromBitcode(
+		ctxt,
+		static_cast<uint32_t>( functionNames.size() ),
+		functionNames.data(),
+		srcPath.string().c_str(),
+		binary.data(),
+		binary.size(),
+		numGeomTypes,
+		numRayTypes,
+		funcNameSets ? funcNameSets.value().data() : nullptr,
+		functionsOut.data(),
+		true );
+}
+
 hiprtError hiprtTest::buildTraceKernel(
 	hiprtContext								 ctxt,
 	const std::filesystem::path&				 srcPath,
@@ -738,6 +927,73 @@ hiprtError hiprtTest::buildTraceKernel(
 	ASSERT( functions.size() == 1 );
 	functionOut = *reinterpret_cast<cudaFunction_t*>( &functions.back() );
 	return e;
+}
+
+hiprtError hiprtTest::buildTraceKernelFromBitcode(
+	hiprtContext								 ctxt,
+	const std::filesystem::path&				 srcPath,
+	const std::string&							 functionName,
+	cudaFunction_t&								 functionOut,
+	std::optional<std::vector<const char*>>		 opts,
+	std::optional<std::vector<hiprtFuncNameSet>> funcNameSets,
+	uint32_t									 numGeomTypes,
+	uint32_t									 numRayTypes )
+{
+	std::vector<hiprtApiFunction> functions;
+	hiprtError					  e = buildTraceKernelsFromBitcode(
+		ctxt, srcPath, { functionName.c_str() }, functions, opts, funcNameSets, numGeomTypes, numRayTypes );
+	ASSERT( functions.size() == 1 );
+	functionOut = *reinterpret_cast<cudaFunction_t*>( &functions.back() );
+	return e;
+}
+
+bool hiprtTest::loadBinaryFile( const std::filesystem::path& path, std::vector<uint8_t>& binary )
+{
+	std::ifstream file( path, std::ios::binary | std::ios::in | std::ios::ate );
+	if ( !file.is_open() ) return false;
+
+	const size_t size = static_cast<size_t>( file.tellg() );
+	file.seekg( 0, std::ios::beg );
+	binary.resize( size );
+	file.read( reinterpret_cast<char*>( binary.data() ), static_cast<std::streamsize>( size ) );
+	return true;
+}
+
+std::filesystem::path hiprtTest::findPrecompiledTraceKernelPath()
+{
+	const std::string filename = std::string( "hiprt" ) + HIPRT_VERSION_STR + "_nv_precompiled_bitcode.fatbin";
+	const std::vector<std::filesystem::path> candidates = {
+		getRootDir() / "dist/bin/Release" / filename,
+		getRootDir() / "dist/bin/Debug" / filename,
+		getRootDir() / "hiprt/bitcodes" / filename,
+	};
+
+	for ( const auto& candidate : candidates )
+	{
+		if ( std::filesystem::exists( candidate ) ) return candidate;
+	}
+
+	return {};
+}
+
+hiprtError hiprtTest::loadPrecompiledTraceKernel(
+	const std::string& functionName, cudaFunction_t& functionOut, CUmodule* moduleOut )
+{
+	const std::filesystem::path path = findPrecompiledTraceKernelPath();
+	if ( path.empty() ) return hiprtErrorInternal;
+
+	std::vector<uint8_t> binary;
+	if ( !loadBinaryFile( path, binary ) ) return hiprtErrorInternal;
+
+	CUmodule module = nullptr;
+	checkOro( cuModuleLoadData( &module, binary.data() ) );
+
+	CUfunction function = nullptr;
+	checkOro( cuModuleGetFunction( &function, module, functionName.c_str() ) );
+
+	functionOut = function;
+	if ( moduleOut ) *moduleOut = module;
+	return hiprtSuccess;
 }
 
 void hiprtTest::createCornellTriangleMeshPrimitive(

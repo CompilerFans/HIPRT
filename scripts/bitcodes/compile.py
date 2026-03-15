@@ -1,197 +1,105 @@
-import optparse
-import os
-import sys
+#!/usr/bin/env python3
+
+import argparse
+import pathlib
+import shutil
 import subprocess
-import re
-import common_tools
-
-def isLinux():
-    return os.name != 'nt'
+import sys
 
 
-root = '..\\..\\'
-if isLinux():
-    root = '../../'
-
-errorMessageHeader = 'Bitcodes Compile Error:'
-
-hipSdkPathFromArgument = ''
-
-def which(program, sufix=''):
-    sufix = '.' + sufix
-    if isLinux():
-        sufix = ''
-
-    def is_exe(fpath):
-        return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
-
-    fpath, fname = os.path.split(program)
-    if fpath:
-        if is_exe(program + sufix):
-            return program
-    else:
-        for path in os.environ["PATH"].split(os.pathsep):
-            exe_file = os.path.join(path, program + sufix)
-            if is_exe(exe_file):
-                return exe_file
-    return None
+def read_version(root: pathlib.Path) -> str:
+    with (root / "version.txt").open("r", encoding="utf-8") as f:
+        major = int(f.readline().strip())
+        minor = int(f.readline().strip())
+    return f"{major * 1000 + minor:05d}"
 
 
-def getVersion():
-    f = open(root + 'version.txt', 'r')
-    HIPRT_MAJOR_VERSION = int(f.readline())
-    HIPRT_MINOR_VERSION = int(f.readline())
-    HIPRT_VERSION = HIPRT_MAJOR_VERSION * 1000 + HIPRT_MINOR_VERSION
-    return '%05d' % HIPRT_VERSION
+def parse_arch_list(arch_list: str) -> list[str]:
+    archs = [item.strip() for item in arch_list.replace(",", ";").split(";") if item.strip()]
+    if not archs:
+        return ["80"]
+    return archs
 
 
-hiprt_ver = getVersion()
-
-def compileScript(cmd, dst):
-    print('compiling ' + dst + '...')
-    sys.stdout.flush()
-    return_code = subprocess.call(cmd, shell=True)
-    if return_code != 0:
-        print(errorMessageHeader + ' executing command: ' + cmd)
-        sys.exit(1)
-    elif not os.path.exists(dst):
-        print(errorMessageHeader + ' The file ' + dst + ' does not exist.')
-        sys.exit(1)
-    else:
-        print('Compilation SUCCEEDED.')
-    sys.stdout.flush()
+def build_gencode_flags(archs: list[str]) -> list[str]:
+    flags: list[str] = []
+    for arch in archs:
+        flags.extend(["-gencode", f"arch=compute_{arch},code=sm_{arch}"])
+    return flags
 
 
-def compileAmd():
-    hipccpath = 'hipcc'
-    postfix = '_linux.bc'
-    if not isLinux(): # if OS is Windows
-        postfix = '_win.bc'
-
-    # if the hip path is given as an argument, we use the hipcc from it
-    if hipSdkPathFromArgument != '': 
-        hipccpath = os.path.join( hipSdkPathFromArgument , "bin" , "hipcc" )
-
-    hipccpath = common_tools.quoteFilepathIfNeeded(hipccpath)
-
-    cmd = hipccpath + ' --version'
-    return_code = subprocess.call(cmd, shell=True)
-    if return_code != 0:
-        print(errorMessageHeader + ' executing command: ' + cmd)
-        sys.exit(1)
-
-    result = subprocess.check_output(cmd, shell=True)
-    hip_sdk_version = result.decode('utf-8')
-    hip_sdk_version_major = re.match(r'HIP version: (\d+).(\d+)', hip_sdk_version).group(1) 
-    hip_sdk_version_minor = re.match(r'HIP version: (\d+).(\d+)', hip_sdk_version).group(2)
-    hip_sdk_version_num = 10 * int(hip_sdk_version_major) + int(hip_sdk_version_minor)
-    hip_version = hip_sdk_version_major +"."+ hip_sdk_version_minor
-        
-    gpu_archs = common_tools.getAMDGPUArchs(hip_sdk_version_num)
-
-    targets = ''
-    for i in gpu_archs:
-        targets += ' --offload-arch=' + i
-
-    parallel_jobs = 15
-
-    if isLinux():
-        osDef = "-DHIPCC_OS_LINUX"
-    else:
-        osDef = "-DHIPCC_OS_WINDOWS"
-
-    dst = 'hiprt' + hiprt_ver + '_' + hip_version + '_amd_lib' + postfix
-    cmd = hipccpath + ' -x hip ../../hiprt/impl/hiprt_kernels_bitcode.h -O3 -std=c++17 ' + targets + ' -fgpu-rdc -c --gpu-bundle-output -c -emit-llvm -I../../contrib/Orochi/ -I../../ -DHIPRT_BITCODE_LINKING ' + osDef +  ' -ffast-math -parallel-jobs=' + str(parallel_jobs) + ' -o ' + dst
-    compileScript(cmd, dst)
-
-    dst = 'hiprt' + hiprt_ver + '_' + hip_version + '_amd.hipfb'
-    cmd = hipccpath + ' -x hip ../../hiprt/impl/hiprt_kernels.h -O3 -std=c++17 ' + targets + ' -mllvm -amdgpu-early-inline-all=false -mllvm -amdgpu-function-calls=true --genco -I../../ -DHIPRT_BITCODE_LINKING ' + osDef +  ' -ffast-math -parallel-jobs=' + str(parallel_jobs) + ' -o ' + dst
-    compileScript(cmd, dst)
-
-    dst = 'oro_compiled_kernels.hipfb'
-    cmd = hipccpath + ' -x hip ../../contrib/Orochi/ParallelPrimitives/RadixSortKernels.h -O3 -std=c++17 ' + targets + ' --genco -I../../contrib/Orochi/ -include hip/hip_runtime.h -DHIPRT_BITCODE_LINKING ' + osDef +  ' -ffast-math -parallel-jobs=' + str(parallel_jobs) + ' -o ' + dst
-    compileScript(cmd, dst)
+def run(cmd: list[str], cwd: pathlib.Path, dst: pathlib.Path) -> None:
+    print(" ".join(cmd))
+    subprocess.run(cmd, cwd=cwd, check=True)
+    if not dst.exists():
+        raise RuntimeError(f"missing output: {dst}")
 
 
-    print('export built programs ...')
-    sys.stdout.flush()
-
-    if not os.path.exists(root + 'dist/bin/Debug/'):
-        os.makedirs(root + 'dist/bin/Debug/')
-    if not os.path.exists(root + 'dist/bin/Release/'):
-        os.makedirs(root + 'dist/bin/Release/')
-
-    if isLinux():
-        os.system('cp *.hipfb ' + root + 'dist/bin/Debug/')
-        os.system('cp *.hipfb ' + root + 'dist/bin/Release/')
-        os.system('cp *.bc ' + root + 'dist/bin/Debug/')
-        os.system('cp *.bc ' + root + 'dist/bin/Release/')
-    else:
-        os.system('copy *.hipfb ' + root + 'dist\\bin\\Debug\\')
-        os.system('copy *.hipfb ' + root + 'dist\\bin\\Release\\')
-        os.system('copy *.bc ' + root + 'dist\\bin\\Debug\\')
-        os.system('copy *.bc ' + root + 'dist\\bin\\Release\\')
-    sys.stdout.flush()
+def copy_outputs(outputs: list[pathlib.Path], destinations: list[pathlib.Path]) -> None:
+    for dst_dir in destinations:
+        dst_dir.mkdir(parents=True, exist_ok=True)
+        for output in outputs:
+            shutil.copy2(output, dst_dir / output.name)
 
 
-def compileNv():
-    ccbin = ''
-    if not isLinux():
-        ccbin = common_tools.getVCPath() + '\\bin\\Hostx64\\x64'
-        ccbin = '"{}"'.format(ccbin)
-        ccbin = '-ccbin=' + ccbin + ' '
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Build HIPRT precompiled fatbin artifacts for CUDA/cu-bridge.")
+    parser.add_argument("--root", required=True, help="Repository root")
+    parser.add_argument("--compiler", default="nvcc", help="CUDA-compatible compiler, e.g. nvcc or cucc")
+    parser.add_argument("--config", default="Release", help="Build config name used for dist/bin/<config>")
+    parser.add_argument("--arch-list", default="", help="CUDA arch list such as 75;80;86;89")
+    args = parser.parse_args()
 
-    dst = 'hiprt' + hiprt_ver + '_nv_lib.fatbin'
-    cmd = 'nvcc -x cu ../../hiprt/impl/hiprt_kernels_bitcode.h -O3 ' + ccbin + '-std=c++17 -fatbin -arch=all --device-c -I../../contrib/Orochi/ -I../../ -DHIPRT_BITCODE_LINKING --use_fast_math --threads 0 -o ' + dst 
-    compileScript(cmd, dst)
+    root = pathlib.Path(args.root).resolve()
+    workdir = pathlib.Path(__file__).resolve().parent
+    version = read_version(root)
+    arch_flags = build_gencode_flags(parse_arch_list(args.arch_list))
+    config_dir = root / "dist" / "bin" / args.config
+    bitcode_dir = root / "hiprt" / "bitcodes"
 
-    dst = 'hiprt' + hiprt_ver + '_nv.fatbin'
-    cmd = 'nvcc -x cu ../../hiprt/impl/hiprt_kernels.h -O3 ' + ccbin + '-std=c++17 -fatbin -arch=all -I../../contrib/Orochi/ -I../../ -DHIPRT_BITCODE_LINKING --use_fast_math --threads 0 -o ' + dst
-    compileScript(cmd, dst)
+    common_flags = [
+        args.compiler,
+        "-x",
+        "cu",
+        "-O3",
+        "-std=c++17",
+        "-fatbin",
+        "-I../../contrib/Orochi/",
+        "-I../../",
+        "-DHIPRT_BITCODE_LINKING",
+        "--use_fast_math",
+    ] + arch_flags
 
-    dst = 'oro_compiled_kernels.fatbin'
-    cmd = 'nvcc -x cu ../../contrib/Orochi/ParallelPrimitives/RadixSortKernels.h -O3 ' + ccbin + '-std=c++17 -fatbin -arch=all -I../../contrib/Orochi/ -include cuda_runtime.h -DHIPRT_BITCODE_LINKING --use_fast_math --threads 0 -o ' + dst
-    compileScript(cmd, dst)
+    outputs: list[pathlib.Path] = []
 
-    print('export built programs ...')
-    sys.stdout.flush()
-    if isLinux():
-        os.system('cp *.fatbin ' + root + 'dist/bin/Debug/')
-        os.system('cp *.fatbin ' + root + 'dist/bin/Release/')
-    else:
-        os.system('copy *.fatbin ' + root + 'dist\\bin\\Debug\\')
-        os.system('copy *.fatbin ' + root + 'dist\\bin\\Release\\')
-    sys.stdout.flush()
-
-
-parser = optparse.OptionParser()
-parser.add_option('-a', '--amd', dest='amd_platform', help='Compile for AMD', action='store_true', default=True)
-parser.add_option('--no-amd'   , dest='amd_platform', help='Do not compile for AMD', action='store_false' )
-parser.add_option('-n', '--nvidia', dest='nv_platform', help='Compile for Nvidia', action='store_true', default=False)
-
-# Add the optional hipSdkPath argument
-parser.add_option(
-    "-p", "--hipSdkPath",
-    dest="hipSdkPath",
-    default=None,
-    help="Path to the HIP SDK",
-    metavar="PATH"
+    hiprt_lib = workdir / f"hiprt{version}_nv_lib.fatbin"
+    run(
+        common_flags
+        + ["--device-c", "../../hiprt/impl/hiprt_kernels_bitcode.h", "-o", str(hiprt_lib)],
+        workdir,
+        hiprt_lib,
     )
+    outputs.append(hiprt_lib)
 
-(options, args) = parser.parse_args()
+    hiprt_fatbin = workdir / f"hiprt{version}_nv.fatbin"
+    run(
+        common_flags
+        + ["../../hiprt/impl/hiprt_kernels.h", "-o", str(hiprt_fatbin)],
+        workdir,
+        hiprt_fatbin,
+    )
+    outputs.append(hiprt_fatbin)
+
+    copy_outputs(outputs, [config_dir, bitcode_dir])
+    return 0
 
 
-if options.hipSdkPath:
-    hipSdkPathFromArgument = common_tools.remove_trailing_slash(options.hipSdkPath)
-    print('Compile kernel using hip sdk: ' + hipSdkPathFromArgument)
-else:
-    # if no hipSdkPath argument, try to use the HIP_PATH environment variable.
-    val_hip_path = os.environ.get("HIP_PATH")
-    if val_hip_path:
-        hipSdkPathFromArgument = common_tools.remove_trailing_slash(val_hip_path)
-        print('Compile kernel using hip sdk (using HIP_PATH): ' + hipSdkPathFromArgument)
-
-if (options.amd_platform):
-    compileAmd()
-if (options.nv_platform):
-    compileNv()
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except subprocess.CalledProcessError as exc:
+        print(f"compile.py failed with exit code {exc.returncode}", file=sys.stderr)
+        raise SystemExit(exc.returncode)
+    except Exception as exc:
+        print(f"compile.py failed: {exc}", file=sys.stderr)
+        raise SystemExit(1)

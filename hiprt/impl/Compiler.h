@@ -75,6 +75,17 @@ class Compiler
 		bool								 extended,
 		bool								 cache );
 
+	void buildKernelsFromBitcode(
+		Context&							 context,
+		const std::vector<const char*>&		 funcNames,
+		const std::filesystem::path&		 moduleName,
+		const std::string_view				 bitcodeBinary,
+		uint32_t							 numGeomTypes,
+		uint32_t							 numRayTypes,
+		const std::vector<hiprtFuncNameSet>& funcNameSets,
+		std::vector<CUfunction>&			 functions,
+		bool								 cache );
+
 	void clear();
 
 	void setCacheDir( const std::filesystem::path& path );
@@ -96,6 +107,12 @@ class Compiler
 		uint32_t									 numRayTypes  = 1 );
 
 	void addCommonOpts( Context& context, std::vector<const char*>& opts, bool extended );
+
+	std::string buildFunctionTableBitcode(
+		Context& context, uint32_t numGeomTypes, uint32_t numRayTypes, const std::vector<hiprtFuncNameSet>& funcNameSets );
+
+	static std::filesystem::path getBitcodePath();
+	static std::filesystem::path findArtifactPath( const std::vector<std::filesystem::path>& candidates );
 
 	std::string getCacheFilename(
 		Context&									 context,

@@ -120,6 +120,16 @@ class Context
 		CUmodule&							 module,
 		bool								 cache );
 
+	void buildKernelsFromBitcode(
+		const std::vector<const char*>&		 funcNames,
+		const std::filesystem::path&		 moduleName,
+		const std::string_view				 bitcodeBinary,
+		uint32_t							 numGeomTypes,
+		uint32_t							 numRayTypes,
+		const std::vector<hiprtFuncNameSet>& funcNameSets,
+		std::vector<CUfunction>&			 functions,
+		bool								 cache );
+
 	void setCacheDir( const std::filesystem::path& path );
 
 	void setLogLevel( hiprtLogLevel level ) { m_logger.setLevel( level ); }

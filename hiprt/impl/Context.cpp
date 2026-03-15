@@ -938,6 +938,20 @@ void Context::buildKernels(
 		cache );
 }
 
+void Context::buildKernelsFromBitcode(
+	const std::vector<const char*>&		 funcNames,
+	const std::filesystem::path&		 moduleName,
+	const std::string_view				 bitcodeBinary,
+	uint32_t							 numGeomTypes,
+	uint32_t							 numRayTypes,
+	const std::vector<hiprtFuncNameSet>& funcNameSets,
+	std::vector<CUfunction>&			 functions,
+	bool								 cache )
+{
+	m_compiler.buildKernelsFromBitcode(
+		*this, funcNames, moduleName, bitcodeBinary, numGeomTypes, numRayTypes, funcNameSets, functions, cache );
+}
+
 void Context::setCacheDir( const std::filesystem::path& path ) { m_compiler.setCacheDir( path ); }
 
 uint32_t Context::getSMCount() const

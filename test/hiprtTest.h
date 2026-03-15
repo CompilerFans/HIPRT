@@ -125,6 +125,16 @@ class hiprtTest : public ::testing::Test
 		uint32_t									 numGeomTypes = 0u,
 		uint32_t									 numRayTypes  = 1u );
 
+	hiprtError buildTraceKernelsFromBitcode(
+		hiprtContext								 ctxt,
+		const std::filesystem::path&				 srcPath,
+		std::vector<const char*>					 functionNames,
+		std::vector<hiprtApiFunction>&				 functionsOut,
+		std::optional<std::vector<const char*>>		 opts		  = std::nullopt,
+		std::optional<std::vector<hiprtFuncNameSet>> funcNameSets = std::nullopt,
+		uint32_t									 numGeomTypes = 0u,
+		uint32_t									 numRayTypes  = 1u );
+
 	hiprtError buildTraceKernel(
 		hiprtContext								 ctxt,
 		const std::filesystem::path&				 srcPath,
@@ -134,6 +144,23 @@ class hiprtTest : public ::testing::Test
 		std::optional<std::vector<hiprtFuncNameSet>> funcNameSets = std::nullopt,
 		uint32_t									 numGeomTypes = 0u,
 		uint32_t									 numRayTypes  = 1u );
+
+	hiprtError buildTraceKernelFromBitcode(
+		hiprtContext								 ctxt,
+		const std::filesystem::path&				 srcPath,
+		const std::string&							 functionName,
+		cudaFunction_t&								 functionOut,
+		std::optional<std::vector<const char*>>		 opts		  = std::nullopt,
+		std::optional<std::vector<hiprtFuncNameSet>> funcNameSets = std::nullopt,
+		uint32_t									 numGeomTypes = 0u,
+		uint32_t									 numRayTypes  = 1u );
+
+	bool loadBinaryFile( const std::filesystem::path& path, std::vector<uint8_t>& binary );
+
+	std::filesystem::path findPrecompiledTraceKernelPath();
+
+	hiprtError loadPrecompiledTraceKernel(
+		const std::string& functionName, cudaFunction_t& functionOut, CUmodule* moduleOut = nullptr );
 
 	void createCornellTriangleMeshPrimitive(
 		uint32_t triangleCount, hiprtTriangleMeshPrimitive& mesh, std::vector<void*>& garbageCollector );

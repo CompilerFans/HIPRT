@@ -17,6 +17,13 @@ if(NOT CMAKE_BUILD_TYPE STREQUAL "Release")
 	set(hiprt_runtime_kernel_cache_default OFF)
 endif()
 option(HIPRT_ENABLE_RUNTIME_KERNEL_CACHE "Enable on-disk cache for runtime-compiled kernels" ${hiprt_runtime_kernel_cache_default})
+option(HIPRT_ENABLE_BAKE_KERNEL "Bake internal kernel headers into generated string tables" OFF)
+option(HIPRT_ENABLE_BITCODE "Generate precompiled HIPRT fatbin artifacts for bitcode linking" OFF)
+option(HIPRT_ENABLE_PRECOMPILED_TRACE_KERNEL "Generate precompiled trace-kernel fatbin for test/analysis" OFF)
+
+if(HIPRT_ENABLE_BAKE_KERNEL OR HIPRT_ENABLE_BITCODE OR HIPRT_ENABLE_PRECOMPILED_TRACE_KERNEL)
+	find_package(Python3 COMPONENTS Interpreter REQUIRED)
+endif()
 
 list(GET CUDAToolkit_INCLUDE_DIRS 0 CUDAToolkit_PRIMARY_INCLUDE_DIR)
 string(REPLACE "\\" "\\\\" HIPRT_CUDA_INCLUDE_DIR_ESCAPED "${CUDAToolkit_PRIMARY_INCLUDE_DIR}")
@@ -61,6 +68,9 @@ message(STATUS "CUDA toolkit version: ${CUDAToolkit_VERSION}")
 message(STATUS "CUDA architectures: ${CMAKE_CUDA_ARCHITECTURES}")
 message(STATUS "Disable unit tests: ${NO_UNITTEST}")
 message(STATUS "Runtime kernel disk cache: ${HIPRT_ENABLE_RUNTIME_KERNEL_CACHE}")
+message(STATUS "Bake kernel headers: ${HIPRT_ENABLE_BAKE_KERNEL}")
+message(STATUS "Generate HIPRT bitcode artifacts: ${HIPRT_ENABLE_BITCODE}")
+message(STATUS "Generate precompiled trace kernel fatbin: ${HIPRT_ENABLE_PRECOMPILED_TRACE_KERNEL}")
 message(STATUS "Using cu-bridge toolchain: ${HIPRT_USING_CU_BRIDGE}")
 if(HIPRT_USING_CU_BRIDGE AND HIPRT_MACA_RUNTIME_INCLUDE_DIR)
 	message(STATUS "Using MACA runtime headers: ${HIPRT_MACA_RUNTIME_INCLUDE_DIR}")
@@ -178,6 +188,12 @@ target_compile_definitions(${HIPRT_NAME} PRIVATE
 	HIPRT_RUNTIME_KERNEL_CACHE_DEFAULT=$<IF:$<BOOL:${HIPRT_ENABLE_RUNTIME_KERNEL_CACHE}>,1,0>
 	HIPRT_CU_BRIDGE_RUNTIME_JIT_WORKAROUND=$<IF:$<BOOL:${HIPRT_USING_CU_BRIDGE}>,1,0>
 )
+if(HIPRT_ENABLE_BAKE_KERNEL)
+	target_compile_definitions(${HIPRT_NAME} PRIVATE
+		HIPRT_LOAD_FROM_STRING
+		ORO_PP_LOAD_FROM_STRING
+	)
+endif()
 
 if(${CMAKE_BUILD_TYPE} STREQUAL "Debug")
 	set_target_properties(${HIPRT_NAME} PROPERTIES OUTPUT_NAME "${HIPRT_NAME}64D")
@@ -207,6 +223,51 @@ file(GLOB_RECURSE hiprt_sources
 	"${CMAKE_CURRENT_SOURCE_DIR}/hiprt/*.inl"
 )
 target_sources(${HIPRT_NAME} PRIVATE ${hiprt_sources})
+
+if(CMAKE_CONFIGURATION_TYPES)
+	set(HIPRT_ACTIVE_CONFIG "$<CONFIG>")
+else()
+	set(HIPRT_ACTIVE_CONFIG "${CMAKE_BUILD_TYPE}")
+endif()
+
+if(HIPRT_ENABLE_BAKE_KERNEL)
+	add_custom_target(hiprt_bake_kernel_headers
+		COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_SOURCE_DIR}/hiprt/cache
+		COMMAND ${CMAKE_COMMAND} -E env PYTHON_BIN=${Python3_EXECUTABLE} sh ${CMAKE_CURRENT_SOURCE_DIR}/tools/bakeKernel.sh
+		WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+		BYPRODUCTS
+			${CMAKE_CURRENT_SOURCE_DIR}/hiprt/cache/Kernels.h
+			${CMAKE_CURRENT_SOURCE_DIR}/hiprt/cache/KernelArgs.h
+	)
+	add_dependencies(${HIPRT_NAME} hiprt_bake_kernel_headers)
+endif()
+
+if(HIPRT_ENABLE_BITCODE)
+	add_custom_target(hiprt_compile_bitcode
+		COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/bitcodes/compile.py
+			--root ${CMAKE_CURRENT_SOURCE_DIR}
+			--compiler ${CMAKE_CUDA_COMPILER}
+			--config ${HIPRT_ACTIVE_CONFIG}
+			--arch-list ${CMAKE_CUDA_ARCHITECTURES}
+		WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/scripts/bitcodes
+		DEPENDS ${HIPRT_NAME}
+	)
+endif()
+
+if(HIPRT_ENABLE_PRECOMPILED_TRACE_KERNEL)
+	add_custom_target(hiprt_precompile_trace_kernels
+		COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/bitcodes/precompile_bitcode.py
+			--root ${CMAKE_CURRENT_SOURCE_DIR}
+			--compiler ${CMAKE_CUDA_COMPILER}
+			--config ${HIPRT_ACTIVE_CONFIG}
+			--arch-list ${CMAKE_CUDA_ARCHITECTURES}
+		WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/scripts/bitcodes
+		DEPENDS ${HIPRT_NAME}
+	)
+	if(HIPRT_ENABLE_BITCODE)
+		add_dependencies(hiprt_precompile_trace_kernels hiprt_compile_bitcode)
+	endif()
+endif()
 
 if(HIPRT_USING_CU_BRIDGE)
 	target_link_directories(${HIPRT_NAME} PRIVATE

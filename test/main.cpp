@@ -2372,6 +2372,87 @@ TEST_F( hiprtTest, SceneTraceKernelSingletonSrt )
 	checkHiprt( hiprtDestroyContext( ctxt ) );
 }
 
+TEST_F( hiprtTest, BuildTraceKernelFromBitcode )
+{
+#if defined( HIPRT_CU_BRIDGE_RUNTIME_JIT_WORKAROUND ) && HIPRT_CU_BRIDGE_RUNTIME_JIT_WORKAROUND == 1
+	std::cout << "Skip BuildTraceKernelFromBitcode on cu-bridge: validate bitcode via precompiled workflow instead."
+			  << std::endl;
+	return;
+#endif
+
+	hiprtContext ctxt;
+	checkHiprt( hiprtCreateContext( HIPRT_API_VERSION, m_ctxtInput, ctxt ) );
+	checkHiprt( hiprtSetLogLevel( ctxt, hiprtLogLevelError | hiprtLogLevelWarn ) );
+
+	constexpr uint32_t sharedStackSize	  = 16u;
+	constexpr uint32_t blockWidth		  = 8u;
+	constexpr uint32_t blockHeight		  = 8u;
+	constexpr uint32_t blockSize		  = blockWidth * blockHeight;
+	std::string		   blockSizeDef		  = "-DBLOCK_SIZE=" + std::to_string( blockSize );
+	std::string		   sharedStackSizeDef = "-DSHARED_STACK_SIZE=" + std::to_string( sharedStackSize );
+	std::vector<const char*> opts{ blockSizeDef.c_str(), sharedStackSizeDef.c_str() };
+
+	cudaFunction_t func = nullptr;
+	checkHiprt( buildTraceKernelFromBitcode(
+		ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "TraceKernel", func, opts ) );
+	EXPECT_NE( func, nullptr );
+
+	checkHiprt( hiprtDestroyContext( ctxt ) );
+}
+
+TEST_F( hiprtTest, BuildTraceKernelFromBitcodeWithCustomFuncTable )
+{
+#if defined( HIPRT_CU_BRIDGE_RUNTIME_JIT_WORKAROUND ) && HIPRT_CU_BRIDGE_RUNTIME_JIT_WORKAROUND == 1
+	std::cout << "Skip BuildTraceKernelFromBitcodeWithCustomFuncTable on cu-bridge: validate bitcode via precompiled "
+				 "workflow instead."
+			  << std::endl;
+	return;
+#endif
+
+	hiprtContext ctxt;
+	checkHiprt( hiprtCreateContext( HIPRT_API_VERSION, m_ctxtInput, ctxt ) );
+	checkHiprt( hiprtSetLogLevel( ctxt, hiprtLogLevelError | hiprtLogLevelWarn ) );
+
+	hiprtFuncNameSet funcName_unused{};
+	hiprtFuncNameSet funcNameSet{};
+	funcNameSet.filterFuncName = "cutoutFilter";
+	std::vector<hiprtFuncNameSet> funcNameSets = { funcName_unused, funcName_unused, funcName_unused, funcNameSet };
+
+	cudaFunction_t func = nullptr;
+	checkHiprt( buildTraceKernelFromBitcode(
+		ctxt,
+		getRootDir() / "test/kernels/HiprtTestKernel.h",
+		"CutoutKernel",
+		func,
+		std::nullopt,
+		funcNameSets,
+		4,
+		1 ) );
+	EXPECT_NE( func, nullptr );
+
+	checkHiprt( hiprtDestroyContext( ctxt ) );
+}
+
+TEST_F( hiprtTest, LoadPrecompiledTraceKernel )
+{
+	cudaFunction_t func = nullptr;
+	CUmodule	   module = nullptr;
+	checkHiprt( loadPrecompiledTraceKernel( "TraceKernel", func, &module ) );
+	EXPECT_NE( func, nullptr );
+	EXPECT_NE( module, nullptr );
+	checkOro( cuModuleUnload( module ) );
+}
+
+TEST_F( hiprtTest, LoadPrecompiledTraceKernelWithCustomFuncTable )
+{
+	cudaFunction_t func = nullptr;
+	CUmodule	   module = nullptr;
+	checkHiprt( loadPrecompiledTraceKernel( "CutoutKernel", func, &module ) );
+	EXPECT_NE( func, nullptr );
+	EXPECT_NE( module, nullptr );
+	checkOro( cuModuleUnload( module ) );
+}
+
 TEST_F( hiprtTest, BoundingBox )
 {
 	hiprtContext ctxt;

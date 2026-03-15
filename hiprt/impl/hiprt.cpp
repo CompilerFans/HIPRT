@@ -710,18 +710,54 @@ hiprtError hiprtBuildTraceKernelsFromBitcode(
 	hiprtApiFunction* functionsOut,
 	bool			  cache )
 {
-	(void)context;
-	(void)numFunctions;
-	(void)functionNames;
-	(void)moduleName;
-	(void)bitcodeBinary;
-	(void)bitcodeBinarySize;
-	(void)numGeomTypes;
-	(void)numRayTypes;
-	(void)functionNameSets;
-	(void)functionsOut;
-	(void)cache;
-	return hiprtErrorNotImplemented;
+	const bool invalid = !context || numFunctions == 0 || functionNames == nullptr || functionsOut == nullptr || moduleName == nullptr ||
+						 bitcodeBinary == nullptr || bitcodeBinarySize == 0;
+	if ( invalid )
+	{
+		if ( context )
+		{
+			reinterpret_cast<Context*>( context )->logError(
+				"hiprtBuildTraceKernelsFromBitcode invalid parameter: context=%p numFunctions=%u functionNames=%p "
+				"moduleName=%p bitcodeBinary=%p bitcodeBinarySize=%zu functionsOut=%p",
+				context,
+				numFunctions,
+				functionNames,
+				moduleName,
+				bitcodeBinary,
+				bitcodeBinarySize,
+				functionsOut );
+		}
+		return hiprtErrorInvalidParameter;
+	}
+
+	try
+	{
+		std::vector<const char*> funcNames;
+		for ( uint32_t i = 0; i < numFunctions; ++i )
+			funcNames.push_back( functionNames[i] );
+
+		std::vector<hiprtFuncNameSet> funcNameSets;
+		if ( functionNameSets != nullptr )
+		{
+			for ( uint32_t i = 0; i < numGeomTypes * numRayTypes; ++i )
+				funcNameSets.push_back( functionNameSets[i] );
+		}
+
+		std::string_view binary( bitcodeBinary, bitcodeBinarySize );
+		std::vector<CUfunction> functions;
+		reinterpret_cast<Context*>( context )->buildKernelsFromBitcode(
+			funcNames, moduleName, binary, numGeomTypes, numRayTypes, funcNameSets, functions, cache );
+
+		for ( uint32_t i = 0; i < numFunctions; ++i )
+			functionsOut[i] = reinterpret_cast<hiprtApiFunction>( functions[i] );
+	}
+	catch ( std::exception& e )
+	{
+		reinterpret_cast<Context*>( context )->logError( e.what() );
+		return hiprtErrorInternal;
+	}
+
+	return hiprtSuccess;
 }
 
 hiprtError hiprtSetCacheDirPath( hiprtContext context, const char* path )
