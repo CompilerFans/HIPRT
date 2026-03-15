@@ -34,6 +34,7 @@
 
 namespace hiprt
 {
+
 Context::Context( const hiprtContextCreationInput& input )
 {
 	m_device = input.device;
@@ -66,36 +67,38 @@ std::vector<hiprtGeometry>
 Context::createGeometries( const std::vector<hiprtGeometryBuildInput>& buildInputs, const hiprtBuildOptions buildOptions )
 {
 	// checkOro( cuCtxSetCurrent( m_ctxt ) );
+	const hiprtBuildFlags effectiveBuildFlags = buildOptions.buildFlags;
+	const bool			 useBatchPath		= buildInputs.size() > 1;
 
 	size_t				size = 0;
 	std::vector<size_t> sizes( buildInputs.size() );
 	for ( size_t i = 0; i < buildInputs.size(); ++i )
 	{
-		if ( batchBuild( buildInputs[i], buildOptions ) )
+		if ( useBatchPath && batchBuild( buildInputs[i], buildOptions ) )
 		{
 			logInfo( "BatchBuild::createGeometry\n" );
 			sizes[i] = BatchBuilder::getStorageBufferSize( *this, buildInputs[i], buildOptions );
 			size += sizes[i];
 		}
-		else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitCustomBvhImport )
+		else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitCustomBvhImport )
 		{
 			logInfo( "CustomBvhImport::createGeometry\n" );
 			sizes[i] = BvhImporter::getStorageBufferSize( *this, buildInputs[i], buildOptions );
 			size += sizes[i];
 		}
-		else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferFastBuild )
+		else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferFastBuild )
 		{
 			logInfo( "FastBuild::createGeometry\n" );
 			sizes[i] = LbvhBuilder::getStorageBufferSize( *this, buildInputs[i], buildOptions );
 			size += sizes[i];
 		}
-		else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferHighQualityBuild )
+		else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferHighQualityBuild )
 		{
 			logInfo( "HighQualityBuild::createGeometry\n" );
 			sizes[i] = SbvhBuilder::getStorageBufferSize( *this, buildInputs[i], buildOptions );
 			size += sizes[i];
 		}
-		else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferBalancedBuild )
+		else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferBalancedBuild )
 		{
 			logInfo( "BalancedBuild::createGeometry\n" );
 			sizes[i] = PlocBuilder::getStorageBufferSize( *this, buildInputs[i], buildOptions );
@@ -162,12 +165,14 @@ void Context::buildGeometries(
 	std::vector<hiprtDevicePtr>&				buffers )
 {
 	// checkOro( cuCtxSetCurrent( m_ctxt ) );
+	const hiprtBuildFlags effectiveBuildFlags = buildOptions.buildFlags;
+	const bool			 useBatchPath		= buildInputs.size() > 1;
 
 	std::vector<hiprtGeometryBuildInput> batchInputs;
 	std::vector<hiprtDevicePtr>			 batchBuffers;
 	for ( size_t i = 0; i < buildInputs.size(); ++i )
 	{
-		if ( batchBuild( buildInputs[i], buildOptions ) )
+		if ( useBatchPath && batchBuild( buildInputs[i], buildOptions ) )
 		{
 			batchInputs.push_back( buildInputs[i] );
 			batchBuffers.push_back( buffers[i] );
@@ -182,24 +187,24 @@ void Context::buildGeometries(
 
 	for ( size_t i = 0; i < buildInputs.size(); ++i )
 	{
-		if ( !batchBuild( buildInputs[i], buildOptions ) )
+		if ( !( useBatchPath && batchBuild( buildInputs[i], buildOptions ) ) )
 		{
-			if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitCustomBvhImport )
+			if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitCustomBvhImport )
 			{
 				logInfo( "CustomBvhImport::buildGeometry\n" );
 				BvhImporter::build( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
 			}
-			else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferFastBuild )
+			else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferFastBuild )
 			{
 				logInfo( "FastBuild::buildGeometry\n" );
 				LbvhBuilder::build( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
 			}
-			else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferHighQualityBuild )
+			else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferHighQualityBuild )
 			{
 				logInfo( "HighQualityBuild::buildGeometry\n" );
 				SbvhBuilder::build( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
 			}
-			else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferBalancedBuild )
+			else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferBalancedBuild )
 			{
 				logInfo( "BalancedBuild::buildGeometry\n" );
 				PlocBuilder::build( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
@@ -221,24 +226,25 @@ void Context::updateGeometries(
 	std::vector<hiprtDevicePtr>&				buffers )
 {
 	// checkOro( cuCtxSetCurrent( m_ctxt ) );
+	const hiprtBuildFlags effectiveBuildFlags = buildOptions.buildFlags;
 	for ( size_t i = 0; i < buildInputs.size(); ++i )
 	{
-		if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitCustomBvhImport )
+		if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitCustomBvhImport )
 		{
 			logInfo( "CustomBvhImport::updateGeometry\n" );
 			BvhImporter::update( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
 		}
-		else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferFastBuild )
+		else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferFastBuild )
 		{
 			logInfo( "FastBuild::updateGeometry\n" );
 			LbvhBuilder::update( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
 		}
-		else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferHighQualityBuild )
+		else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferHighQualityBuild )
 		{
 			logInfo( "HighQualityBuild::updateGeometry\n" );
 			SbvhBuilder::update( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
 		}
-		else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferBalancedBuild )
+		else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferBalancedBuild )
 		{
 			logInfo( "BalancedBuild::updateGeometry\n" );
 			PlocBuilder::update( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
@@ -254,10 +260,12 @@ void Context::updateGeometries(
 size_t Context::getGeometriesBuildTempBufferSize(
 	const std::vector<hiprtGeometryBuildInput>& buildInputs, const hiprtBuildOptions buildOptions )
 {
+	const hiprtBuildFlags effectiveBuildFlags = buildOptions.buildFlags;
+	const bool			 useBatchPath		= buildInputs.size() > 1;
 	std::vector<hiprtGeometryBuildInput> batchInputs;
 	for ( size_t i = 0; i < buildInputs.size(); ++i )
 	{
-		if ( batchBuild( buildInputs[i], buildOptions ) ) batchInputs.push_back( buildInputs[i] );
+		if ( useBatchPath && batchBuild( buildInputs[i], buildOptions ) ) batchInputs.push_back( buildInputs[i] );
 	}
 
 	size_t size = 0;
@@ -269,24 +277,24 @@ size_t Context::getGeometriesBuildTempBufferSize(
 
 	for ( size_t i = 0; i < buildInputs.size(); ++i )
 	{
-		if ( !batchBuild( buildInputs[i], buildOptions ) )
+		if ( !( useBatchPath && batchBuild( buildInputs[i], buildOptions ) ) )
 		{
-			if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitCustomBvhImport )
+			if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitCustomBvhImport )
 			{
 				logInfo( "CustomBvhImport::getGeometryBuildTempBufferSize\n" );
 				size = std::max( size, BvhImporter::getTemporaryBufferSize( *this, buildInputs[i], buildOptions ) );
 			}
-			else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferFastBuild )
+			else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferFastBuild )
 			{
 				logInfo( "FastBuild::getGeometryBuildTempBufferSize\n" );
 				size = std::max( size, LbvhBuilder::getTemporaryBufferSize( *this, buildInputs[i], buildOptions ) );
 			}
-			else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferHighQualityBuild )
+			else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferHighQualityBuild )
 			{
 				logInfo( "HighQualityBuild::getGeometryBuildTempBufferSize\n" );
 				size = std::max( size, SbvhBuilder::getTemporaryBufferSize( *this, buildInputs[i], buildOptions ) );
 			}
-			else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferBalancedBuild )
+			else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferBalancedBuild )
 			{
 				logInfo( "BalancedBuild::getGeometryBuildTempBufferSize\n" );
 				size = std::max( size, PlocBuilder::getTemporaryBufferSize( *this, buildInputs[i], buildOptions ) );
@@ -371,6 +379,8 @@ std::vector<hiprtScene>
 Context::createScenes( const std::vector<hiprtSceneBuildInput>& buildInputs, const hiprtBuildOptions buildOptions )
 {
 	// checkOro( cuCtxSetCurrent( m_ctxt ) );
+	const hiprtBuildFlags effectiveBuildFlags = buildOptions.buildFlags;
+	const bool			 useBatchPath		= true;
 
 	size_t				size = 0;
 	std::vector<size_t> sizes( buildInputs.size() );
@@ -385,31 +395,31 @@ Context::createScenes( const std::vector<hiprtSceneBuildInput>& buildInputs, con
 			throw std::runtime_error( msg );
 		}
 
-		if ( batchBuild( buildInputs[i], buildOptions ) )
+		if ( useBatchPath && batchBuild( buildInputs[i], buildOptions ) )
 		{
 			logInfo( "BatchBuild::createScene\n" );
 			sizes[i] = BatchBuilder::getStorageBufferSize( *this, buildInputs[i], buildOptions );
 			size += sizes[i];
 		}
-		if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitCustomBvhImport )
+		if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitCustomBvhImport )
 		{
 			logInfo( "CustomBvhImport::createScene\n" );
 			sizes[i] = BvhImporter::getStorageBufferSize( *this, buildInputs[i], buildOptions );
 			size += sizes[i];
 		}
-		else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferFastBuild )
+		else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferFastBuild )
 		{
 			logInfo( "FastBuild::createScene\n" );
 			sizes[i] = LbvhBuilder::getStorageBufferSize( *this, buildInputs[i], buildOptions );
 			size += sizes[i];
 		}
-		else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferHighQualityBuild )
+		else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferHighQualityBuild )
 		{
 			logInfo( "HighQualityBuild::createScene\n" );
 			sizes[i] = SbvhBuilder::getStorageBufferSize( *this, buildInputs[i], buildOptions );
 			size += sizes[i];
 		}
-		else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferBalancedBuild )
+		else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferBalancedBuild )
 		{
 			logInfo( "BalancedBuild::createScene\n" );
 			sizes[i] = PlocBuilder::getStorageBufferSize( *this, buildInputs[i], buildOptions );
@@ -476,6 +486,8 @@ void Context::buildScenes(
 	std::vector<hiprtDevicePtr>&			 buffers )
 {
 	// checkOro( cuCtxSetCurrent( m_ctxt ) );
+	const hiprtBuildFlags effectiveBuildFlags = buildOptions.buildFlags;
+	const bool			 useBatchPath		= true;
 
 	std::vector<hiprtSceneBuildInput> batchInputs;
 	std::vector<hiprtDevicePtr>		  batchBuffers;
@@ -490,7 +502,7 @@ void Context::buildScenes(
 			throw std::runtime_error( msg );
 		}
 
-		if ( batchBuild( buildInputs[i], buildOptions ) )
+		if ( useBatchPath && batchBuild( buildInputs[i], buildOptions ) )
 		{
 			batchInputs.push_back( buildInputs[i] );
 			batchBuffers.push_back( buffers[i] );
@@ -505,24 +517,24 @@ void Context::buildScenes(
 
 	for ( size_t i = 0; i < buildInputs.size(); ++i )
 	{
-		if ( !batchBuild( buildInputs[i], buildOptions ) )
+		if ( !( useBatchPath && batchBuild( buildInputs[i], buildOptions ) ) )
 		{
-			if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitCustomBvhImport )
+			if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitCustomBvhImport )
 			{
 				logInfo( "CustomBvhImport::buildScene\n" );
 				BvhImporter::build( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
 			}
-			else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferFastBuild )
+			else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferFastBuild )
 			{
 				logInfo( "FastBuild::buildScene\n" );
 				LbvhBuilder::build( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
 			}
-			else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferHighQualityBuild )
+			else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferHighQualityBuild )
 			{
 				logInfo( "HighQualityBuild::buildScene\n" );
 				SbvhBuilder::build( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
 			}
-			else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferBalancedBuild )
+			else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferBalancedBuild )
 			{
 				logInfo( "BalancedBuild::buildScene\n" );
 				PlocBuilder::build( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
@@ -544,6 +556,7 @@ void Context::updateScenes(
 	std::vector<hiprtDevicePtr>&			 buffers )
 {
 	// checkOro( cuCtxSetCurrent( m_ctxt ) );
+	const hiprtBuildFlags effectiveBuildFlags = buildOptions.buildFlags;
 	for ( size_t i = 0; i < buildInputs.size(); ++i )
 	{
 		if ( InstanceIDBits < 32 && buildInputs[i].instanceCount >= ( 1u << InstanceIDBits ) )
@@ -555,22 +568,22 @@ void Context::updateScenes(
 			throw std::runtime_error( msg );
 		}
 
-		if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitCustomBvhImport )
+		if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitCustomBvhImport )
 		{
 			logInfo( "CustomBvhImport::updateScene\n" );
 			BvhImporter::update( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
 		}
-		else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferFastBuild )
+		else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferFastBuild )
 		{
 			logInfo( "FastBuild::updateScene\n" );
 			LbvhBuilder::update( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
 		}
-		else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferHighQualityBuild )
+		else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferHighQualityBuild )
 		{
 			logInfo( "HighQualityBuild::updateScene\n" );
 			SbvhBuilder::update( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
 		}
-		else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferBalancedBuild )
+		else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferBalancedBuild )
 		{
 			logInfo( "BalancedBuild::updateScene\n" );
 			PlocBuilder::update( *this, buildInputs[i], buildOptions, temporaryBuffer, stream, buffers[i] );
@@ -586,6 +599,8 @@ void Context::updateScenes(
 size_t Context::getScenesBuildTempBufferSize(
 	const std::vector<hiprtSceneBuildInput>& buildInputs, const hiprtBuildOptions buildOptions )
 {
+	const hiprtBuildFlags effectiveBuildFlags = buildOptions.buildFlags;
+	const bool			 useBatchPath		= true;
 	std::vector<hiprtSceneBuildInput> batchInputs;
 	for ( size_t i = 0; i < buildInputs.size(); ++i )
 	{
@@ -598,7 +613,7 @@ size_t Context::getScenesBuildTempBufferSize(
 			throw std::runtime_error( msg );
 		}
 
-		if ( batchBuild( buildInputs[i], buildOptions ) ) batchInputs.push_back( buildInputs[i] );
+		if ( useBatchPath && batchBuild( buildInputs[i], buildOptions ) ) batchInputs.push_back( buildInputs[i] );
 	}
 
 	size_t size = 0;
@@ -610,25 +625,25 @@ size_t Context::getScenesBuildTempBufferSize(
 
 	for ( size_t i = 0; i < buildInputs.size(); ++i )
 	{
-		if ( !batchBuild( buildInputs[i], buildOptions ) )
+		if ( !( useBatchPath && batchBuild( buildInputs[i], buildOptions ) ) )
 		{
 
-			if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitCustomBvhImport )
+			if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitCustomBvhImport )
 			{
 				logInfo( "CustomBvhImport::getSceneBuildTempBufferSize\n" );
 				size += BvhImporter::getTemporaryBufferSize( *this, buildInputs[i], buildOptions );
 			}
-			else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferFastBuild )
+			else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferFastBuild )
 			{
 				logInfo( "FastBuild::getSceneBuildTempBufferSize\n" );
 				size += LbvhBuilder::getTemporaryBufferSize( *this, buildInputs[i], buildOptions );
 			}
-			else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferHighQualityBuild )
+			else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferHighQualityBuild )
 			{
 				logInfo( "HighQualityBuild::getSceneBuildTempBufferSize\n" );
 				size += SbvhBuilder::getTemporaryBufferSize( *this, buildInputs[i], buildOptions );
 			}
-			else if ( ( buildOptions.buildFlags & 3 ) == hiprtBuildFlagBitPreferBalancedBuild )
+			else if ( ( effectiveBuildFlags & 3 ) == hiprtBuildFlagBitPreferBalancedBuild )
 			{
 				logInfo( "BalancedBuild::getSceneBuildTempBufferSize\n" );
 				size += PlocBuilder::getTemporaryBufferSize( *this, buildInputs[i], buildOptions );
@@ -726,7 +741,7 @@ std::vector<hiprtScene> Context::compactScenes( const std::vector<hiprtScene>& s
 
 hiprtFuncTable Context::createFuncTable( uint32_t numGeomTypes, uint32_t numRayTypes )
 {
-	// checkOro( cuCtxSetCurrent( m_ctxt ) );
+	checkOro( cuCtxSetCurrent( m_ctxt ) );
 
 	uint8_t* ptr = nullptr;
 	checkOro( cudaMalloc(
@@ -746,7 +761,7 @@ hiprtFuncTable Context::createFuncTable( uint32_t numGeomTypes, uint32_t numRayT
 
 void Context::setFuncTable( hiprtFuncTable funcTable, uint32_t geomType, uint32_t rayType, hiprtFuncDataSet set )
 {
-	// checkOro( cuCtxSetCurrent( m_ctxt ) );
+	checkOro( cuCtxSetCurrent( m_ctxt ) );
 
 	hiprtFuncTableHeader header;
 	checkOro( cuMemcpyDtoH( &header, static_cast<uintptr_t>(reinterpret_cast<size_t>( funcTable )), sizeof( hiprtFuncTableHeader ) ) );
@@ -758,13 +773,13 @@ void Context::setFuncTable( hiprtFuncTable funcTable, uint32_t geomType, uint32_
 
 void Context::destroyFuncTable( hiprtFuncTable funcTable )
 {
-	// checkOro( cuCtxSetCurrent( m_ctxt ) );
+	checkOro( cuCtxSetCurrent( m_ctxt ) );
 	checkOro( cudaFree( reinterpret_cast<void *>( funcTable ) ) );
 }
 
 void Context::createGlobalStackBuffer( const hiprtGlobalStackBufferInput& input, hiprtGlobalStackBuffer& stackBufferOut )
 {
-	// checkOro( cuCtxSetCurrent( m_ctxt ) );
+	checkOro( cuCtxSetCurrent( m_ctxt ) );
 
 	const size_t stackEntrySize =
 		input.entryType == hiprtStackEntryTypeInstance ? sizeof( hiprtInstanceStackEntry ) : sizeof( uint32_t );
@@ -784,7 +799,8 @@ void Context::createGlobalStackBuffer( const hiprtGlobalStackBufferInput& input,
 	}
 	else
 	{
-		size_t				   size = input.stackSize * input.threadCount * stackEntrySize;
+		const uint32_t		   stackStride = getWarpSize();
+		size_t				   size		   = input.stackSize * input.threadCount * stackStride * stackEntrySize;
 		hiprtGlobalStackBuffer stackBuffer{ input.stackSize, input.threadCount, nullptr };
 		checkOro( cudaMalloc( reinterpret_cast<void **>( &stackBuffer.stackData ), size ) );
 		stackBufferOut = stackBuffer;
@@ -793,7 +809,7 @@ void Context::createGlobalStackBuffer( const hiprtGlobalStackBufferInput& input,
 
 void Context::destroyGlobalStackBuffer( hiprtGlobalStackBuffer stackBuffer )
 {
-	// checkOro( cuCtxSetCurrent( m_ctxt ) );
+	checkOro( cuCtxSetCurrent( m_ctxt ) );
 	checkOro( cudaFree( reinterpret_cast<void *>( stackBuffer.stackData ) ) );
 }
 
@@ -920,7 +936,7 @@ void Context::buildKernels(
 	CUmodule&							 module,
 	bool								 cache )
 {
-	// checkOro( cuCtxSetCurrent( m_ctxt ) );
+	checkOro( cuCtxSetCurrent( m_ctxt ) );
 	m_compiler.buildKernels(
 		*this,
 		funcNames,

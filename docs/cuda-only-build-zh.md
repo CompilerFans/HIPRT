@@ -24,6 +24,13 @@
 
 项目现在仅支持 **CMake + CUDA Toolkit**。
 
+如果是在 **MACA + cu-bridge** 环境下，推荐使用仓库脚本走：
+
+- `cmake_maca`
+- `ninja_maca`
+- `ccache`
+- `mold`
+
 ### Linux / Windows 通用
 
 ```bash
@@ -31,10 +38,27 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release -j
 ```
 
+### MACA / cu-bridge
+
+推荐直接使用：
+
+```bash
+./scripts/build_maca_cucc.sh
+./scripts/build_and_test_maca_cucc.sh
+```
+
+对应默认行为：
+
+- configure：`cmake_maca -G Ninja`
+- build：`ninja_maca`
+- 编译加速：优先启用 `ccache`
+- 链接加速：优先启用 `mold`
+
 常用可选项：
 
 - 指定架构：`-DCMAKE_CUDA_ARCHITECTURES=89`
 - 不编译单测：`-DNO_UNITTEST=ON`
+- 控制运行时 kernel 磁盘缓存：`-DHIPRT_ENABLE_RUNTIME_KERNEL_CACHE=ON|OFF`（当前默认策略：`Release` 为 `ON`，非 `Release` 为 `OFF`；测试建议保持开启）
 
 构建产物默认输出到：
 
@@ -102,6 +126,23 @@ cd scripts
 
 ```bash
 ../dist/bin/Release/unittest64 --width=512 --height=512 --referencePath=../test/references/ --gtest_filter=hiprtTest.CudaEnabled:hiprtTest.MinimumCornellBox:ObjTestCases.PrimaryRayCornellBox
+```
+
+开发 / 调试阶段建议关闭运行时 kernel 磁盘缓存，避免旧的 JIT 结果掩盖头文件修改：
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DHIPRT_ENABLE_RUNTIME_KERNEL_CACHE=OFF
+```
+
+也可以在运行时通过环境变量强制关闭：
+
+```bash
+export HIPRT_DISABLE_RUNTIME_KERNEL_CACHE=1
+
+说明：
+
+- 常规 `Release` 测试建议保持 cache 开启，以减少重复 JIT 编译时间。
+- 只有在排查 JIT 头文件、运行时编译输入或 cache 失效问题时，才建议显式设置 `HIPRT_DISABLE_RUNTIME_KERNEL_CACHE=1`。
 ```
 
 ## 后续改动建议

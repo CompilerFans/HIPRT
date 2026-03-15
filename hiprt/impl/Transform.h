@@ -185,6 +185,22 @@ struct alignas( 64 ) SRTFrame
 		return f;
 	}
 
+	HIPRT_HOST_DEVICE Frame convert() const { return *this; }
+
+	static HIPRT_HOST_DEVICE SRTFrame getSRTFrame( const Frame& frame ) { return frame; }
+
+	static HIPRT_HOST_DEVICE SRTFrame getSRTFrameInv( const Frame& frame )
+	{
+		SRTFrame srtFrame{};
+		srtFrame.m_time		   = frame.m_time;
+		srtFrame.m_translation = -frame.m_translation;
+		srtFrame.m_scale	   = 1.0f / frame.m_scale;
+		srtFrame.m_shear	   = make_float3( 0.0f );
+		srtFrame.m_rotation	   = frame.m_rotation;
+		srtFrame.m_rotation.w *= -1.0f;
+		return srtFrame;
+	}
+
 	HIPRT_HOST_DEVICE float3 transform( const float3& p ) const
 	{
 		if ( identity() ) return p;
@@ -311,6 +327,110 @@ struct alignas( 64 ) MatrixFrame
 			}
 		}
 		return f;
+	}
+
+	HIPRT_HOST_DEVICE Frame convert() const { return Frame( *reinterpret_cast<const hiprtFrameMatrix*>( this ) ); }
+
+	static HIPRT_HOST_DEVICE MatrixFrame getMatrixFrame( const Frame& frame )
+	{
+		MatrixFrame matrixFrame{};
+		matrixFrame.m_time = frame.m_time;
+
+		if ( frame.identity() )
+		{
+			matrixFrame.m_matrix[0][0] = 1.0f;
+			matrixFrame.m_matrix[1][1] = 1.0f;
+			matrixFrame.m_matrix[2][2] = 1.0f;
+			return matrixFrame;
+		}
+
+		float Q[3][3];
+		qtToRotationMatrix( frame.m_rotation, Q );
+
+		float R[3][3];
+		R[0][0] = frame.m_scale.x;
+		R[1][1] = frame.m_scale.y;
+		R[2][2] = frame.m_scale.z;
+		R[0][1] = frame.m_shear.x;
+		R[0][2] = frame.m_shear.y;
+		R[1][2] = frame.m_shear.z;
+		R[1][0] = 0.0f;
+		R[2][0] = 0.0f;
+		R[2][1] = 0.0f;
+
+#ifdef __KERNECC__
+#pragma unroll
+#endif
+		for ( uint32_t i = 0; i < 3; ++i )
+#ifdef __KERNECC__
+#pragma unroll
+#endif
+			for ( uint32_t j = 0; j < 3; ++j )
+#ifdef __KERNECC__
+#pragma unroll
+#endif
+				for ( uint32_t k = 0; k < 3; ++k )
+					matrixFrame.m_matrix[i][j] += Q[i][k] * R[k][j];
+
+		matrixFrame.m_matrix[0][3] = frame.m_translation.x;
+		matrixFrame.m_matrix[1][3] = frame.m_translation.y;
+		matrixFrame.m_matrix[2][3] = frame.m_translation.z;
+		return matrixFrame;
+	}
+
+	static HIPRT_HOST_DEVICE MatrixFrame getMatrixFrameInv( const Frame& frame )
+	{
+		MatrixFrame matrixFrame{};
+		matrixFrame.m_time = frame.m_time;
+
+		if ( frame.identity() )
+		{
+			matrixFrame.m_matrix[0][0] = 1.0f;
+			matrixFrame.m_matrix[1][1] = 1.0f;
+			matrixFrame.m_matrix[2][2] = 1.0f;
+			return matrixFrame;
+		}
+
+		float Q[3][3];
+		qtToRotationMatrix( frame.m_rotation, Q );
+
+		float Ri[3][3];
+		Ri[0][0] = 1.0f / frame.m_scale.x;
+		Ri[1][1] = 1.0f / frame.m_scale.y;
+		Ri[2][2] = 1.0f / frame.m_scale.z;
+		Ri[0][1] = -frame.m_shear.x / ( frame.m_scale.x * frame.m_scale.y );
+		Ri[0][2] = ( frame.m_shear.x * frame.m_shear.z - frame.m_shear.y * frame.m_scale.y ) /
+				   ( frame.m_scale.x * frame.m_scale.y * frame.m_scale.z );
+		Ri[1][2] = -frame.m_shear.z / ( frame.m_scale.y * frame.m_scale.z );
+		Ri[1][0] = 0.0f;
+		Ri[2][0] = 0.0f;
+		Ri[2][1] = 0.0f;
+
+#ifdef __KERNECC__
+#pragma unroll
+#endif
+		for ( uint32_t i = 0; i < 3; ++i )
+#ifdef __KERNECC__
+#pragma unroll
+#endif
+			for ( uint32_t j = 0; j < 3; ++j )
+#ifdef __KERNECC__
+#pragma unroll
+#endif
+				for ( uint32_t k = 0; k < 3; ++k )
+					matrixFrame.m_matrix[i][j] += Ri[i][k] * Q[j][k];
+
+		matrixFrame.m_matrix[0][3] =
+			-( matrixFrame.m_matrix[0][0] * frame.m_translation.x + matrixFrame.m_matrix[0][1] * frame.m_translation.y +
+			   matrixFrame.m_matrix[0][2] * frame.m_translation.z );
+		matrixFrame.m_matrix[1][3] =
+			-( matrixFrame.m_matrix[1][0] * frame.m_translation.x + matrixFrame.m_matrix[1][1] * frame.m_translation.y +
+			   matrixFrame.m_matrix[1][2] * frame.m_translation.z );
+		matrixFrame.m_matrix[2][3] =
+			-( matrixFrame.m_matrix[2][0] * frame.m_translation.x + matrixFrame.m_matrix[2][1] * frame.m_translation.y +
+			   matrixFrame.m_matrix[2][2] * frame.m_translation.z );
+
+		return matrixFrame;
 	}
 
 	HIPRT_HOST_DEVICE float3 transform( const float3& p ) const

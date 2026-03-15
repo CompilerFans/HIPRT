@@ -126,8 +126,10 @@ void Compiler::buildProgram(
 		headers.data(),
 		includeNames.data() ) );
 
+#if !defined( HIPRT_CU_BRIDGE_RUNTIME_JIT_WORKAROUND ) || HIPRT_CU_BRIDGE_RUNTIME_JIT_WORKAROUND == 0
 	for ( const char* funcName : funcNames )
 		checkOrortc( nvrtcAddNameExpression( progOut, funcName ) );
+#endif
 
 	const nvrtcResult result = nvrtcCompileProgram( progOut, static_cast<int>( options.size() ), options.data() );
 	if ( result != NVRTC_SUCCESS )

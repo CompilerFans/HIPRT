@@ -24,6 +24,22 @@
 
 #include <test/shared.h>
 
+extern "C" __global__ void TraceKernel(
+	hiprtScene scene, uint32_t numOfRays, hiprtGlobalStackBuffer globalStackBuffer, hiprtRay* rays, hiprtHit* hits );
+extern "C" __global__ void CornellBoxKernel(
+	hiprtGeometry geom, uint8_t* image, hiprtFuncTable table, uint2 resolution, uint32_t* matIndices, float3* diffusColors );
+extern "C" __global__ void MeshIntersectionKernel( hiprtGeometry geom, uint8_t* image, uint2 resolution );
+extern "C" __global__ void GeomClosestHitKernel( hiprtGeometry geom, uint32_t rayCount, hiprtRay* rays, hiprtHit* hits );
+extern "C" __global__ void PairTrianglesKernel( hiprtScene scene, uint8_t* image, uint2 resolution );
+extern "C" __global__ void CutoutKernel( hiprtGeometry geom, uint8_t* image, hiprtFuncTable table, uint2 resolution );
+extern "C" __global__ void CustomIntersectionKernel( hiprtGeometry geom, uint8_t* image, hiprtFuncTable table, uint2 resolution );
+extern "C" __global__ void SceneIntersectionSingleton( hiprtScene scene, uint8_t* image, uint2 resolution );
+extern "C" __global__ void SceneClosestHitKernel( hiprtScene scene, uint32_t rayCount, hiprtRay* rays, hiprtHit* hits );
+extern "C" __global__ void SceneManualClosestHitKernel( hiprtScene scene, uint32_t rayCount, hiprtRay* rays, hiprtHit* hits );
+extern "C" __global__ void SceneIntersectionKernel( hiprtScene scene, uint8_t* image, hiprtFuncTable table, uint2 resolution );
+extern "C" __global__ void TransformRayKernel( hiprtScene scene, hiprtRay ray, hiprtRay* out );
+extern "C" __global__ void InternalTransformRayKernel( hiprtScene scene, hiprtRay ray, hiprtRay* out );
+
 #ifndef BLOCK_SIZE
 #define BLOCK_SIZE 1
 #endif
@@ -184,6 +200,15 @@ extern "C" __global__ void MeshIntersectionKernel( hiprtGeometry geom, uint8_t* 
 	image[index * 4 + 3] = 255;
 }
 
+extern "C" __global__ void GeomClosestHitKernel( hiprtGeometry geom, uint32_t rayCount, hiprtRay* rays, hiprtHit* hits )
+{
+	const uint32_t index = blockIdx.x * blockDim.x + threadIdx.x;
+	if ( index >= rayCount ) return;
+
+	hiprtGeomTraversalClosest tr( geom, rays[index] );
+	hits[index] = tr.getNextHit();
+}
+
 extern "C" __global__ void PairTrianglesKernel( hiprtScene scene, uint8_t* image, uint2 resolution )
 {
 	const uint32_t x	 = blockIdx.x * blockDim.x + threadIdx.x;
@@ -283,6 +308,34 @@ extern "C" __global__ void SceneIntersectionSingleton( hiprtScene scene, uint8_t
 	image[index * 4 + 3] = 255;
 }
 
+extern "C" __global__ void SceneClosestHitKernel( hiprtScene scene, uint32_t rayCount, hiprtRay* rays, hiprtHit* hits )
+{
+	const uint32_t index = blockIdx.x * blockDim.x + threadIdx.x;
+	if ( index >= rayCount ) return;
+
+	hiprtSceneTraversalClosest tr( scene, rays[index] );
+	hits[index] = tr.getNextHit();
+}
+
+extern "C" __global__ void SceneManualClosestHitKernel( hiprtScene scene, uint32_t rayCount, hiprtRay* rays, hiprtHit* hits )
+{
+	const uint32_t index = blockIdx.x * blockDim.x + threadIdx.x;
+	if ( index >= rayCount ) return;
+
+	hiprt::SceneHeader*		   sceneHeader	= reinterpret_cast<hiprt::SceneHeader*>( scene );
+	const hiprt::InstanceNode& instanceNode = sceneHeader->m_primNodes[0];
+	hiprtRay				   localRay	   = rays[index];
+
+	const float3 origin = hiprtPointWorldToObject( localRay.origin, scene, 0 );
+	const float3 target = hiprtPointWorldToObject( localRay.origin + localRay.direction, scene, 0 );
+	localRay.origin	   = origin;
+	localRay.direction = target - origin;
+
+	hiprtGeometry geom = reinterpret_cast<hiprtGeometry>( instanceNode.m_geometry );
+	hiprtGeomTraversalClosest tr( geom, localRay );
+	hits[index] = tr.getNextHit();
+}
+
 extern "C" __global__ void SceneIntersectionKernel( hiprtScene scene, uint8_t* image, hiprtFuncTable table, uint2 resolution )
 {
 	const uint32_t x	 = blockIdx.x * blockDim.x + threadIdx.x;
@@ -323,6 +376,67 @@ extern "C" __global__ void SceneIntersectionKernel( hiprtScene scene, uint8_t* i
 
 		if ( tr.getCurrentState() == hiprtTraversalStateFinished ) break;
 	}
+}
+
+extern "C" __global__ void TransformRayKernel( hiprtScene scene, hiprtRay ray, hiprtRay* out )
+{
+	const float3 origin		  = hiprtPointWorldToObject( ray.origin, scene, 0 );
+	const float3 target		  = hiprtPointWorldToObject( ray.origin + ray.direction, scene, 0 );
+	out[0].origin			  = origin;
+	out[0].direction		  = target - origin;
+	out[0].minT				  = ray.minT;
+	out[0].maxT				  = ray.maxT;
+}
+
+extern "C" __global__ void InternalTransformRayKernel( hiprtScene scene, hiprtRay ray, hiprtRay* out )
+{
+	hiprt::SceneHeader*		   sceneHeader	= reinterpret_cast<hiprt::SceneHeader*>( scene );
+	const hiprt::InstanceNode& instanceNode = sceneHeader->m_primNodes[0];
+	hiprt::Transform		   tr( sceneHeader->m_frames, instanceNode.m_transform.frameIndex, instanceNode.m_transform.frameCount );
+	out[0] = tr.transformRay( ray, 0.0f );
+}
+
+struct SceneTransformDebugData
+{
+	float3	 frameScale;
+	uint32_t frameIndex;
+	uint32_t frameCount;
+	uint32_t isStatic;
+	uint32_t isIdentity;
+};
+
+extern "C" __global__ void SceneTransformDebugKernel( hiprtScene scene, SceneTransformDebugData* out )
+{
+	hiprt::SceneHeader*		   sceneHeader	= reinterpret_cast<hiprt::SceneHeader*>( scene );
+	const hiprt::InstanceNode& instanceNode = sceneHeader->m_primNodes[0];
+	out[0].frameScale = sceneHeader->m_frames[0].m_scale;
+	out[0].frameIndex = instanceNode.m_transform.frameIndex;
+	out[0].frameCount = instanceNode.m_transform.frameCount;
+	out[0].isStatic   = instanceNode.m_static;
+	out[0].isIdentity = instanceNode.m_identity;
+}
+
+extern "C" __global__ void SceneInterpolatedFrameDebugKernel( hiprtScene scene, SceneTransformDebugData* out )
+{
+	hiprt::SceneHeader*		   sceneHeader	= reinterpret_cast<hiprt::SceneHeader*>( scene );
+	const hiprt::InstanceNode& instanceNode = sceneHeader->m_primNodes[0];
+	hiprt::Transform		   tr( sceneHeader->m_frames, instanceNode.m_transform.frameIndex, instanceNode.m_transform.frameCount );
+	hiprt::Frame			   frame = tr.interpolateFrames( 0.0f );
+	out[0].frameScale = frame.m_scale;
+	out[0].frameIndex = instanceNode.m_transform.frameIndex;
+	out[0].frameCount = instanceNode.m_transform.frameCount;
+	out[0].isStatic   = instanceNode.m_static;
+	out[0].isIdentity = frame.identity() ? 1u : 0u;
+}
+
+extern "C" __global__ void SceneInverseMatrixDebugKernel( hiprtScene scene, hiprtFrameMatrix* out )
+{
+	hiprt::SceneHeader*		   sceneHeader	= reinterpret_cast<hiprt::SceneHeader*>( scene );
+	const hiprt::InstanceNode& instanceNode = sceneHeader->m_primNodes[0];
+	hiprt::Transform		   tr( sceneHeader->m_frames, instanceNode.m_transform.frameIndex, instanceNode.m_transform.frameCount );
+	hiprt::Frame			   frame = tr.interpolateFrames( 0.0f );
+	hiprt::MatrixFrame		   matrix = hiprt::MatrixFrame::getMatrixFrameInv( frame );
+	out[0] = *reinterpret_cast<hiprtFrameMatrix*>( &matrix );
 }
 
 extern "C" __global__ void MotionBlurKernel( hiprtScene scene, uint8_t* image, uint2 resolution )
