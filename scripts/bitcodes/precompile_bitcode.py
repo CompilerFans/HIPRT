@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import os
 import pathlib
 import shutil
 import subprocess
@@ -29,10 +30,36 @@ def build_gencode_flags(archs: list[str]) -> list[str]:
     return flags
 
 
+def is_mxcc(compiler: str, toolchain: str) -> bool:
+    if toolchain:
+        return toolchain == "mxcc"
+    return pathlib.Path(compiler).name == "mxcc"
+
+
+def build_mxcc_flags(root: pathlib.Path) -> list[str]:
+    maca_path = pathlib.Path(os.environ.get("MACA_PATH", "/opt/maca"))
+    cuda_path = pathlib.Path(os.environ.get("CUDA_PATH", str(maca_path / "tools" / "cu-bridge")))
+    offload_arch = os.environ.get("MXCC_OFFLOAD_ARCH", "xcore1000")
+    return [
+        "-x",
+        "maca",
+        "-fgpu-rdc",
+        "--include",
+        "cuda_runtime.h",
+        "-D__CUDACC__",
+        "-I../../",
+        "-I../../contrib/Orochi/",
+        f"-I{cuda_path / 'include'}",
+        f"-I{maca_path / 'include'}",
+        "--offload-arch=" + offload_arch,
+    ]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build a precompiled trace-kernel fatbin for CUDA/cu-bridge.")
     parser.add_argument("--root", required=True, help="Repository root")
     parser.add_argument("--compiler", default="nvcc", help="CUDA-compatible compiler, e.g. nvcc or cucc")
+    parser.add_argument("--toolchain", choices=["auto", "nvcc", "mxcc"], default="auto", help="Offline compiler flavor")
     parser.add_argument("--config", default="Release", help="Build config name used for dist/bin/<config>")
     parser.add_argument("--arch-list", default="", help="CUDA arch list such as 75;80;86;89")
     args = parser.parse_args()
@@ -56,19 +83,30 @@ def main() -> int:
             encoding="utf-8",
         )
 
-        cmd = [
-            args.compiler,
-            "-x",
-            "cu",
-            str(source),
-            "-O3",
-            "-std=c++17",
-            "-fatbin",
-            "-I../../",
-            "-I../../contrib/Orochi/",
-            "-DHIPRT_BITCODE_LINKING",
-            "--use_fast_math",
-        ] + arch_flags + ["-o", str(output)]
+        use_mxcc = is_mxcc(args.compiler, "" if args.toolchain == "auto" else args.toolchain)
+        if use_mxcc:
+            cmd = [
+                args.compiler,
+                "-O3",
+                "-std=c++17",
+                "-fatbin",
+                "-DHIPRT_BITCODE_LINKING",
+                "-use-fast-math",
+            ] + build_mxcc_flags(root) + [str(source), "-o", str(output)]
+        else:
+            cmd = [
+                args.compiler,
+                "-x",
+                "cu",
+                str(source),
+                "-O3",
+                "-std=c++17",
+                "-fatbin",
+                "-I../../",
+                "-I../../contrib/Orochi/",
+                "-DHIPRT_BITCODE_LINKING",
+                "--use_fast_math",
+            ] + arch_flags + ["-o", str(output)]
 
         print(" ".join(cmd))
         subprocess.run(cmd, cwd=workdir, check=True)

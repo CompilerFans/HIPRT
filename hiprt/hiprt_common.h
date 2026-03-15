@@ -24,7 +24,7 @@
 
 #pragma once
 
-#if defined( __CUDACC__ )
+#if defined( __CUDACC__ ) || defined( __MACACC__ )
 #define __KERNELCC__
 #endif
 

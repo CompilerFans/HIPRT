@@ -22,11 +22,11 @@
 //
 //////////////////////////////////////////////////////////////////////////////////////////
 
-#if defined( __CUDACC__ )
+#if defined( __CUDACC__ ) || defined( __MACACC__ )
 #include <cuda_runtime.h>
 #include <cmath>
 #else
-#include <hip/hip_runtime.h>
+#error "hiprt_kernels_bitcode.h no longer supports hip_runtime.h; expected CUDA/cu-bridge/macacc compilation."
 #endif
 #include <hiprt/hiprt_device.h>
 #include <hiprt/impl/hiprt_device_impl.h>
