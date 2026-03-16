@@ -51,4 +51,7 @@ CUdevice getDevice( int deviceOrdinal );
 CUcontext retainPrimaryContext( CUdevice device );
 void setCurrentContext( CUcontext context );
 void releasePrimaryContext( CUdevice device );
+void memsetD8( CUdeviceptr dst, unsigned char value, size_t byteCount );
+void memcpyHtoD( CUdeviceptr dst, const void* src, size_t byteCount );
+void memcpyDtoH(void* dst, CUdeviceptr src, size_t byteCount);
 } // namespace hiprt::mc

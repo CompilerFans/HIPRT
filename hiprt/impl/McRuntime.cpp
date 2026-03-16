@@ -120,4 +120,10 @@ CUcontext retainPrimaryContext( CUdevice device )
 void setCurrentContext( CUcontext context ) { checkOro( cuCtxSetCurrent( context ) ); }
 
 void releasePrimaryContext( CUdevice device ) { checkOro( cuDevicePrimaryCtxRelease( device ) ); }
+
+void memsetD8( CUdeviceptr dst, unsigned char value, size_t byteCount ) { checkOro( cuMemsetD8( dst, value, byteCount ) ); }
+
+void memcpyHtoD( CUdeviceptr dst, const void* src, size_t byteCount ) { checkOro( cuMemcpyHtoD( dst, src, byteCount ) ); }
+
+void memcpyDtoH( void* dst, CUdeviceptr src, size_t byteCount ) { checkOro( cuMemcpyDtoH( dst, src, byteCount ) ); }
 } // namespace hiprt::mc

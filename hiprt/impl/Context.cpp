@@ -732,14 +732,14 @@ hiprtFuncTable Context::createFuncTable( uint32_t numGeomTypes, uint32_t numRayT
 	checkOro( cudaMalloc(
 		reinterpret_cast<void **>( &ptr ),
 		sizeof( hiprtFuncTableHeader ) + numGeomTypes * numRayTypes * sizeof( hiprtFuncDataSet ) ) );
-	checkOro( cuMemsetD8(
-		reinterpret_cast<size_t>( ptr ),
+	mc::memsetD8(
+		reinterpret_cast<CUdeviceptr>( ptr ),
 		0,
-		sizeof( hiprtFuncTableHeader ) + numGeomTypes * numRayTypes * sizeof( hiprtFuncDataSet ) ) );
+		sizeof( hiprtFuncTableHeader ) + numGeomTypes * numRayTypes * sizeof( hiprtFuncDataSet ) );
 
 	hiprtFuncTableHeader header{
 		numGeomTypes, numRayTypes, reinterpret_cast<hiprtFuncDataSet*>( ptr + sizeof( hiprtFuncTableHeader ) ) };
-	checkOro( cuMemcpyHtoD( reinterpret_cast<size_t>( ptr ), &header, sizeof( hiprtFuncTableHeader ) ) );
+	mc::memcpyHtoD( reinterpret_cast<CUdeviceptr>( ptr ), &header, sizeof( hiprtFuncTableHeader ) );
 
 	return reinterpret_cast<hiprtFuncTable>( ptr );
 }
@@ -749,11 +749,11 @@ void Context::setFuncTable( hiprtFuncTable funcTable, uint32_t geomType, uint32_
 	// checkOro( cuCtxSetCurrent( m_ctxt ) );
 
 	hiprtFuncTableHeader header;
-	checkOro( cuMemcpyDtoH( &header, static_cast<uintptr_t>(reinterpret_cast<size_t>( funcTable )), sizeof( hiprtFuncTableHeader ) ) );
+	mc::memcpyDtoH( &header, static_cast<CUdeviceptr>( reinterpret_cast<size_t>( funcTable ) ), sizeof( hiprtFuncTableHeader ) );
 
 	uint32_t index = header.numGeomTypes * rayType + geomType;
-	checkOro(
-		cuMemcpyHtoD( reinterpret_cast<size_t>( &header.funcDataSets[index] ), &set, sizeof( hiprtFuncDataSet ) ) );
+	mc::memcpyHtoD(
+		static_cast<CUdeviceptr>( reinterpret_cast<size_t>( &header.funcDataSets[index] ) ), &set, sizeof( hiprtFuncDataSet ) );
 }
 
 void Context::destroyFuncTable( hiprtFuncTable funcTable )
@@ -877,12 +877,12 @@ void Context::exportGeometryAabb( hiprtGeometry inGeometry, float3& outAabbMin, 
 	// checkOro( cuCtxSetCurrent( m_ctxt ) );
 
 	GeomHeader header;
-	checkOro( cuMemcpyDtoH( &header, reinterpret_cast<size_t>( inGeometry ), sizeof( GeomHeader ) ) );
+	mc::memcpyDtoH( &header, static_cast<CUdeviceptr>( reinterpret_cast<uintptr_t>( inGeometry ) ), sizeof( GeomHeader ) );
 
 	constexpr uint32_t Alignment = alignof( Box8Node ) > alignof( Box4Node ) ? alignof( Box8Node ) : alignof( Box4Node );
 	constexpr uint32_t Size		 = sizeof( Box8Node ) > sizeof( Box4Node ) ? sizeof( Box8Node ) : sizeof( Box4Node );
 	alignas( Alignment ) uint8_t root[Size];
-	checkOro( cuMemcpyDtoH( root, reinterpret_cast<size_t>( header.m_boxNodes ), getBoxNodeSize() ) );
+	mc::memcpyDtoH( root, static_cast<CUdeviceptr>( reinterpret_cast<uintptr_t>( header.m_boxNodes ) ), getBoxNodeSize() );
 
 	Aabb box   = getRtip() >= 31 ? reinterpret_cast<Box8Node*>( root )->aabb() : reinterpret_cast<Box4Node*>( root )->aabb();
 	outAabbMin = box.m_min;
@@ -894,12 +894,12 @@ void Context::exportSceneAabb( hiprtScene inScene, float3& outAabbMin, float3& o
 	// checkOro( cuCtxSetCurrent( m_ctxt ) );
 
 	SceneHeader header;
-	checkOro( cuMemcpyDtoH( &header, reinterpret_cast<size_t>( inScene ), sizeof( SceneHeader ) ) );
+	mc::memcpyDtoH( &header, static_cast<CUdeviceptr>( reinterpret_cast<uintptr_t>( inScene ) ), sizeof( SceneHeader ) );
 
 	constexpr uint32_t Alignment = alignof( Box8Node ) > alignof( Box4Node ) ? alignof( Box8Node ) : alignof( Box4Node );
 	constexpr uint32_t Size		 = sizeof( Box8Node ) > sizeof( Box4Node ) ? sizeof( Box8Node ) : sizeof( Box4Node );
 	alignas( Alignment ) uint8_t root[Size];
-	checkOro( cuMemcpyDtoH( root, reinterpret_cast<size_t>( header.m_boxNodes ), getBoxNodeSize() ) );
+	mc::memcpyDtoH( root, static_cast<CUdeviceptr>( reinterpret_cast<uintptr_t>( header.m_boxNodes ) ), getBoxNodeSize() );
 
 	Aabb box   = getRtip() >= 31 ? reinterpret_cast<Box8Node*>( root )->aabb() : reinterpret_cast<Box4Node*>( root )->aabb();
 	outAabbMin = box.m_min;
