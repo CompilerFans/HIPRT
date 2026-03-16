@@ -246,7 +246,12 @@ python3 precompile_bitcode.py \
 
 这说明：
 
-- **对典型 source-based 用法，HIPRT 已经具备“客户侧继续沿官方 API 调用，内部自动切到 maca-link bundle fallback”的能力。**
+- **对典型 source-based 用法，HIPRT 已经具备“客户侧继续沿官方 API 调用，内部自动切到 maca-link bundle 路线”的能力。**
+
+并且当前实现已经进一步前进到：
+
+- 对 `mxcc` 路径，不再把 `maca-link bundle` 当成异常 fallback
+- 而是直接把它作为当前已验证可行的主路径
 
 ## 2.10 当前第三阶段结论
 

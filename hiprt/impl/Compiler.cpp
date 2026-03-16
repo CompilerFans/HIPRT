@@ -119,12 +119,6 @@ bool shouldUseMxccBundleFallback( const std::string& compiler )
 	return isMxccCompiler( compiler );
 }
 
-bool shouldForceMxccBundleFallback()
-{
-	const std::string forceOpt = Utility::getEnvVariable( "HIPRT_FORCE_MXCC_BUNDLE_FALLBACK" );
-	return !forceOpt.empty() && forceOpt != "0" && forceOpt != "false" && forceOpt != "FALSE";
-}
-
 std::vector<std::string> sanitizeOptionsForMxccBundle( const std::vector<const char*>& options )
 {
 	std::vector<std::string> result;
@@ -438,10 +432,10 @@ void Compiler::buildKernels(
 		{
 			binary = loadCacheFileToBinary( cacheName );
 		}
-		else
-		{
-			std::string extSrc = src;
-			if ( extended )
+			else
+			{
+				std::string extSrc = src;
+				if ( extended )
 			{
 				extSrc = "#include <hiprt/impl/hiprt_device_impl.h>\n";
 				addCustomFuncsSwitchCase( extSrc, funcNameSets, numGeomTypes, numRayTypes );
@@ -454,23 +448,22 @@ void Compiler::buildKernels(
 				addCommonOpts( context, opts, extended );
 
 				const std::string externalCompiler = findCudaCompiler();
-				const bool useBundleFallback = shouldUseMxccBundleFallback( externalCompiler );
-				const bool forceBundleFallback = shouldForceMxccBundleFallback() && useBundleFallback;
+				const bool useBundlePath = shouldUseMxccBundleFallback( externalCompiler );
 
-				try
+				// On MACA/cu-bridge, runtime `cuLinkAddData` has proven unreliable for mxcc-generated
+				// user binaries. Once `mxcc --maca-link -fatbin` was validated, it became the primary
+				// source-based path for mxcc rather than an exceptional fallback.
+				if ( useBundlePath )
 				{
-					if ( forceBundleFallback ) throw std::runtime_error( "Force mxcc bundle fallback" );
+					binary = compileSourceToBundle( externalCompiler, extSrc, moduleName, headers, includeNames, opts, moduleName.stem().string() );
+				}
+				else
+				{
 					buildProgram( funcNames, extSrc, moduleName, headers, includeNames, opts, prog );
 					binary = getNvrtcCompiledBinary( prog );
 					if ( binary.empty() )
 						throw std::runtime_error( "Runtime compilation succeeded but emitted neither PTX nor CUBIN." );
 					checkOrortc( nvrtcDestroyProgram( &prog ) );
-				}
-				catch ( const std::exception& )
-				{
-					if ( prog != nullptr ) nvrtcDestroyProgram( &prog );
-					if ( !useBundleFallback ) throw;
-					binary = compileSourceToBundle( externalCompiler, extSrc, moduleName, headers, includeNames, opts, moduleName.stem().string() );
 				}
 
 				if ( useDiskCache ) cacheBinaryToFile( binary, cacheName );

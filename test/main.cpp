@@ -2404,10 +2404,9 @@ TEST_F( hiprtTest, BuildTraceKernelFromBitcode )
 	checkHiprt( hiprtDestroyContext( ctxt ) );
 }
 
-TEST_F( hiprtTest, BuildTraceKernelWithForcedMxccBundleFallback )
+TEST_F( hiprtTest, BuildTraceKernelWithMxccBundlePath )
 {
 	setenv( "HIPRT_EXTERNAL_DEVICE_COMPILER", "mxcc", 1 );
-	setenv( "HIPRT_FORCE_MXCC_BUNDLE_FALLBACK", "1", 1 );
 
 	hiprtContext ctxt;
 	checkHiprt( hiprtCreateContext( HIPRT_API_VERSION, m_ctxtInput, ctxt ) );
@@ -2438,7 +2437,6 @@ TEST_F( hiprtTest, BuildTraceKernelWithForcedMxccBundleFallback )
 	EXPECT_NE( functions[0], nullptr );
 
 	checkHiprt( hiprtDestroyContext( ctxt ) );
-	unsetenv( "HIPRT_FORCE_MXCC_BUNDLE_FALLBACK" );
 	unsetenv( "HIPRT_EXTERNAL_DEVICE_COMPILER" );
 }
 
