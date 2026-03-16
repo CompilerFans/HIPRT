@@ -129,6 +129,35 @@ python3 precompile_bitcode.py \
 
 - **当前 blocker 已不是“应该产出 cubin 还是 fatbin”，而是“当前 cu-bridge runtime linker 不接受 `mxcc` 生成的用户输入二进制，无论是 ELF 还是 clang offload bundle”。**
 
+### 2.5 `mxcc --maca-link` 最小设备链接实验
+
+为了确认问题是不是必须改走 `mxcc` 自己的设备链接流程，补做了最小实验：
+
+1. 先用：
+   - `mxcc -fgpu-rdc -c`
+   生成含设备代码的目标文件
+
+2. 再用：
+   - `mxcc -fgpu-rdc --maca-link ... -fatbin`
+   生成设备 bundle
+
+实验结果：
+
+- `--maca-link -fatbin` 能成功产出 `__CLANG_OFFLOAD_BUNDLE__`
+- 这说明 `mxcc` 自身的设备链接流程是可工作的
+
+但同时也确认了一个现实约束：
+
+- 当前 HIPRT 主链里使用的是：
+  - `cuLinkAddData`
+  - `cuModuleLoadData`
+- 而不是 `mxcc/maca-link` 设备链接流程本身
+
+所以目前可以明确：
+
+- **`maca-link` 是后续值得继续深入的方向**
+- **但还没有被证明能直接接入当前 HIPRT 的 runtime link / module load 入口**
+
 ## 3. 这轮确认的“本质缺陷”
 
 当前离线编译的本质问题不是：
@@ -183,6 +212,7 @@ python3 precompile_bitcode.py \
 3. 后续不应再只做“换一种本地输出文件后缀”的试验，而应转向：
    - 调研 cu-bridge runtime linker 对用户输入的真实支持矩阵
    - 或探索是否需要使用 `mxcc` / `maca-link` 自身的设备链接流程，而不是继续强塞到当前 `cuLinkAddData` 路径
+   - 当前最新实验已经说明：继续只换 `device-bin/fatbin/fatbc` 的收益很低，下一步应优先研究 `maca-link` 产物如何接到 HIPRT runtime 模块加载路径
 
 ## 6. 一句话结论
 
