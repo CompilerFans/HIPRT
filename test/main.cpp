@@ -2404,6 +2404,44 @@ TEST_F( hiprtTest, BuildTraceKernelFromBitcode )
 	checkHiprt( hiprtDestroyContext( ctxt ) );
 }
 
+TEST_F( hiprtTest, BuildTraceKernelWithForcedMxccBundleFallback )
+{
+	setenv( "HIPRT_EXTERNAL_DEVICE_COMPILER", "mxcc", 1 );
+	setenv( "HIPRT_FORCE_MXCC_BUNDLE_FALLBACK", "1", 1 );
+
+	hiprtContext ctxt;
+	checkHiprt( hiprtCreateContext( HIPRT_API_VERSION, m_ctxtInput, ctxt ) );
+	checkHiprt( hiprtSetLogLevel( ctxt, hiprtLogLevelError | hiprtLogLevelWarn ) );
+
+	std::string source;
+	ASSERT_TRUE( readSourceCode( getRootDir() / "test/bitcodes/runtime_bitcode_test.cu", source ) );
+
+	const char* functionName = "TraceKernel";
+	std::vector<hiprtApiFunction> functions( 1 );
+	checkHiprt( hiprtBuildTraceKernels(
+		ctxt,
+		1,
+		&functionName,
+		source.c_str(),
+		"runtime_bitcode_test.cu",
+		0,
+		nullptr,
+		nullptr,
+		0,
+		nullptr,
+		0,
+		1,
+		nullptr,
+		functions.data(),
+		nullptr,
+		false ) );
+	EXPECT_NE( functions[0], nullptr );
+
+	checkHiprt( hiprtDestroyContext( ctxt ) );
+	unsetenv( "HIPRT_FORCE_MXCC_BUNDLE_FALLBACK" );
+	unsetenv( "HIPRT_EXTERNAL_DEVICE_COMPILER" );
+}
+
 TEST_F( hiprtTest, BuildTraceKernelFromBitcodeWithCustomFuncTable )
 {
 #if defined( HIPRT_CU_BRIDGE_RUNTIME_JIT_WORKAROUND ) && HIPRT_CU_BRIDGE_RUNTIME_JIT_WORKAROUND == 1

@@ -224,7 +224,31 @@ python3 precompile_bitcode.py \
 
 这为后续正式把 `maca-link` 路线接入 HIPRT 主工作流提供了 API 落点。
 
-## 2.9 当前第三阶段结论
+### 2.9 客户侧无感 source API 回退验证
+
+进一步补做了一个更接近真实使用方式的验证：
+
+- 客户仍然调用：
+  - `hiprtBuildTraceKernels(...)`
+- 不改调用接口
+- 仅通过环境变量强制内部走：
+  - `mxcc -c`
+  - `mxcc --maca-link -fatbin`
+  - `cuModuleLoadData`
+
+对应测试：
+
+- `hiprtTest.BuildTraceKernelWithForcedMxccBundleFallback`
+
+验证结果：
+
+- 测试通过
+
+这说明：
+
+- **对典型 source-based 用法，HIPRT 已经具备“客户侧继续沿官方 API 调用，内部自动切到 maca-link bundle fallback”的能力。**
+
+## 2.10 当前第三阶段结论
 
 现在已经可以把第三阶段结论写得更具体：
 
@@ -236,10 +260,11 @@ python3 precompile_bitcode.py \
    - 该 bundle 可以被 `cuModuleLoadData` 直接加载
    - 对包含 HIPRT 设备遍历实现的 `TraceKernel/CutoutKernel` 也成立
 
-因此最有希望的后续方向是：
+因此当前最有希望、也已经开始落地的方向是：
 
 - **不要再试图把 `mxcc` 用户产物强塞给当前 `cuLinkAddData`**
-- **而是探索“离线先用 `mxcc --maca-link` 完成设备链接，运行时只做 `cuModuleLoadData`”的新路径**
+- **而是转向“离线先用 `mxcc --maca-link` 完成设备链接，运行时只做 `cuModuleLoadData`”的新路径**
+- **并且对 source-based 官方 API，用内部 fallback 保持客户侧尽量无感**
 
 ## 3. 这轮确认的“本质缺陷”
 

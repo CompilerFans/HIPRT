@@ -110,6 +110,37 @@ std::string quoteShellArg( const std::string& arg )
 	return escaped;
 }
 
+bool isMxccCompiler( const std::string& compiler ) { return std::filesystem::path( compiler ).filename() == "mxcc"; }
+
+bool shouldUseMxccBundleFallback( const std::string& compiler )
+{
+	const std::string explicitOpt = Utility::getEnvVariable( "HIPRT_ENABLE_MXCC_BUNDLE_FALLBACK" );
+	if ( !explicitOpt.empty() ) return explicitOpt != "0" && explicitOpt != "false" && explicitOpt != "FALSE";
+	return isMxccCompiler( compiler );
+}
+
+bool shouldForceMxccBundleFallback()
+{
+	const std::string forceOpt = Utility::getEnvVariable( "HIPRT_FORCE_MXCC_BUNDLE_FALLBACK" );
+	return !forceOpt.empty() && forceOpt != "0" && forceOpt != "false" && forceOpt != "FALSE";
+}
+
+std::vector<std::string> sanitizeOptionsForMxccBundle( const std::vector<const char*>& options )
+{
+	std::vector<std::string> result;
+	for ( const char* option : options )
+	{
+		if ( option == nullptr ) continue;
+		const std::string opt = option;
+		if ( opt == "--use_fast_math" ) { result.push_back( "-use-fast-math" ); continue; }
+		if ( opt == "--device-c" ) continue;
+		if ( opt.rfind( "--gpu-architecture=", 0 ) == 0 ) continue;
+		if ( opt == "-std=c++17" ) continue;
+		result.push_back( opt );
+	}
+	return result;
+}
+
 std::string findCudaCompiler()
 {
 	const std::string preferredExternal = Utility::getEnvVariable( "HIPRT_EXTERNAL_DEVICE_COMPILER" );
@@ -200,6 +231,77 @@ std::string compileSourceToCubin(
 	std::string cubin( size, '\0' );
 	file.read( cubin.data(), static_cast<std::streamsize>( size ) );
 	return cubin;
+}
+
+std::string compileSourceToBundle(
+	const std::string&				 compiler,
+	const std::string&				 source,
+	const std::filesystem::path&	 moduleName,
+	const std::vector<const char*>&	 headers,
+	const std::vector<const char*>&	 includeNames,
+	const std::vector<const char*>&	 options,
+	const std::string&				 stem )
+{
+	if ( !isMxccCompiler( compiler ) ) throw std::runtime_error( "compileSourceToBundle requires mxcc." );
+
+	const std::string macaPath = Utility::getEnvVariable( "MACA_PATH" ).empty() ? "/opt/maca" : Utility::getEnvVariable( "MACA_PATH" );
+	const std::string cudaPath =
+		Utility::getEnvVariable( "CUDA_PATH" ).empty() ? macaPath + "/tools/cu-bridge" : Utility::getEnvVariable( "CUDA_PATH" );
+	const std::string offloadArch =
+		Utility::getEnvVariable( "MXCC_OFFLOAD_ARCH" ).empty() ? "xcore1000" : Utility::getEnvVariable( "MXCC_OFFLOAD_ARCH" );
+
+	const std::filesystem::path tempDir =
+		std::filesystem::temp_directory_path() /
+		Utility::format( "hiprt-bundle-%08x", Utility::hashString( source + stem + std::to_string( std::rand() ) ) );
+	std::filesystem::create_directories( tempDir );
+
+	for ( size_t i = 0; i < headers.size() && i < includeNames.size(); ++i )
+	{
+		const std::filesystem::path headerPath = tempDir / includeNames[i];
+		std::filesystem::create_directories( headerPath.parent_path() );
+		std::ofstream file( headerPath, std::ios::out | std::ios::binary );
+		file.write( headers[i], static_cast<std::streamsize>( std::char_traits<char>::length( headers[i] ) ) );
+	}
+
+	const std::filesystem::path srcPath = tempDir / ( moduleName.filename().empty() ? std::filesystem::path( stem + ".cu" ) : moduleName.filename() );
+	{
+		std::ofstream file( srcPath, std::ios::out | std::ios::binary );
+		file.write( source.data(), static_cast<std::streamsize>( source.size() ) );
+	}
+
+	const std::filesystem::path objPath = tempDir / ( stem + ".o" );
+	const std::filesystem::path outPath = tempDir / ( stem + ".mcfb" );
+	const auto sanitizedOptions = sanitizeOptionsForMxccBundle( options );
+
+	std::ostringstream compileCmd;
+	compileCmd << quoteShellArg( compiler ) << " -O3 -std=c++17 -x maca -fgpu-rdc --include cuda_runtime.h -D__CUDACC__"
+			   << " -I" << quoteShellArg( tempDir.string() )
+			   << " -I" << quoteShellArg( Utility::getRootDir().string() )
+			   << " -I" << quoteShellArg( ( Utility::getRootDir() / "contrib/Orochi" ).string() )
+			   << " -I" << quoteShellArg( cudaPath + "/include" )
+			   << " -I" << quoteShellArg( macaPath + "/include" )
+			   << " --offload-arch=" << offloadArch;
+	for ( const auto& option : sanitizedOptions )
+		compileCmd << " " << option;
+	compileCmd << " -c " << quoteShellArg( srcPath.string() ) << " -o " << quoteShellArg( objPath.string() );
+
+	if ( std::system( compileCmd.str().c_str() ) != 0 )
+		throw std::runtime_error( "mxcc bundle compile failed for source: " + srcPath.string() );
+
+	std::ostringstream linkCmd;
+	linkCmd << quoteShellArg( compiler ) << " -fgpu-rdc --maca-link " << quoteShellArg( objPath.string() ) << " -fatbin -o "
+			<< quoteShellArg( outPath.string() );
+	if ( std::system( linkCmd.str().c_str() ) != 0 )
+		throw std::runtime_error( "mxcc maca-link failed for object: " + objPath.string() );
+
+	std::ifstream file( outPath, std::ios::in | std::ios::binary | std::ios::ate );
+	if ( !file.is_open() ) throw std::runtime_error( "Failed to open bundle output: " + outPath.string() );
+
+	const size_t size = static_cast<size_t>( file.tellg() );
+	file.seekg( 0, std::ios::beg );
+	std::string bundle( size, '\0' );
+	file.read( bundle.data(), static_cast<std::streamsize>( size ) );
+	return bundle;
 }
 } // namespace
 
@@ -346,20 +448,33 @@ void Compiler::buildKernels(
 				extSrc += "\n" + src;
 			}
 
-			std::vector<const char*> opts = options;
-			std::string				 includePath = "-I" + Utility::getRootDir().string();
-			opts.push_back( includePath.c_str() );
-			addCommonOpts( context, opts, extended );
+				std::vector<const char*> opts = options;
+				std::string				 includePath = "-I" + Utility::getRootDir().string();
+				opts.push_back( includePath.c_str() );
+				addCommonOpts( context, opts, extended );
 
-			buildProgram( funcNames, extSrc, moduleName, headers, includeNames, opts, prog );
+				const std::string externalCompiler = findCudaCompiler();
+				const bool useBundleFallback = shouldUseMxccBundleFallback( externalCompiler );
+				const bool forceBundleFallback = shouldForceMxccBundleFallback() && useBundleFallback;
 
-			binary = getNvrtcCompiledBinary( prog );
-			if ( binary.empty() )
-				throw std::runtime_error( "Runtime compilation succeeded but emitted neither PTX nor CUBIN." );
-			checkOrortc( nvrtcDestroyProgram( &prog ) );
+				try
+				{
+					if ( forceBundleFallback ) throw std::runtime_error( "Force mxcc bundle fallback" );
+					buildProgram( funcNames, extSrc, moduleName, headers, includeNames, opts, prog );
+					binary = getNvrtcCompiledBinary( prog );
+					if ( binary.empty() )
+						throw std::runtime_error( "Runtime compilation succeeded but emitted neither PTX nor CUBIN." );
+					checkOrortc( nvrtcDestroyProgram( &prog ) );
+				}
+				catch ( const std::exception& )
+				{
+					if ( prog != nullptr ) nvrtcDestroyProgram( &prog );
+					if ( !useBundleFallback ) throw;
+					binary = compileSourceToBundle( externalCompiler, extSrc, moduleName, headers, includeNames, opts, moduleName.stem().string() );
+				}
 
-			if ( useDiskCache ) cacheBinaryToFile( binary, cacheName );
-		}
+				if ( useDiskCache ) cacheBinaryToFile( binary, cacheName );
+			}
 
 			module = mc::loadModule( binary.data() );
 			m_moduleCache[moduleName.string()] = module;
