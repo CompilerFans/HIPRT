@@ -104,6 +104,31 @@ python3 precompile_bitcode.py \
 - 不再是编译器选择问题
 - 而是 **runtime bitcode link 输入格式 / relocatable 属性 / linker 期望的二进制类型** 不匹配
 
+### 2.4 最小输出形态实验矩阵
+
+为了继续判断是不是“产物类型选错”，补做了最小 `mxcc` 输出实验：
+
+- `mxcc -device-bin`
+  - 输出文件头：`ELF`
+- `mxcc -fatbin`
+  - 输出文件头：`__CLANG_OFFLOAD_BUNDLE__`
+- `mxcc -fatbc`
+  - 输出文件头：`__CLANG_OFFLOAD_BUNDLE__`
+
+然后继续把 runtime fallback 改成：
+
+- `mxcc` 路径产出 `fatbin`
+- linker 侧识别 `FATBINARY`
+
+再强制运行主仓 runtime-bitcode 测试，结果仍然失败于：
+
+- `cuLinkAddData`
+- `mcErrorInvalidKernelImage`
+
+因此可以把问题进一步压缩成一句话：
+
+- **当前 blocker 已不是“应该产出 cubin 还是 fatbin”，而是“当前 cu-bridge runtime linker 不接受 `mxcc` 生成的用户输入二进制，无论是 ELF 还是 clang offload bundle”。**
+
 ## 3. 这轮确认的“本质缺陷”
 
 当前离线编译的本质问题不是：
@@ -133,6 +158,10 @@ python3 precompile_bitcode.py \
      - precompiled fatbin 可加载
      - runtime `cuLinkAddData` 却可能拒绝
    - 这说明“能离线生成”与“能作为 runtime bitcode link 输入”不是同一个兼容层级
+   - 目前进一步确认：
+     - `device-bin` 不行
+     - `fatbin` 也不行
+     - 问题仍在 runtime linker 的输入兼容层
 
 ## 4. 这轮之后的判断
 
@@ -151,13 +180,9 @@ python3 precompile_bitcode.py \
 
 1. 继续清理 active path 中的 `hip_runtime.h` / HIP 分支残留
 2. 把 `compile.py` 里 wrapper 的逻辑再参数化，避免只服务当前 `hiprt_kernels_bitcode.h`
-3. 继续研究 `cuLinkAddData` 对 `mxcc` 产物的真实可接受输入类型：
-   - 当前 `CU_JIT_INPUT_CUBIN` 路径失败
-   - 后续应试验：
-     - `-fatbin`
-     - `-device-bin`
-     - `-fatbc`
-     - 以及是否需要不同的 `CUjitInputType`
+3. 后续不应再只做“换一种本地输出文件后缀”的试验，而应转向：
+   - 调研 cu-bridge runtime linker 对用户输入的真实支持矩阵
+   - 或探索是否需要使用 `mxcc` / `maca-link` 自身的设备链接流程，而不是继续强塞到当前 `cuLinkAddData` 路径
 
 ## 6. 一句话结论
 

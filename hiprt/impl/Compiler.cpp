@@ -68,6 +68,12 @@ bool isElfBinary( const std::string_view binary )
 		   binary[3] == 'F';
 }
 
+bool isFatbinBinary( const std::string_view binary )
+{
+	constexpr std::string_view ClangOffloadMagic = "__CLANG_OFFLOAD_";
+	return binary.size() >= ClangOffloadMagic.size() && binary.substr( 0, ClangOffloadMagic.size() ) == ClangOffloadMagic;
+}
+
 std::string getNvrtcCompiledBinary( nvrtcProgram prog )
 {
 	size_t ptxSize = 0;
@@ -144,7 +150,6 @@ std::string compileSourceToCubin(
 	std::filesystem::create_directories( tempDir );
 
 	const std::filesystem::path srcPath = tempDir / ( stem + ".cu" );
-	const std::filesystem::path outPath = tempDir / ( stem + ".cubin" );
 
 	{
 		std::ofstream file( srcPath, std::ios::out | std::ios::binary );
@@ -154,6 +159,7 @@ std::string compileSourceToCubin(
 	const std::string compiler = findCudaCompiler();
 	std::ostringstream cmd;
 	const bool useMxcc = std::filesystem::path( compiler ).filename() == "mxcc";
+	const std::filesystem::path outPath = tempDir / ( stem + ( useMxcc ? ".fatbin" : ".cubin" ) );
 	if ( useMxcc )
 	{
 		const std::string macaPath = Utility::getEnvVariable( "MACA_PATH" ).empty() ? "/opt/maca" : Utility::getEnvVariable( "MACA_PATH" );
@@ -162,7 +168,7 @@ std::string compileSourceToCubin(
 		const std::string offloadArch =
 			Utility::getEnvVariable( "MXCC_OFFLOAD_ARCH" ).empty() ? "xcore1000" : Utility::getEnvVariable( "MXCC_OFFLOAD_ARCH" );
 
-		cmd << quoteShellArg( compiler ) << " -O3 -std=c++17 -cubin -use-fast-math"
+		cmd << quoteShellArg( compiler ) << " -O3 -std=c++17 -fatbin -use-fast-math"
 			<< " -x maca -fgpu-rdc --include cuda_runtime.h -D__CUDACC__"
 			<< " -I" << quoteShellArg( Utility::getRootDir().string() )
 			<< " -I" << quoteShellArg( ( Utility::getRootDir() / "contrib/Orochi" ).string() )
@@ -408,11 +414,14 @@ void Compiler::buildKernelsFromBitcode(
 		{
 			const std::string customFuncBitcodeBinary =
 				buildFunctionTableBitcode( context, numGeomTypes, numRayTypes, funcNameSets );
-			const std::filesystem::path bcPath = getBitcodePath();
-			const CUjitInputType		  userBinaryType =
-				isElfBinary( bitcodeBinary ) ? CU_JIT_INPUT_CUBIN : CU_JIT_INPUT_PTX;
-			const CUjitInputType customBinaryType =
-				isElfBinary( customFuncBitcodeBinary ) ? CU_JIT_INPUT_CUBIN : CU_JIT_INPUT_PTX;
+				const std::filesystem::path bcPath = getBitcodePath();
+				const CUjitInputType userBinaryType = isElfBinary( bitcodeBinary )
+														 ? CU_JIT_INPUT_CUBIN
+														 : ( isFatbinBinary( bitcodeBinary ) ? CU_JIT_INPUT_FATBINARY : CU_JIT_INPUT_PTX );
+				const CUjitInputType customBinaryType = isElfBinary( customFuncBitcodeBinary )
+														   ? CU_JIT_INPUT_CUBIN
+														   : ( isFatbinBinary( customFuncBitcodeBinary ) ? CU_JIT_INPUT_FATBINARY
+																										 : CU_JIT_INPUT_PTX );
 
 			std::array<char, LinkLogSize> errorLog{};
 			std::array<char, LinkLogSize> infoLog{};

@@ -2375,10 +2375,13 @@ TEST_F( hiprtTest, SceneTraceKernelSingletonSrt )
 TEST_F( hiprtTest, BuildTraceKernelFromBitcode )
 {
 #if defined( HIPRT_CU_BRIDGE_RUNTIME_JIT_WORKAROUND ) && HIPRT_CU_BRIDGE_RUNTIME_JIT_WORKAROUND == 1
-	std::cout << "Skip BuildTraceKernelFromBitcode on cu-bridge: runtime bitcode link still rejects external "
-				 "mxcc/cu-bridge user binaries as invalid kernel image; precompiled workflow remains the supported path."
-			  << std::endl;
-	return;
+	if ( getEnvVariable( "HIPRT_FORCE_RUNTIME_BITCODE_TEST" ) != "1" )
+	{
+		std::cout << "Skip BuildTraceKernelFromBitcode on cu-bridge: runtime bitcode link still rejects external "
+					 "mxcc/cu-bridge user binaries as invalid kernel image; precompiled workflow remains the supported path."
+				  << std::endl;
+		return;
+	}
 #endif
 
 	hiprtContext ctxt;
@@ -2404,11 +2407,14 @@ TEST_F( hiprtTest, BuildTraceKernelFromBitcode )
 TEST_F( hiprtTest, BuildTraceKernelFromBitcodeWithCustomFuncTable )
 {
 #if defined( HIPRT_CU_BRIDGE_RUNTIME_JIT_WORKAROUND ) && HIPRT_CU_BRIDGE_RUNTIME_JIT_WORKAROUND == 1
-	std::cout << "Skip BuildTraceKernelFromBitcodeWithCustomFuncTable on cu-bridge: runtime bitcode link still rejects "
-				 "external mxcc/cu-bridge user binaries as invalid kernel image; precompiled workflow remains the "
-				 "supported path."
-			  << std::endl;
-	return;
+	if ( getEnvVariable( "HIPRT_FORCE_RUNTIME_BITCODE_TEST" ) != "1" )
+	{
+		std::cout << "Skip BuildTraceKernelFromBitcodeWithCustomFuncTable on cu-bridge: runtime bitcode link still rejects "
+					 "external mxcc/cu-bridge user binaries as invalid kernel image; precompiled workflow remains the "
+					 "supported path."
+				  << std::endl;
+		return;
+	}
 #endif
 
 	hiprtContext ctxt;

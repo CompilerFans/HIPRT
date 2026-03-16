@@ -112,6 +112,12 @@ std::string getNvrtcCompiledBinaryForTest( nvrtcProgram prog )
 	return {};
 }
 
+bool isFatbinBinaryForTest( const std::string_view binary )
+{
+	constexpr std::string_view magic = "__CLANG_OFFLOAD_";
+	return binary.size() >= magic.size() && binary.substr( 0, magic.size() ) == magic;
+}
+
 std::string quoteShellArgForTest( const std::string& arg )
 {
 	std::string escaped = "'";
@@ -126,9 +132,19 @@ std::string quoteShellArgForTest( const std::string& arg )
 
 std::string findCudaCompilerForTest()
 {
+	const std::string preferredExternal = getEnvVariable( "HIPRT_EXTERNAL_DEVICE_COMPILER" );
+	const bool		preferMxcc		  = preferredExternal == "mxcc";
+	const bool		preferCucc		  = preferredExternal == "cucc";
+	const bool		preferNvcc		  = preferredExternal == "nvcc";
+
 	const std::vector<std::string> candidates = {
+		preferMxcc ? "/opt/maca/mxgpu_llvm/bin/mxcc" : std::string(),
+		preferCucc ? "/opt/maca/tools/cu-bridge/bin/cucc" : std::string(),
+		preferNvcc ? "nvcc" : std::string(),
 		getEnvVariable( "HIPRT_CUDA_COMPILER" ),
 		getEnvVariable( "CUDACXX" ),
+		getEnvVariable( "CUBIN_COMPILER" ),
+		"/opt/maca/mxgpu_llvm/bin/mxcc",
 		getEnvVariable( "CUDA_PATH" ).empty() ? std::string() : getEnvVariable( "CUDA_PATH" ) + "/bin/nvcc",
 		"/root/cu-bridge/CUDA_DIR/bin/nvcc",
 		"/opt/maca/tools/cu-bridge/bin/cucc",
@@ -159,18 +175,36 @@ std::string compileSourceToCubinForTest(
 		( "hiprt-test-bitcode-" + std::to_string( std::chrono::steady_clock::now().time_since_epoch().count() ) );
 	std::filesystem::create_directories( tempDir );
 
-	const std::filesystem::path wrapperPath = tempDir / "trace_kernel.cu";
-	const std::filesystem::path cubinPath	 = tempDir / "trace_kernel.cubin";
-	{
-		std::ofstream file( wrapperPath, std::ios::out | std::ios::binary );
-		file << "#include \"" << absoluteSrcPath.string() << "\"\n";
-	}
+	const bool useMxcc = std::filesystem::path( compiler ).filename() == "mxcc";
+	const std::filesystem::path cubinPath = tempDir / ( useMxcc ? "trace_kernel.fatbin" : "trace_kernel.cubin" );
 
 	std::ostringstream cmd;
-	cmd << quoteShellArgForTest( compiler ) << " -x cu " << quoteShellArgForTest( wrapperPath.string() )
-		<< " -O3 -std=c++17 --device-c -cubin --use_fast_math"
-		<< " -I" << quoteShellArgForTest( absoluteRootPath.string() )
-		<< " -I" << quoteShellArgForTest( ( absoluteRootPath / "contrib/Orochi" ).string() );
+	if ( useMxcc )
+	{
+		const std::string macaPath = getEnvVariable( "MACA_PATH" ).empty() ? "/opt/maca" : getEnvVariable( "MACA_PATH" );
+		const std::string cudaPath =
+			getEnvVariable( "CUDA_PATH" ).empty() ? macaPath + "/tools/cu-bridge" : getEnvVariable( "CUDA_PATH" );
+		const std::string offloadArch =
+			getEnvVariable( "MXCC_OFFLOAD_ARCH" ).empty() ? "xcore1000" : getEnvVariable( "MXCC_OFFLOAD_ARCH" );
+
+		cmd << quoteShellArgForTest( compiler ) << " -O3 -std=c++17 -fatbin -use-fast-math"
+			<< " -x maca -fgpu-rdc --include cuda_runtime.h -D__CUDACC__"
+			<< " -I" << quoteShellArgForTest( absoluteRootPath.string() )
+			<< " -I" << quoteShellArgForTest( ( absoluteRootPath / "test" ).string() )
+			<< " -I" << quoteShellArgForTest( ( absoluteRootPath / "contrib/Orochi" ).string() )
+			<< " -I" << quoteShellArgForTest( cudaPath + "/include" )
+			<< " -I" << quoteShellArgForTest( macaPath + "/include" )
+			<< " --offload-arch=" << offloadArch
+			<< " " << quoteShellArgForTest( absoluteSrcPath.string() );
+	}
+	else
+	{
+		cmd << quoteShellArgForTest( compiler ) << " -x cu " << quoteShellArgForTest( absoluteSrcPath.string() )
+			<< " -O3 -std=c++17 --device-c -cubin --use_fast_math"
+			<< " -I" << quoteShellArgForTest( absoluteRootPath.string() )
+			<< " -I" << quoteShellArgForTest( ( absoluteRootPath / "test" ).string() )
+			<< " -I" << quoteShellArgForTest( ( absoluteRootPath / "contrib/Orochi" ).string() );
+	}
 	for ( const char* option : options )
 		cmd << " " << option;
 	cmd << " -o " << quoteShellArgForTest( cubinPath.string() );
