@@ -144,6 +144,7 @@ python3 precompile_bitcode.py \
 实验结果：
 
 - `--maca-link -fatbin` 能成功产出 `__CLANG_OFFLOAD_BUNDLE__`
+- 并且该 bundle 可以被当前 `cuModuleLoadData` 成功加载，随后可通过 `cuModuleGetFunction` 取到最小 kernel symbol
 - 这说明 `mxcc` 自身的设备链接流程是可工作的
 
 但同时也确认了一个现实约束：
@@ -156,7 +157,24 @@ python3 precompile_bitcode.py \
 所以目前可以明确：
 
 - **`maca-link` 是后续值得继续深入的方向**
-- **但还没有被证明能直接接入当前 HIPRT 的 runtime link / module load 入口**
+- **它已经被证明能接到“模块加载”这一步**
+- **当前未解决的是：怎样把它和 HIPRT 现有 runtime bitcode API / runtime link 入口拼起来**
+
+## 2.6 当前第三阶段结论
+
+现在已经可以把第三阶段结论写得更具体：
+
+1. `cuLinkAddData`
+   - 当前不接受 `mxcc` 产出的用户输入二进制
+
+2. `mxcc --maca-link -fatbin`
+   - 可以产出 bundle
+   - 该 bundle 可以被 `cuModuleLoadData` 直接加载
+
+因此最有希望的后续方向是：
+
+- **不要再试图把 `mxcc` 用户产物强塞给当前 `cuLinkAddData`**
+- **而是探索“离线先用 `mxcc --maca-link` 完成设备链接，运行时只做 `cuModuleLoadData`”的新路径**
 
 ## 3. 这轮确认的“本质缺陷”
 
