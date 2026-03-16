@@ -100,4 +100,24 @@ int getFunctionAttribute( Function function, CUfunction_attribute attribute )
 	checkOro( cuFuncGetAttribute( &value, attribute, function ) );
 	return value;
 }
+
+void init() { checkOro( cuInit( 0 ) ); }
+
+CUdevice getDevice( int deviceOrdinal )
+{
+	CUdevice device = 0;
+	checkOro( cuDeviceGet( &device, deviceOrdinal ) );
+	return device;
+}
+
+CUcontext retainPrimaryContext( CUdevice device )
+{
+	CUcontext context = nullptr;
+	checkOro( cuDevicePrimaryCtxRetain( &context, device ) );
+	return context;
+}
+
+void setCurrentContext( CUcontext context ) { checkOro( cuCtxSetCurrent( context ) ); }
+
+void releasePrimaryContext( CUdevice device ) { checkOro( cuDevicePrimaryCtxRelease( device ) ); }
 } // namespace hiprt::mc

@@ -63,6 +63,21 @@
 
 - 这些是“当前功能是否能工作”的主路径修复，不是风格调整。
 
+另外，当前还新增了 `McRuntime` 这一层运行时封装，已经覆盖：
+
+- module load / unload
+- get function
+- link create / add / complete / destroy
+- kernel launch
+- occupancy
+- function attribute
+- device init / primary context retain / set current / release
+
+这层封装的价值不只是“代码风格统一”，而是：
+
+- 为后续把 `maca-link` 路线正式接入主工作流提供稳定落点
+- 避免继续在 `Compiler.cpp` / `Kernel.cpp` / `Context.cpp` 中直接散落 raw `cu*` 调用
+
 ### 3.2 scene transform 修复
 
 关键文件：

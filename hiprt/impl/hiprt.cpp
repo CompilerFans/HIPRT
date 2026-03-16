@@ -26,13 +26,14 @@
 #include <hiprt/impl/Error.h>
 #include <hiprt/impl/Context.h>
 #include <hiprt/impl/Header.h>
+#include <hiprt/impl/McRuntime.h>
 #include <hiprt/impl/Utility.h>
 
 using namespace hiprt;
 
 hiprtError hiprtCreateContext( uint32_t hiprtApiVersion, const hiprtContextCreationInput& input, hiprtContext& contextOut )
 {
-	cuInit(0);
+	mc::init();
 	if ( hiprtApiVersion != HIPRT_API_VERSION ) return hiprtErrorInvalidApiVersion;
 
 	try

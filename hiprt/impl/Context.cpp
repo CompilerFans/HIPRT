@@ -28,6 +28,7 @@
 #include <hiprt/impl/Context.h>
 #include <hiprt/impl/Header.h>
 #include <hiprt/impl/LbvhBuilder.h>
+#include <hiprt/impl/McRuntime.h>
 #include <hiprt/impl/PlocBuilder.h>
 #include <hiprt/impl/SbvhBuilder.h>
 #include <hiprt/impl/Transform.h>
@@ -41,24 +42,23 @@ Context::Context( const hiprtContextCreationInput& input )
 
 	checkOro( cudaSetDevice( m_device ) );
 
-	CUdevice cuDevice = 0;
-	checkOro( cuDeviceGet( &cuDevice, m_device ) );
-	checkOro( cuDevicePrimaryCtxRetain( &m_ctxt, cuDevice ) );
-	checkOro( cuCtxSetCurrent( m_ctxt ) );
+	CUdevice cuDevice = mc::getDevice( m_device );
+	m_ctxt = mc::retainPrimaryContext( cuDevice );
+	mc::setCurrentContext( m_ctxt );
 }
 
 Context::~Context()
 {
 	if ( m_ctxt == nullptr ) return;
 
-	cuCtxSetCurrent( m_ctxt );
+	mc::setCurrentContext( m_ctxt );
 	m_compiler.clear();
-	cuCtxSetCurrent( nullptr );
+	mc::setCurrentContext( nullptr );
 
 	CUdevice cuDevice = 0;
 	if ( cuDeviceGet( &cuDevice, m_device ) == CUDA_SUCCESS )
 	{
-		cuDevicePrimaryCtxRelease( cuDevice );
+		mc::releasePrimaryContext( cuDevice );
 	}
 }
 

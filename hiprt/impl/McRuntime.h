@@ -46,4 +46,9 @@ void launchKernel(
 	void** args );
 void occupancyMaxPotentialBlockSize( int* minGridSize, int* blockSize, Function function );
 int getFunctionAttribute( Function function, CUfunction_attribute attribute );
+void init();
+CUdevice getDevice( int deviceOrdinal );
+CUcontext retainPrimaryContext( CUdevice device );
+void setCurrentContext( CUcontext context );
+void releasePrimaryContext( CUdevice device );
 } // namespace hiprt::mc
