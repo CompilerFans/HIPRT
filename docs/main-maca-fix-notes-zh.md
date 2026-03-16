@@ -70,6 +70,46 @@
 - 当前 `main` 可见的完整非性能测试集：
   - `39 / 39` 通过
 
+补充验证：
+
+- 在相同代码状态下，再次使用：
+  - `cmake_maca`
+  - `make_maca`
+  - `HIPRT_ENABLE_RUNTIME_KERNEL_CACHE=ON`
+  - `HIPRT_DISABLE_RUNTIME_KERNEL_CACHE=0`
+- 对 `main` 当前可见的完整非性能测试集做串行回归
+- 结果同样为：
+  - `39 / 39` 通过
+
+因此，当前 `main` 分支上的 MACA 修复不仅在“关闭 cache 的调试口径”下有效，在“打开 cache 的常规口径”下也已验证通过。
+
+## 测试移植后的验证结果
+
+随后已将 `maca_dev` 上从 30+ 扩展到 50+ 的那批诊断 / 回归测试迁移到 `main`，主要涉及：
+
+- scene transform / traversal 诊断
+- recreate / lifecycle 诊断
+- batch geometry 诊断
+- focused no-reference 回归测试
+
+迁移后，当前 `main` 可见的完整非性能测试集扩大为：
+
+- `62 / 62`
+
+并且已经在以下两种口径下分别完成串行回归：
+
+1. 调试口径
+   - `HIPRT_ENABLE_RUNTIME_KERNEL_CACHE=OFF`
+   - `HIPRT_DISABLE_RUNTIME_KERNEL_CACHE=1`
+   - 结果：`62 / 62 passed`
+
+2. 常规口径
+   - `HIPRT_ENABLE_RUNTIME_KERNEL_CACHE=ON`
+   - `HIPRT_DISABLE_RUNTIME_KERNEL_CACHE=0`
+   - 结果：`62 / 62 passed`
+
+这说明当前 `main` 上的最小必要修复，不仅能承接原始主线测试，也已经能承接从 `maca_dev` 迁移回来的增强测试集。
+
 ## 备注
 
 这份结论文件只记录 `main` 当前已经完成的最小修复与验证结果。

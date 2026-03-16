@@ -106,7 +106,7 @@ class hiprtTest : public ::testing::Test
 	bool readSourceCode(
 		const std::filesystem::path&					  srcPath,
 		std::string&									  src,
-		std::optional<std::vector<std::filesystem::path>> includes = std::nullopt );
+		std::vector<std::filesystem::path>*			  includes = nullptr );
 
 	void validateAndWriteImage(
 		const std::filesystem::path& imgPath, uint8_t* data, std::optional<std::filesystem::path> refFilename = std::nullopt );
@@ -134,6 +134,20 @@ class hiprtTest : public ::testing::Test
 		std::optional<std::vector<hiprtFuncNameSet>> funcNameSets = std::nullopt,
 		uint32_t									 numGeomTypes = 0u,
 		uint32_t									 numRayTypes  = 1u );
+
+	void createCornellTriangleMeshPrimitive(
+		uint32_t triangleCount, hiprtTriangleMeshPrimitive& mesh, std::vector<void*>& garbageCollector );
+
+	void createIndexedQuadStripTriangleMeshPrimitive(
+		uint32_t quadCount, hiprtTriangleMeshPrimitive& mesh, std::vector<void*>& garbageCollector );
+
+	void attachSequentialTrianglePairs(
+		uint32_t pairCount, hiprtTriangleMeshPrimitive& mesh, std::vector<void*>& garbageCollector );
+
+	void destroyGarbage( std::vector<void*>& garbageCollector );
+
+	void buildBatchGeometriesBuildOnly(
+		const std::vector<hiprtGeometryBuildInput>& geomInputs, const hiprtBuildOptions& options );
 
 	void launchKernel( cudaFunction_t func, uint32_t nx, uint32_t ny, void** args, uint32_t sharedMemoryBytes = 0 );
 	void launchKernel(
@@ -169,7 +183,7 @@ class hiprtTest : public ::testing::Test
 	}
 
 	template <typename T>
-	void copyHtoDAsync( T* dst, const T* src, size_t n, cudaStream_t stream )
+	void copyHtoDAsync( T* dst, T* src, size_t n, cudaStream_t stream )
 	{
 		checkOro( cuMemcpyHtoDAsync( reinterpret_cast<size_t>( dst ), src, sizeof( T ) * n, stream ) );
 	}

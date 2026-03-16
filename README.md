@@ -45,6 +45,27 @@ This is the main repository for the source code for HIPRT.
 
 For a concise Chinese description of the current build and migration boundaries, see `docs/cuda-only-build-zh.md`.
 
+## Current Main MACA Status
+
+For the current `main` branch on `MACA + cu-bridge`:
+
+- The local non-performance test suite currently visible on `main` passes `62 / 62`.
+- This result has been verified both with runtime kernel disk cache disabled and with runtime kernel disk cache enabled.
+- The cache-enabled verification used:
+  - `cmake_maca`
+  - `make_maca`
+  - `HIPRT_ENABLE_RUNTIME_KERNEL_CACHE=ON`
+  - `HIPRT_DISABLE_RUNTIME_KERNEL_CACHE=0`
+
+This `62 / 62` suite includes the additional diagnostics and regression tests previously kept on `maca_dev`, such as:
+
+- scene transform / traversal diagnostics
+- recreate / lifecycle diagnostics
+- batch geometry diagnostics
+- focused no-reference regressions used as red/green guards
+
+For the detailed Chinese notes of the current `main`-branch MACA fixes and validation scope, see `docs/main-maca-fix-notes-zh.md`.
+
 ## Cloning and Building 
 
 1. `git clone https://github.com/GPUOpen-LibrariesAndSDKs/HIPRT.git`
