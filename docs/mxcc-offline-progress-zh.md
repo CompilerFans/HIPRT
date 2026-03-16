@@ -190,7 +190,25 @@ python3 precompile_bitcode.py \
 
 - **`maca-link` 路线不仅能承载空 probe kernel，也已经能承载包含 HIPRT 设备遍历实现的真实 tutorial/test 级别 kernel。**
 
-## 2.7 当前第三阶段结论
+### 2.7 工程化结果
+
+为了避免第三阶段只停留在一次性命令实验，又新增了仓库内脚本：
+
+- `scripts/bitcodes/build_mxcc_trace_bundle.py`
+
+用途：
+
+- 输入一份用户 kernel 源文件
+- 通过：
+  1. `mxcc -fgpu-rdc -c`
+  2. `mxcc --maca-link -fatbin`
+  生成一个可直接加载的 MACA bundle
+
+它的目标不是替代当前主构建入口，而是：
+
+- 为后续“离线先设备链接，运行时只模块加载”的路径提供固定入口
+
+## 2.8 当前第三阶段结论
 
 现在已经可以把第三阶段结论写得更具体：
 
