@@ -1,21 +1,41 @@
 # HIPRT
 
-## 中文说明
+## 项目说明
 
-HIPRT 当前仓库保留 `HIPRT` 项目名称以及 `hiprt*` 公开 API 命名，但底层实现已经收敛为 CUDA-only。
+当前仓库保留 `HIPRT` 项目名称以及 `hiprt*` 对外 API 命名，但主实现已经围绕 **CUDA-only + MACA/cu-bridge** 路径完成重构与验证。
 
-- 保留：`hiprt.h`、`hiprtew.h`、`hiprtCreateContext` 等公开接口
-- 去除：AMD HIP runtime、ROCm toolchain、`hipcc`、运行时 HIP 动态加载路径
-- 当前构建方式：仅支持 `CMake + CUDA Toolkit`
+当前状态：
 
-快速构建：
+- 保留：
+  - `hiprt.h`
+  - `hiprtew.h`
+  - `hiprtCreateContext`
+  - `hiprtBuildTraceKernels`
+  - `hiprtBuildTraceKernelsFromLinkedBundle`
+- 去除：
+  - AMD HIP runtime 主路径
+  - ROCm toolchain 依赖
+  - 历史 HIP loader 主路径
+- 当前主推荐构建：
+  - 原生 CUDA：`CMake + CUDA Toolkit`
+  - MACA：`cmake_maca + make_maca`
+
+## 快速构建
+
+原生 CUDA：
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release -j
 ```
 
-一键脚本：
+MACA/cu-bridge：
+
+```bash
+./scripts/build_maca_cucc.sh
+```
+
+常用一键脚本：
 
 ```bash
 ./scripts/build.sh
@@ -23,7 +43,50 @@ cmake --build build --config Release -j
 ./scripts/unittest_maca_cucc_precompiled.sh
 ```
 
-如需更完整的中文改造说明，请查看 `docs/cuda-only-build-zh.md`。
+更完整的中文说明：
+
+- `docs/cuda-only-build-zh.md`
+- `docs/bitcode-status-zh.md`
+- `docs/main-maca-fix-notes-zh.md`
+- `docs/main-vs-upstream-classification-zh.md`
+- `docs/mxcc-offline-progress-zh.md`
+- `docs/mxcc-offline-plan-zh.md`
+
+## 当前能力概览
+
+- `MACA + cu-bridge` 主路径已完成基础功能验证
+- `bitcode / precompile / bake_kernel` 已恢复
+- source-based 官方 API 在 `mxcc` 路径下，默认已切到当前已验证的 `maca-link bundle` 行为
+- `linked bundle` 也提供了显式 public API：
+  - `hiprtBuildTraceKernelsFromLinkedBundle(...)`
+
+## 关键示例效果
+
+以下图片来自当前仓库联动 `HIPRTSDK` 跑通后的真实结果：
+
+### 1. Geometry Intersection
+
+![Geometry Intersection](docs/images/sdk_showcase/01_geom_intersection.png)
+
+### 2. Custom Intersection
+
+![Custom Intersection](docs/images/sdk_showcase/03_custom_intersection.png)
+
+### 3. Custom BVH Import
+
+![Custom BVH Import](docs/images/sdk_showcase/07_custom_bvh_import.png)
+
+### 4. Cutout / Filter
+
+![Cutout](docs/images/sdk_showcase/12_cutout.png)
+
+### 5. Shadow Ray
+
+![Shadow Ray](docs/images/sdk_showcase/18_shadow_ray.png)
+
+### 6. Primary Ray
+
+![Primary Ray Normal](docs/images/sdk_showcase/19_primary_ray_normal.png)
 
 ## About 
 HIP RT is a low-level ray tracing library. This repository now targets a CUDA/NVRTC runtime path and no longer depends on HIP toolchains, HIP runtime loaders, or compatibility layers.
