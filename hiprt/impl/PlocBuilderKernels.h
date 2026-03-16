@@ -175,11 +175,11 @@ extern "C" __global__ void __launch_bounds__( PlocMainBlockSize ) HPloc(
 
 		const uint32_t size	 = j - i;
 		const bool	   last	 = active && size == primCount;
-		uint64_t	   merge = hiprt::ballot( ( active && size > WarpSize / 2 ) || last );
+		LaneMask	   merge = hiprt::ballot( ( active && size > WarpSize / 2 ) || last );
 
 		while ( merge )
 		{
-			const uint32_t currentLane = __ffsll( static_cast<unsigned long long>( merge ) ) - 1;
+			const uint32_t currentLane = hiprt::laneMaskFirstSet( merge );
 			merge &= merge - 1;
 
 			const uint32_t current_i   = shfl( i, currentLane );
@@ -192,12 +192,12 @@ extern "C" __global__ void __launch_bounds__( PlocMainBlockSize ) HPloc(
 
 			uint32_t leftIndex = InvalidValue;
 			if ( laneIndex < numLeft ) leftIndex = nodeIndices[current_i + laneIndex];
-			uint32_t numValidLeft = __popcll( hiprt::ballot( leftIndex != InvalidValue ) );
+			uint32_t numValidLeft = hiprt::laneMaskPopCount( hiprt::ballot( leftIndex != InvalidValue ) );
 			numLeft				  = min( numLeft, numValidLeft );
 
 			uint32_t rightIndex = InvalidValue;
 			if ( laneIndex < numRight ) rightIndex = nodeIndices[current_s + laneIndex];
-			uint32_t numValidRight = __popcll( hiprt::ballot( rightIndex != InvalidValue ) );
+			uint32_t numValidRight = hiprt::laneMaskPopCount( hiprt::ballot( rightIndex != InvalidValue ) );
 			numRight			   = min( numRight, numValidRight );
 
 			if ( laneIndex < numLeft ) nodeIndicesWarp[laneIndex] = leftIndex;
@@ -279,9 +279,9 @@ extern "C" __global__ void __launch_bounds__( PlocMainBlockSize ) HPloc(
 					}
 				}
 
-				const uint64_t warpBallot = hiprt::ballot( nodeIndex != InvalidValue ); // warp sync'd here
-				const uint32_t newIndex	  = __popcll( warpBallot & ( ( 1ull << laneIndex ) - 1ull ) );
-				numberOfClusters		  = __popcll( warpBallot );
+				const LaneMask warpBallot = hiprt::ballot( nodeIndex != InvalidValue ); // warp sync'd here
+				const uint32_t newIndex	  = hiprt::laneMaskLowerCount( warpBallot, laneIndex );
+				numberOfClusters		  = hiprt::laneMaskPopCount( warpBallot );
 
 				if ( nodeIndex != InvalidValue )
 				{
