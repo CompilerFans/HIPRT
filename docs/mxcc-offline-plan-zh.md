@@ -157,6 +157,16 @@
 - 改 `Compiler.cpp`
 - 让 runtime fallback 优先支持 `mxcc`
 
+当前已完成到：
+
+- `findCudaCompiler()` 已支持 `HIPRT_EXTERNAL_DEVICE_COMPILER`
+- 可显式指定：
+  - `mxcc`
+  - `cucc`
+  - `nvcc`
+
+也就是说，runtime fallback 现在已经具备“优先走 mxcc”的入口条件。
+
 ### 阶段 4
 
 - 在 `test/` 或 SDK 场景上补验证

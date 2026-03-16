@@ -105,9 +105,19 @@ std::string quoteShellArg( const std::string& arg )
 
 std::string findCudaCompiler()
 {
+	const std::string preferredExternal = Utility::getEnvVariable( "HIPRT_EXTERNAL_DEVICE_COMPILER" );
+	const bool		  preferMxcc		  = preferredExternal == "mxcc";
+	const bool		  preferCucc		  = preferredExternal == "cucc";
+	const bool		  preferNvcc		  = preferredExternal == "nvcc";
+
 	const std::vector<std::string> candidates = {
+		preferMxcc ? "/opt/maca/mxgpu_llvm/bin/mxcc" : std::string(),
+		preferCucc ? "/opt/maca/tools/cu-bridge/bin/cucc" : std::string(),
+		preferNvcc ? "nvcc" : std::string(),
 		Utility::getEnvVariable( "HIPRT_CUDA_COMPILER" ),
+		Utility::getEnvVariable( "CUBIN_COMPILER" ),
 		Utility::getEnvVariable( "CUDACXX" ),
+		"/opt/maca/mxgpu_llvm/bin/mxcc",
 		Utility::getEnvVariable( "CUDA_PATH" ).empty() ? std::string() : Utility::getEnvVariable( "CUDA_PATH" ) + "/bin/nvcc",
 		"/root/cu-bridge/CUDA_DIR/bin/nvcc",
 		"/opt/maca/tools/cu-bridge/bin/cucc",
@@ -143,10 +153,31 @@ std::string compileSourceToCubin(
 
 	const std::string compiler = findCudaCompiler();
 	std::ostringstream cmd;
-	cmd << quoteShellArg( compiler ) << " -x cu " << quoteShellArg( srcPath.string() )
-		<< " -O3 -std=c++17 --device-c -cubin --use_fast_math"
-		<< " -I" << quoteShellArg( Utility::getRootDir().string() )
-		<< " -I" << quoteShellArg( ( Utility::getRootDir() / "contrib/Orochi" ).string() );
+	const bool useMxcc = std::filesystem::path( compiler ).filename() == "mxcc";
+	if ( useMxcc )
+	{
+		const std::string macaPath = Utility::getEnvVariable( "MACA_PATH" ).empty() ? "/opt/maca" : Utility::getEnvVariable( "MACA_PATH" );
+		const std::string cudaPath =
+			Utility::getEnvVariable( "CUDA_PATH" ).empty() ? macaPath + "/tools/cu-bridge" : Utility::getEnvVariable( "CUDA_PATH" );
+		const std::string offloadArch =
+			Utility::getEnvVariable( "MXCC_OFFLOAD_ARCH" ).empty() ? "xcore1000" : Utility::getEnvVariable( "MXCC_OFFLOAD_ARCH" );
+
+		cmd << quoteShellArg( compiler ) << " -O3 -std=c++17 -cubin -use-fast-math"
+			<< " -x maca -fgpu-rdc --include cuda_runtime.h -D__CUDACC__"
+			<< " -I" << quoteShellArg( Utility::getRootDir().string() )
+			<< " -I" << quoteShellArg( ( Utility::getRootDir() / "contrib/Orochi" ).string() )
+			<< " -I" << quoteShellArg( cudaPath + "/include" )
+			<< " -I" << quoteShellArg( macaPath + "/include" )
+			<< " --offload-arch=" << offloadArch
+			<< " " << quoteShellArg( srcPath.string() );
+	}
+	else
+	{
+		cmd << quoteShellArg( compiler ) << " -x cu " << quoteShellArg( srcPath.string() )
+			<< " -O3 -std=c++17 --device-c -cubin --use_fast_math"
+			<< " -I" << quoteShellArg( Utility::getRootDir().string() )
+			<< " -I" << quoteShellArg( ( Utility::getRootDir() / "contrib/Orochi" ).string() );
+	}
 	for ( const auto& option : extraOptions )
 		cmd << " " << option;
 	cmd << " -o " << quoteShellArg( outPath.string() );
