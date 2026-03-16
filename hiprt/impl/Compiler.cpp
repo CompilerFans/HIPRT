@@ -32,6 +32,7 @@
 #include <hiprt/impl/Compiler.h>
 #include <hiprt/impl/Context.h>
 #include <hiprt/impl/Error.h>
+#include <hiprt/impl/McRuntime.h>
 #include <hiprt/impl/Utility.h>
 
 namespace hiprt
@@ -210,7 +211,7 @@ Compiler::~Compiler()
 void Compiler::clear()
 {
 	for ( auto& module : m_moduleCache )
-		checkOro( cuModuleUnload( module.second ) );
+		mc::unloadModule( module.second );
 	m_moduleCache.clear();
 	m_kernelCache.clear();
 }
@@ -360,15 +361,13 @@ void Compiler::buildKernels(
 			if ( useDiskCache ) cacheBinaryToFile( binary, cacheName );
 		}
 
-		checkOro( cuModuleLoadData( &module, binary.data() ) );
-		m_moduleCache[moduleName.string()] = module;
+			module = mc::loadModule( binary.data() );
+			m_moduleCache[moduleName.string()] = module;
 	}
 
 	for ( const char* funcName : funcNames )
 	{
-		CUfunction func = nullptr;
-		checkOro( cuModuleGetFunction( &func, module, funcName ) );
-		functions.push_back( func );
+		functions.push_back( mc::getFunction( module, funcName ) );
 	}
 }
 
@@ -415,13 +414,14 @@ void Compiler::buildKernelsFromBitcode(
 			const std::string customFuncBitcodeBinary =
 				buildFunctionTableBitcode( context, numGeomTypes, numRayTypes, funcNameSets );
 				const std::filesystem::path bcPath = getBitcodePath();
-				const CUjitInputType userBinaryType = isElfBinary( bitcodeBinary )
-														 ? CU_JIT_INPUT_CUBIN
-														 : ( isFatbinBinary( bitcodeBinary ) ? CU_JIT_INPUT_FATBINARY : CU_JIT_INPUT_PTX );
-				const CUjitInputType customBinaryType = isElfBinary( customFuncBitcodeBinary )
-														   ? CU_JIT_INPUT_CUBIN
-														   : ( isFatbinBinary( customFuncBitcodeBinary ) ? CU_JIT_INPUT_FATBINARY
-																										 : CU_JIT_INPUT_PTX );
+				const mc::LinkInputType userBinaryType = isElfBinary( bitcodeBinary )
+															? mc::LinkInputType::Cubin
+															: ( isFatbinBinary( bitcodeBinary ) ? mc::LinkInputType::Fatbinary
+																							   : mc::LinkInputType::Ptx );
+				const mc::LinkInputType customBinaryType = isElfBinary( customFuncBitcodeBinary )
+															  ? mc::LinkInputType::Cubin
+															  : ( isFatbinBinary( customFuncBitcodeBinary ) ? mc::LinkInputType::Fatbinary
+																											 : mc::LinkInputType::Ptx );
 
 			std::array<char, LinkLogSize> errorLog{};
 			std::array<char, LinkLogSize> infoLog{};
@@ -444,74 +444,52 @@ void Compiler::buildKernelsFromBitcode(
 				reinterpret_cast<void*>( static_cast<uintptr_t>( 1 ) ),
 			};
 
-			CUlinkState linkState = nullptr;
-			checkOro( cuLinkCreate(
-				static_cast<unsigned int>( sizeof( options ) / sizeof( options[0] ) ), options, optionValues, &linkState ) );
+				mc::LinkState linkState = mc::createLinkState(
+					static_cast<unsigned int>( sizeof( options ) / sizeof( options[0] ) ), options, optionValues );
 
-			const auto throwLinkError = [&]( const std::string& prefix ) {
-				std::string message = prefix;
-				if ( errorLog[0] != '\0' ) message += "\n" + std::string( errorLog.data() );
-				if ( infoLog[0] != '\0' ) message += "\n" + std::string( infoLog.data() );
-				checkOro( cuLinkDestroy( linkState ) );
-				throw std::runtime_error( message );
-			};
+				const auto throwLinkError = [&]( const std::string& prefix ) {
+					std::string message = prefix;
+					if ( errorLog[0] != '\0' ) message += "\n" + std::string( errorLog.data() );
+					if ( infoLog[0] != '\0' ) message += "\n" + std::string( infoLog.data() );
+					mc::destroyLinkState( linkState );
+					throw std::runtime_error( message );
+				};
 
-			if ( cuLinkAddFile( linkState, CU_JIT_INPUT_FATBINARY, const_cast<char*>( bcPath.string().c_str() ), 0, nullptr, nullptr ) !=
-				 CUDA_SUCCESS )
-			{
-				throwLinkError( "Failed to add HIPRT precompiled fatbin: " + bcPath.string() );
-			}
+				try
+				{
+					mc::addFile( linkState, mc::LinkInputType::Fatbinary, bcPath );
+					mc::addData( linkState, userBinaryType, bitcodeBinary, "user_bitcode" );
+					mc::addData( linkState, customBinaryType, customFuncBitcodeBinary, "hiprt_custom_funcs" );
+				}
+				catch ( const std::exception& )
+				{
+					throwLinkError( "Failed to add inputs for bitcode linking" );
+				}
 
-			if ( cuLinkAddData(
-					 linkState,
-					 userBinaryType,
-					 const_cast<char*>( bitcodeBinary.data() ),
-					 bitcodeBinary.size(),
-					 const_cast<char*>( "user_bitcode" ),
-					 0,
-					 nullptr,
-					 nullptr )
-				 != CUDA_SUCCESS )
-			{
-				throwLinkError( "Failed to add user PTX for bitcode linking" );
-			}
+				void*  linkedImage = nullptr;
+				size_t linkedSize  = 0;
+				try
+				{
+					mc::completeLink( linkState, &linkedImage, &linkedSize );
+				}
+				catch ( const std::exception& )
+				{
+					throwLinkError( "Failed to complete bitcode linking" );
+				}
 
-			if ( cuLinkAddData(
-					 linkState,
-					 customBinaryType,
-					 const_cast<char*>( customFuncBitcodeBinary.data() ),
-					 customFuncBitcodeBinary.size(),
-					 const_cast<char*>( "hiprt_custom_funcs" ),
-					 0,
-					 nullptr,
-					 nullptr )
-				 != CUDA_SUCCESS )
-			{
-				throwLinkError( "Failed to add HIPRT custom-function PTX for bitcode linking" );
-			}
-
-			void*  linkedImage = nullptr;
-			size_t linkedSize  = 0;
-			if ( cuLinkComplete( linkState, &linkedImage, &linkedSize ) != CUDA_SUCCESS )
-			{
-				throwLinkError( "Failed to complete bitcode linking" );
-			}
-
-			binary.assign( reinterpret_cast<const char*>( linkedImage ), linkedSize );
-			checkOro( cuLinkDestroy( linkState ) );
+				binary.assign( reinterpret_cast<const char*>( linkedImage ), linkedSize );
+				mc::destroyLinkState( linkState );
 
 			if ( useDiskCache ) cacheBinaryToFile( binary, diskCacheName );
 		}
 
-		checkOro( cuModuleLoadData( &module, binary.data() ) );
-		m_moduleCache[cacheKey] = module;
+			module = mc::loadModule( binary.data() );
+			m_moduleCache[cacheKey] = module;
 	}
 
 	for ( const char* funcName : funcNames )
 	{
-		CUfunction func = nullptr;
-		checkOro( cuModuleGetFunction( &func, module, funcName ) );
-		functions.push_back( func );
+		functions.push_back( mc::getFunction( module, funcName ) );
 	}
 }
 
