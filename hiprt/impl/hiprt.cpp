@@ -760,6 +760,46 @@ hiprtError hiprtBuildTraceKernelsFromBitcode(
 	return hiprtSuccess;
 }
 
+hiprtError hiprtBuildTraceKernelsFromLinkedBundle(
+	hiprtContext	  context,
+	uint32_t		  numFunctions,
+	const char**	  functionNames,
+	const char*		  moduleName,
+	const char*		  bundleBinary,
+	size_t			  bundleBinarySize,
+	hiprtApiFunction* functionsOut,
+	hiprtApiModule*	  moduleOut,
+	bool			  cache )
+{
+	if ( !context || numFunctions == 0 || functionNames == nullptr || functionsOut == nullptr || moduleName == nullptr ||
+		 bundleBinary == nullptr || bundleBinarySize == 0 )
+		return hiprtErrorInvalidParameter;
+
+	try
+	{
+		std::vector<const char*> funcNames;
+		for ( uint32_t i = 0; i < numFunctions; ++i )
+			funcNames.push_back( functionNames[i] );
+
+		std::string_view binary( bundleBinary, bundleBinarySize );
+		std::vector<CUfunction> functions;
+		CUmodule				 module = nullptr;
+		reinterpret_cast<Context*>( context )->buildKernelsFromBundle( funcNames, moduleName, binary, functions, module, cache );
+
+		for ( uint32_t i = 0; i < numFunctions; ++i )
+			functionsOut[i] = reinterpret_cast<hiprtApiFunction>( functions[i] );
+
+		if ( moduleOut != nullptr ) *moduleOut = reinterpret_cast<hiprtApiModule>( module );
+	}
+	catch ( std::exception& e )
+	{
+		reinterpret_cast<Context*>( context )->logError( e.what() );
+		return hiprtErrorInternal;
+	}
+
+	return hiprtSuccess;
+}
+
 hiprtError hiprtSetCacheDirPath( hiprtContext context, const char* path )
 {
 	if ( !context ) return hiprtErrorInvalidParameter;

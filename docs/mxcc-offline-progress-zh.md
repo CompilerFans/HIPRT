@@ -208,7 +208,23 @@ python3 precompile_bitcode.py \
 
 - 为后续“离线先设备链接，运行时只模块加载”的路径提供固定入口
 
-## 2.8 当前第三阶段结论
+### 2.8 对外 API 接入
+
+当前已经把这条 bundle 路线接到 HIPRT 对外接口中：
+
+- `hiprtBuildTraceKernelsFromLinkedBundle(...)`
+
+这个 API 的定位非常明确：
+
+- 输入的是一个已经离线链接好的 bundle
+- 不再要求运行时再走 `cuLinkAddData`
+- 运行时只做：
+  - 模块加载
+  - symbol 获取
+
+这为后续正式把 `maca-link` 路线接入 HIPRT 主工作流提供了 API 落点。
+
+## 2.9 当前第三阶段结论
 
 现在已经可以把第三阶段结论写得更具体：
 

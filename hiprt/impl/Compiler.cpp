@@ -493,6 +493,33 @@ void Compiler::buildKernelsFromBitcode(
 	}
 }
 
+void Compiler::buildKernelsFromBundle(
+	const std::vector<const char*>& funcNames,
+	const std::filesystem::path&	moduleName,
+	const std::string_view			bundleBinary,
+	std::vector<CUfunction>&		functions,
+	CUmodule&						module,
+	bool							cache )
+{
+	const std::string cacheKey = "bundle:" + moduleName.string() + ":" +
+								 Utility::format( "%08x", Utility::hashString( std::string( bundleBinary ) ) );
+
+	std::lock_guard<std::mutex> lock( m_moduleMutex );
+	auto						cacheEntry = m_moduleCache.find( cacheKey );
+	if ( cache && cacheEntry != m_moduleCache.end() )
+	{
+		module = cacheEntry->second;
+	}
+	else
+	{
+		module = mc::loadModule( bundleBinary.data() );
+		m_moduleCache[cacheKey] = module;
+	}
+
+	for ( const char* funcName : funcNames )
+		functions.push_back( mc::getFunction( module, funcName ) );
+}
+
 void Compiler::setCacheDir( const std::filesystem::path& cacheDirectory )
 {
 	if ( !cacheDirectory.empty() ) m_cacheDirectory = cacheDirectory;

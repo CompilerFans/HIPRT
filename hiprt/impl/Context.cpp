@@ -952,6 +952,17 @@ void Context::buildKernelsFromBitcode(
 		*this, funcNames, moduleName, bitcodeBinary, numGeomTypes, numRayTypes, funcNameSets, functions, cache );
 }
 
+void Context::buildKernelsFromBundle(
+	const std::vector<const char*>& funcNames,
+	const std::filesystem::path&	moduleName,
+	const std::string_view			bundleBinary,
+	std::vector<CUfunction>&		functions,
+	CUmodule&						module,
+	bool							cache )
+{
+	m_compiler.buildKernelsFromBundle( funcNames, moduleName, bundleBinary, functions, module, cache );
+}
+
 void Context::setCacheDir( const std::filesystem::path& path ) { m_compiler.setCacheDir( path ); }
 
 uint32_t Context::getSMCount() const

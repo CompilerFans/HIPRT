@@ -582,6 +582,23 @@ HIPRT_API hiprtError hiprtBuildTraceKernelsFromBitcode(
 	hiprtApiFunction* functionsOut,
 	bool			  cache );
 
+/** \brief Builds trace kernels directly from a pre-linked device bundle.
+ *
+ * This entry bypasses runtime `cuLinkAddData` and expects `bundleBinary` to
+ * already contain a loadable module image, for example a bundle produced by
+ * `mxcc --maca-link -fatbin`.
+ */
+HIPRT_API hiprtError hiprtBuildTraceKernelsFromLinkedBundle(
+	hiprtContext	  context,
+	uint32_t		  numFunctions,
+	const char**	  funcNames,
+	const char*		  moduleName,
+	const char*		  bundleBinary,
+	size_t			  bundleBinarySize,
+	hiprtApiFunction* functionsOut,
+	hiprtApiModule*	  moduleOut,
+	bool			  cache );
+
 /** \brief Setting log level.
  * \param context The HIPRT API context.
  * \param path A user defined path to cache kernels.

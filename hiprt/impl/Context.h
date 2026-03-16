@@ -130,6 +130,14 @@ class Context
 		std::vector<CUfunction>&			 functions,
 		bool								 cache );
 
+	void buildKernelsFromBundle(
+		const std::vector<const char*>& funcNames,
+		const std::filesystem::path&	moduleName,
+		const std::string_view			bundleBinary,
+		std::vector<CUfunction>&		functions,
+		CUmodule&						module,
+		bool							cache );
+
 	void setCacheDir( const std::filesystem::path& path );
 
 	void setLogLevel( hiprtLogLevel level ) { m_logger.setLevel( level ); }
