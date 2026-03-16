@@ -175,6 +175,21 @@
   - precompiled fatbin
   - custom func table 场景
 
+当前阶段 4 的基础设施已经具备：
+
+- `scripts/bitcodes/build_mxcc_trace_bundle.py`
+- `scripts/bitcodes/mxcc_maca_link_probe.sh`
+- `scripts/bitcodes/mxcc_maca_link_trace_probe.sh`
+
+并且已经验证：
+
+- `maca-link` 产物可被 `cuModuleLoadData` 直接加载
+- `TraceKernel/CutoutKernel` 级别的 bundle 也成立
+
+因此后续阶段 4 的重点不再是“继续写 probe”，而是：
+
+- 评估是否把这条 bundle 路线正式接到 HIPRT 的一条主工作流中
+
 ## 7. 当前最现实的判断
 
 如果现在只问一句：
