@@ -73,4 +73,31 @@ void unloadModule( Module module )
 {
 	if ( module != nullptr ) checkOro( cuModuleUnload( module ) );
 }
+
+void launchKernel(
+	Function function,
+	uint32_t gx,
+	uint32_t gy,
+	uint32_t gz,
+	uint32_t bx,
+	uint32_t by,
+	uint32_t bz,
+	uint32_t sharedMemBytes,
+	cudaStream_t stream,
+	void** args )
+{
+	checkOro( cuLaunchKernel( function, gx, gy, gz, bx, by, bz, sharedMemBytes, stream, args, nullptr ) );
+}
+
+void occupancyMaxPotentialBlockSize( int* minGridSize, int* blockSize, Function function )
+{
+	checkOro( cuOccupancyMaxPotentialBlockSize( minGridSize, blockSize, function, 0, 0, 0 ) );
+}
+
+int getFunctionAttribute( Function function, CUfunction_attribute attribute )
+{
+	int value = 0;
+	checkOro( cuFuncGetAttribute( &value, attribute, function ) );
+	return value;
+}
 } // namespace hiprt::mc
