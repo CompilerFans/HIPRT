@@ -76,6 +76,34 @@ python3 precompile_bitcode.py \
 
 - 对当前 precompiled trace-kernel 路径，`mxcc` 已经能作为可用后端
 
+### 2.3 runtime cubin fallback 的第二阶段验证
+
+已做验证：
+
+- 在主仓 runtime-bitcode 测试中显式设置：
+  - `HIPRT_EXTERNAL_DEVICE_COMPILER=mxcc`
+- 让测试辅助通过外部编译器生成用户 cubin
+- 再把该 cubin 传给：
+  - `hiprtBuildTraceKernelsFromBitcode(...)`
+
+验证结果：
+
+- 外部编译器选择器已生效
+- fallback 已真正走到 `mxcc`
+- 但在 runtime 链接阶段失败于：
+  - `cuLinkAddData`
+  - 具体表现为 `mcErrorInvalidKernelImage`
+
+这说明一个新的、更精确的结论：
+
+- **`mxcc` 产出的离线 fatbin / precompiled fatbin 可以被 `cuModuleLoadData` 消费**
+- **但当前 `mxcc` 产出的“用户 cubin”还不能被现有 runtime bitcode linking 入口稳定接受**
+
+也就是说，第二阶段已经回答了“问题卡在哪”：
+
+- 不再是编译器选择问题
+- 而是 **runtime bitcode link 输入格式 / relocatable 属性 / linker 期望的二进制类型** 不匹配
+
 ## 3. 这轮确认的“本质缺陷”
 
 当前离线编译的本质问题不是：
@@ -100,6 +128,12 @@ python3 precompile_bitcode.py \
 - `mxcc` 没有暴露一个全新问题
 - 它只是把当前离线链里原本隐藏的依赖关系更早、更明确地暴露出来
 
+3. **runtime bitcode link 对用户二进制的输入格式要求比 `cuModuleLoadData` 更严格**
+   - 同样是 `mxcc` 产物：
+     - precompiled fatbin 可加载
+     - runtime `cuLinkAddData` 却可能拒绝
+   - 这说明“能离线生成”与“能作为 runtime bitcode link 输入”不是同一个兼容层级
+
 ## 4. 这轮之后的判断
 
 当前可以给出更明确的结论：
@@ -109,6 +143,7 @@ python3 precompile_bitcode.py \
 但同时也要明确：
 
 - **要让它真正稳定，不是单纯换编译器名字，而是要继续把源码中的 HIP 残留和 custom-func 包装依赖清干净。**
+- **同时还需要继续确认：`mxcc` 生成的用户设备二进制，究竟应以 `CUBIN`、`FATBIN`、`device-bc` 还是其它形式喂给 runtime bitcode link。**
 
 ## 5. 下一步建议
 
@@ -116,9 +151,13 @@ python3 precompile_bitcode.py \
 
 1. 继续清理 active path 中的 `hip_runtime.h` / HIP 分支残留
 2. 把 `compile.py` 里 wrapper 的逻辑再参数化，避免只服务当前 `hiprt_kernels_bitcode.h`
-3. 评估是否把 `Compiler.cpp` 的 `compileSourceToCubin(...)` 优先级改成：
-   - `HIPRT_EXTERNAL_DEVICE_COMPILER=mxcc`
-   - 再回退到 `cucc`
+3. 继续研究 `cuLinkAddData` 对 `mxcc` 产物的真实可接受输入类型：
+   - 当前 `CU_JIT_INPUT_CUBIN` 路径失败
+   - 后续应试验：
+     - `-fatbin`
+     - `-device-bin`
+     - `-fatbc`
+     - 以及是否需要不同的 `CUjitInputType`
 
 ## 6. 一句话结论
 

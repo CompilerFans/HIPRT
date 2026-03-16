@@ -2375,7 +2375,8 @@ TEST_F( hiprtTest, SceneTraceKernelSingletonSrt )
 TEST_F( hiprtTest, BuildTraceKernelFromBitcode )
 {
 #if defined( HIPRT_CU_BRIDGE_RUNTIME_JIT_WORKAROUND ) && HIPRT_CU_BRIDGE_RUNTIME_JIT_WORKAROUND == 1
-	std::cout << "Skip BuildTraceKernelFromBitcode on cu-bridge: validate bitcode via precompiled workflow instead."
+	std::cout << "Skip BuildTraceKernelFromBitcode on cu-bridge: runtime bitcode link still rejects external "
+				 "mxcc/cu-bridge user binaries as invalid kernel image; precompiled workflow remains the supported path."
 			  << std::endl;
 	return;
 #endif
@@ -2394,7 +2395,7 @@ TEST_F( hiprtTest, BuildTraceKernelFromBitcode )
 
 	cudaFunction_t func = nullptr;
 	checkHiprt( buildTraceKernelFromBitcode(
-		ctxt, getRootDir() / "test/kernels/HiprtTestKernel.h", "TraceKernel", func, opts ) );
+		ctxt, getRootDir() / "test/bitcodes/runtime_bitcode_test.cu", "TraceKernel", func, opts ) );
 	EXPECT_NE( func, nullptr );
 
 	checkHiprt( hiprtDestroyContext( ctxt ) );
@@ -2403,8 +2404,9 @@ TEST_F( hiprtTest, BuildTraceKernelFromBitcode )
 TEST_F( hiprtTest, BuildTraceKernelFromBitcodeWithCustomFuncTable )
 {
 #if defined( HIPRT_CU_BRIDGE_RUNTIME_JIT_WORKAROUND ) && HIPRT_CU_BRIDGE_RUNTIME_JIT_WORKAROUND == 1
-	std::cout << "Skip BuildTraceKernelFromBitcodeWithCustomFuncTable on cu-bridge: validate bitcode via precompiled "
-				 "workflow instead."
+	std::cout << "Skip BuildTraceKernelFromBitcodeWithCustomFuncTable on cu-bridge: runtime bitcode link still rejects "
+				 "external mxcc/cu-bridge user binaries as invalid kernel image; precompiled workflow remains the "
+				 "supported path."
 			  << std::endl;
 	return;
 #endif
@@ -2421,7 +2423,7 @@ TEST_F( hiprtTest, BuildTraceKernelFromBitcodeWithCustomFuncTable )
 	cudaFunction_t func = nullptr;
 	checkHiprt( buildTraceKernelFromBitcode(
 		ctxt,
-		getRootDir() / "test/kernels/HiprtTestKernel.h",
+		getRootDir() / "test/bitcodes/runtime_bitcode_test.cu",
 		"CutoutKernel",
 		func,
 		std::nullopt,
