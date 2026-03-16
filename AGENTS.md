@@ -15,6 +15,10 @@
 - 回归前优先清理测试过程中生成的 `scripts/cache/`，避免旧缓存掩盖真实问题。
 - 如果在验证 trace kernel/JIT 相关行为，优先避免复用缓存；必要时应将构建调用里的 `cache` 参数设为 `false`，或切换到新的临时 cache 目录后再验证。
 - 默认先跑非性能功能测试：`cd scripts && ./unittest.sh`。
+- 对 MACA/cu-bridge 路径，当前已经确认三类问题都是真实问题：
+  1. runtime JIT 的 `nvrtcAddNameExpression` 兼容问题
+  2. runtime JIT 中 device helper / filter 的符号可见性问题
+  3. scene instance 在 build/update 路径覆盖 `transform header` 的问题
 
 ## 本次主线迁移阶段要求
 - 当前阶段目标是先完成纯 CUDA 适配，并保持当前官方 `main` 上的功能测试可通过。

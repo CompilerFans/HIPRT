@@ -1154,22 +1154,15 @@ struct alignas( 64 ) UserInstanceNode : public InstanceNodeBase
 		m_primIndex = primIndex;
 		m_mask		= mask;
 		m_type		= instance.type;
-		m_static	= transform.frameCount == 1 ? 1 : 0;
 
 		if ( instance.type == hiprtInstanceTypeScene )
 			m_scene = reinterpret_cast<SceneHeader*>( instance.scene );
 		else
 			m_geometry = reinterpret_cast<GeomHeader*>( instance.geometry );
 
-		if ( transform.frameCount == 1 )
-		{
-			m_identity = computeInvTransformMatrix( frame, m_matrix ) ? 1 : 0;
-		}
-		else
-		{
-			m_identity	= 0;
-			m_transform = transform;
-		}
+		m_static	= 0;
+		m_identity	= 0;
+		m_transform = transform;
 	}
 
 	uint32_t m_mask = FullRayMask;
@@ -1206,22 +1199,15 @@ struct alignas( 128 ) HwInstanceNode : public InstanceNodeBase
 		m_mask		= mask;
 		m_hwMask	= 0xff;
 		m_type		= instance.type;
-		m_static	= transform.frameCount == 1 ? 1 : 0;
 
 		if ( instance.type == hiprtInstanceTypeScene )
 			m_scene = reinterpret_cast<SceneHeader*>( instance.scene );
 		else
 			m_geometry = reinterpret_cast<GeomHeader*>( instance.geometry );
 
-		if ( transform.frameCount == 1 )
-		{
-			m_identity = computeInvTransformMatrix( frame, m_matrix ) ? 1 : 0;
-		}
-		else
-		{
-			m_identity	= 0;
-			m_transform = transform;
-		}
+		m_static	= 0;
+		m_identity	= 0;
+		m_transform = transform;
 
 		m_disableBoxSort	 = 0;
 		m_childCountMinusOne = childCount - 1;

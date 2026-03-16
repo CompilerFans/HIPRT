@@ -646,11 +646,9 @@ __device__ void ResetCountersAndUpdateLeaves(
 			const uint32_t		 primIndex = primNodes[index].m_primIndex;
 			hiprtTransformHeader transform = primitives.fetchTransformHeader( primIndex );
 			primNodes[index].m_mask		   = primitives.fetchMask( primIndex );
-			if ( transform.frameCount == 1 )
-				primNodes[index].m_identity =
-					primitives.computeInvTransformMatrix( transform.frameIndex, primNodes[index].m_matrix ) ? 1 : 0;
-			else
-				primNodes[index].m_identity = 0;
+			primNodes[index].m_static	 = 0;
+			primNodes[index].m_identity	 = 0;
+			primNodes[index].m_transform = transform;
 		}
 	}
 }

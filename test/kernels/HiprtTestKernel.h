@@ -32,7 +32,7 @@
 #define SHARED_STACK_SIZE 1
 #endif
 
-HIPRT_DEVICE bool intersectSphere( const hiprtRay& ray, const void* data, void* payload, hiprtHit& hit )
+HIPRT_DEVICE HIPRT_INLINE bool intersectSphere( const hiprtRay& ray, const void* data, void* payload, hiprtHit& hit )
 {
 	const float3 orig = ray.origin;
 	const float3 dir  = ray.direction;
@@ -59,7 +59,7 @@ HIPRT_DEVICE bool intersectSphere( const hiprtRay& ray, const void* data, void* 
 	return false;
 }
 
-HIPRT_DEVICE bool intersectCircle( const hiprtRay& ray, const void* data, void* payload, hiprtHit& hit )
+HIPRT_DEVICE HIPRT_INLINE bool intersectCircle( const hiprtRay& ray, const void* data, void* payload, hiprtHit& hit )
 {
 	const float*	o = reinterpret_cast<const float*>( data );
 	constexpr float R = 0.1f;
@@ -78,7 +78,7 @@ HIPRT_DEVICE bool intersectCircle( const hiprtRay& ray, const void* data, void* 
 	return hasHit;
 }
 
-HIPRT_DEVICE bool duplicityFilter( const hiprtRay& ray, const void* data, void* payload, const hiprtHit& hit )
+HIPRT_DEVICE HIPRT_INLINE bool duplicityFilter( const hiprtRay& ray, const void* data, void* payload, const hiprtHit& hit )
 {
 	uint32_t* processed = reinterpret_cast<uint32_t*>( payload );
 	if ( processed[hit.primID] ) return true;
@@ -86,7 +86,7 @@ HIPRT_DEVICE bool duplicityFilter( const hiprtRay& ray, const void* data, void* 
 	return false;
 }
 
-HIPRT_DEVICE bool cutoutFilter( const hiprtRay& ray, const void* data, void* payload, const hiprtHit& hit )
+HIPRT_DEVICE HIPRT_INLINE bool cutoutFilter( const hiprtRay& ray, const void* data, void* payload, const hiprtHit& hit )
 {
 	const float	  SCALE = 16.0f;
 	const float2& uv	= hit.uv;
