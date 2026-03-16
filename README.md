@@ -172,6 +172,7 @@ Build with CMake only.
   - `scripts/bitcodes/mxcc_maca_link_trace_probe.sh`
   - `docs/mxcc-offline-progress-zh.md`
 - For source-based usage on the current `mxcc` path, the default behavior now prefers the validated `mxcc -c + --maca-link -fatbin + cuModuleLoadData` route rather than the older `cuLinkAddData` path.
+- If users want an explicit route instead of the default source path, `hiprtBuildTraceKernelsFromLinkedBundle(...)` is available as the direct public entry for already linked bundles.
 
 For the detailed Chinese status and current MACA constraints, see `docs/bitcode-status-zh.md`.
 

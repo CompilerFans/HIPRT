@@ -54,4 +54,8 @@ void releasePrimaryContext( CUdevice device );
 void memsetD8( CUdeviceptr dst, unsigned char value, size_t byteCount );
 void memcpyHtoD( CUdeviceptr dst, const void* src, size_t byteCount );
 void memcpyDtoH(void* dst, CUdeviceptr src, size_t byteCount);
+void memcpyDtoDAsync( CUdeviceptr dst, CUdeviceptr src, size_t byteCount, cudaStream_t stream );
+void memcpyHtoDAsync( CUdeviceptr dst, const void* src, size_t byteCount, cudaStream_t stream );
+void memcpyDtoHAsync( void* dst, CUdeviceptr src, size_t byteCount, cudaStream_t stream );
+void streamSynchronize( cudaStream_t stream );
 } // namespace hiprt::mc

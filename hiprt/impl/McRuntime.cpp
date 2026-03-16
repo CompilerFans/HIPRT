@@ -126,4 +126,21 @@ void memsetD8( CUdeviceptr dst, unsigned char value, size_t byteCount ) { checkO
 void memcpyHtoD( CUdeviceptr dst, const void* src, size_t byteCount ) { checkOro( cuMemcpyHtoD( dst, src, byteCount ) ); }
 
 void memcpyDtoH( void* dst, CUdeviceptr src, size_t byteCount ) { checkOro( cuMemcpyDtoH( dst, src, byteCount ) ); }
+
+void memcpyDtoDAsync( CUdeviceptr dst, CUdeviceptr src, size_t byteCount, cudaStream_t stream )
+{
+	checkOro( cuMemcpyDtoDAsync( dst, src, byteCount, stream ) );
+}
+
+void memcpyHtoDAsync( CUdeviceptr dst, const void* src, size_t byteCount, cudaStream_t stream )
+{
+	checkOro( cuMemcpyHtoDAsync( dst, src, byteCount, stream ) );
+}
+
+void memcpyDtoHAsync( void* dst, CUdeviceptr src, size_t byteCount, cudaStream_t stream )
+{
+	checkOro( cuMemcpyDtoHAsync( dst, src, byteCount, stream ) );
+}
+
+void streamSynchronize( cudaStream_t stream ) { checkOro( cuStreamSynchronize( stream ) ); }
 } // namespace hiprt::mc

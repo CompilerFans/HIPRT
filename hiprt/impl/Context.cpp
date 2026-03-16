@@ -335,22 +335,22 @@ std::vector<hiprtGeometry> Context::compactGeometries( const std::vector<hiprtGe
 		void* boxNodes	= storageMemoryArena.allocate<uint8_t>( boxNodeSize * header.m_boxNodeCount );
 		void* primNodes = storageMemoryArena.allocate<uint8_t>( primNodeSize * header.m_primNodeCount );
 
-		checkOro( cuMemcpyDtoDAsync(
-			reinterpret_cast<size_t>( boxNodes ),
-			reinterpret_cast<size_t>( header.m_boxNodes ),
+		mc::memcpyDtoDAsync(
+			static_cast<CUdeviceptr>( reinterpret_cast<size_t>( boxNodes ) ),
+			static_cast<CUdeviceptr>( reinterpret_cast<size_t>( header.m_boxNodes ) ),
 			boxNodeSize * header.m_boxNodeCount,
-			stream ) );
+			stream );
 
-		checkOro( cuMemcpyDtoDAsync(
-			reinterpret_cast<size_t>( primNodes ),
-			reinterpret_cast<size_t>( header.m_primNodes ),
+		mc::memcpyDtoDAsync(
+			static_cast<CUdeviceptr>( reinterpret_cast<size_t>( primNodes ) ),
+			static_cast<CUdeviceptr>( reinterpret_cast<size_t>( header.m_primNodes ) ),
 			primNodeSize * header.m_primNodeCount,
-			stream ) );
+			stream );
 
 		header.m_boxNodes  = boxNodes;
 		header.m_primNodes = primNodes;
-		checkOro(
-			cuMemcpyHtoDAsync( reinterpret_cast<size_t>( geometriesOut[i] ), &header, sizeof( GeomHeader ), stream ) );
+		mc::memcpyHtoDAsync(
+			static_cast<CUdeviceptr>( reinterpret_cast<size_t>( geometriesOut[i] ) ), &header, sizeof( GeomHeader ), stream );
 
 		buffer = reinterpret_cast<uint8_t*>( buffer ) + sizes[i];
 	}
@@ -681,36 +681,36 @@ std::vector<hiprtScene> Context::compactScenes( const std::vector<hiprtScene>& s
 		Instance* instances = storageMemoryArena.allocate<Instance>( header.m_primCount );
 		Frame*	  frames	= storageMemoryArena.allocate<Frame>( header.m_frameCount );
 
-		checkOro( cuMemcpyDtoDAsync(
-			reinterpret_cast<size_t>( boxNodes ),
-			reinterpret_cast<size_t>( header.m_boxNodes ),
+		mc::memcpyDtoDAsync(
+			static_cast<CUdeviceptr>( reinterpret_cast<size_t>( boxNodes ) ),
+			static_cast<CUdeviceptr>( reinterpret_cast<size_t>( header.m_boxNodes ) ),
 			getBoxNodeSize() * header.m_boxNodeCount,
-			stream ) );
+			stream );
 
-		checkOro( cuMemcpyDtoDAsync(
-			reinterpret_cast<size_t>( primNodes ),
-			reinterpret_cast<size_t>( header.m_primNodes ),
+		mc::memcpyDtoDAsync(
+			static_cast<CUdeviceptr>( reinterpret_cast<size_t>( primNodes ) ),
+			static_cast<CUdeviceptr>( reinterpret_cast<size_t>( header.m_primNodes ) ),
 			getInstanceNodeSize() * header.m_primNodeCount,
-			stream ) );
+			stream );
 
-		checkOro( cuMemcpyDtoDAsync(
-			reinterpret_cast<size_t>( instances ),
-			reinterpret_cast<size_t>( header.m_instances ),
+		mc::memcpyDtoDAsync(
+			static_cast<CUdeviceptr>( reinterpret_cast<size_t>( instances ) ),
+			static_cast<CUdeviceptr>( reinterpret_cast<size_t>( header.m_instances ) ),
 			sizeof( hiprtTransformHeader ) * header.m_primCount,
-			stream ) );
+			stream );
 
-		checkOro( cuMemcpyDtoDAsync(
-			reinterpret_cast<size_t>( frames ),
-			reinterpret_cast<size_t>( header.m_frames ),
+		mc::memcpyDtoDAsync(
+			static_cast<CUdeviceptr>( reinterpret_cast<size_t>( frames ) ),
+			static_cast<CUdeviceptr>( reinterpret_cast<size_t>( header.m_frames ) ),
 			sizeof( Frame ) * header.m_frameCount,
-			stream ) );
+			stream );
 
 		header.m_boxNodes  = boxNodes;
 		header.m_primNodes = primNodes;
 		header.m_instances = instances;
 		header.m_frames	   = frames;
-		checkOro(
-			cuMemcpyHtoDAsync( reinterpret_cast<size_t>( scenesOut[i] ), &header, sizeof( SceneHeader ), stream ) );
+		mc::memcpyHtoDAsync(
+			static_cast<CUdeviceptr>( reinterpret_cast<size_t>( scenesOut[i] ) ), &header, sizeof( SceneHeader ), stream );
 
 		buffer = reinterpret_cast<uint8_t*>( buffer ) + sizes[i];
 	}
