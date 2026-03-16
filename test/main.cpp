@@ -2442,6 +2442,20 @@ TEST_F( hiprtTest, BuildTraceKernelWithForcedMxccBundleFallback )
 	unsetenv( "HIPRT_EXTERNAL_DEVICE_COMPILER" );
 }
 
+TEST_F( hiprtTest, BuildTraceKernelFromLinkedBundle )
+{
+	hiprtContext ctxt;
+	checkHiprt( hiprtCreateContext( HIPRT_API_VERSION, m_ctxtInput, ctxt ) );
+	checkHiprt( hiprtSetLogLevel( ctxt, hiprtLogLevelError | hiprtLogLevelWarn ) );
+
+	cudaFunction_t func = nullptr;
+	checkHiprt( buildTraceKernelFromLinkedBundle(
+		ctxt, getRootDir() / "test/bitcodes/runtime_bitcode_test.cu", "TraceKernel", func, true ) );
+	EXPECT_NE( func, nullptr );
+
+	checkHiprt( hiprtDestroyContext( ctxt ) );
+}
+
 TEST_F( hiprtTest, BuildTraceKernelFromBitcodeWithCustomFuncTable )
 {
 #if defined( HIPRT_CU_BRIDGE_RUNTIME_JIT_WORKAROUND ) && HIPRT_CU_BRIDGE_RUNTIME_JIT_WORKAROUND == 1

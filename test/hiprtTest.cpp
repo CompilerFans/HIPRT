@@ -981,6 +981,44 @@ hiprtError hiprtTest::buildTraceKernelFromBitcode(
 	return e;
 }
 
+hiprtError hiprtTest::buildTraceKernelFromLinkedBundle(
+	hiprtContext					   ctxt,
+	const std::filesystem::path&	   srcPath,
+	const std::string&				   functionName,
+	cudaFunction_t&					   functionOut,
+	bool							   withDefaultFuncTable )
+{
+	const std::filesystem::path bundlePath =
+		std::filesystem::temp_directory_path() /
+		( "hiprt-linked-bundle-" + std::to_string( std::chrono::steady_clock::now().time_since_epoch().count() ) + ".mcfb" );
+
+	std::ostringstream cmd;
+	cmd << "python3 " << quoteShellArgForTest( ( getRootDir() / "scripts/bitcodes/build_mxcc_trace_bundle.py" ).string() )
+		<< " --root " << quoteShellArgForTest( getRootDir().string() )
+		<< " --source " << quoteShellArgForTest( srcPath.string() )
+		<< " --output " << quoteShellArgForTest( bundlePath.string() );
+	if ( withDefaultFuncTable ) cmd << " --with-default-func-table";
+
+	if ( std::system( cmd.str().c_str() ) != 0 ) return hiprtErrorInternal;
+
+	std::ifstream file( bundlePath, std::ios::in | std::ios::binary | std::ios::ate );
+	if ( !file.is_open() ) return hiprtErrorInternal;
+
+	const size_t size = static_cast<size_t>( file.tellg() );
+	file.seekg( 0, std::ios::beg );
+	std::string bundle( size, '\0' );
+	file.read( bundle.data(), static_cast<std::streamsize>( size ) );
+
+	std::vector<hiprtApiFunction> functions( 1 );
+	const char* functionNamePtr = functionName.c_str();
+	hiprtError error = hiprtBuildTraceKernelsFromLinkedBundle(
+		ctxt, 1, &functionNamePtr, srcPath.string().c_str(), bundle.data(), bundle.size(), functions.data(), nullptr, false );
+	if ( error != hiprtSuccess ) return error;
+
+	functionOut = *reinterpret_cast<cudaFunction_t*>( &functions[0] );
+	return hiprtSuccess;
+}
+
 bool hiprtTest::loadBinaryFile( const std::filesystem::path& path, std::vector<uint8_t>& binary )
 {
 	std::ifstream file( path, std::ios::binary | std::ios::in | std::ios::ate );

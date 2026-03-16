@@ -155,6 +155,13 @@ class hiprtTest : public ::testing::Test
 		uint32_t									 numGeomTypes = 0u,
 		uint32_t									 numRayTypes  = 1u );
 
+	hiprtError buildTraceKernelFromLinkedBundle(
+		hiprtContext					   ctxt,
+		const std::filesystem::path&	   srcPath,
+		const std::string&				   functionName,
+		cudaFunction_t&					   functionOut,
+		bool							   withDefaultFuncTable = false );
+
 	bool loadBinaryFile( const std::filesystem::path& path, std::vector<uint8_t>& binary );
 
 	std::filesystem::path findPrecompiledTraceKernelPath();
