@@ -160,7 +160,37 @@ python3 precompile_bitcode.py \
 - **它已经被证明能接到“模块加载”这一步**
 - **当前未解决的是：怎样把它和 HIPRT 现有 runtime bitcode API / runtime link 入口拼起来**
 
-## 2.6 当前第三阶段结论
+### 2.6 `mxcc --maca-link` TraceKernel 级别实验
+
+在最小空 kernel 之外，又补做了更接近 HIPRT 实际使用方式的实验：
+
+- 目标源不是空 `K()`
+- 而是：
+  - `TraceKernel`
+  - `CutoutKernel`
+- 同时显式补了默认：
+  - `intersectFunc`
+  - `filterFunc`
+
+实验链为：
+
+1. `mxcc -fgpu-rdc -c`
+2. `mxcc -fgpu-rdc --maca-link -fatbin`
+3. `cuModuleLoadData`
+4. `cuModuleGetFunction`
+
+验证结果：
+
+- `TraceKernel`
+  - 可取到 symbol
+- `CutoutKernel`
+  - 可取到 symbol
+
+这意味着：
+
+- **`maca-link` 路线不仅能承载空 probe kernel，也已经能承载包含 HIPRT 设备遍历实现的真实 tutorial/test 级别 kernel。**
+
+## 2.7 当前第三阶段结论
 
 现在已经可以把第三阶段结论写得更具体：
 
@@ -170,6 +200,7 @@ python3 precompile_bitcode.py \
 2. `mxcc --maca-link -fatbin`
    - 可以产出 bundle
    - 该 bundle 可以被 `cuModuleLoadData` 直接加载
+   - 对包含 HIPRT 设备遍历实现的 `TraceKernel/CutoutKernel` 也成立
 
 因此最有希望的后续方向是：
 
