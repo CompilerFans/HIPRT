@@ -325,6 +325,396 @@ TEST_F( ObjTestCases, RotateCornellBoxSmallAngleNoRef )
 	deleteScene( m_scene );
 }
 
+TEST_F( ObjTestCases, MetaXRayTracingShowcaseNoRef )
+{
+	const std::filesystem::path outputDir = getRootDir() / "docs/images/showcase";
+	std::filesystem::create_directories( outputDir );
+
+	Camera camera;
+	camera.m_translation = { 8.8f, 0.15f, 17.8f };
+	camera.m_rotation	 = { 0.0f, 1.0f, 0.0f, 0.46f };
+	camera.m_fov		 = 48.0f * hiprt::Pi / 180.0f;
+
+	setupScene( camera, getRootDir() / "test/common/meshes/metax_showcase/metax_ray_tracing_stacked.obj" );
+	render(
+		outputDir / "metax_ray_tracing_lit.png",
+		getRootDir() / "test/kernels/ShowcaseKeyLightKernel.h",
+		"ShowcaseKeyLightKernel",
+		std::nullopt,
+		false,
+		0.15f );
+	deleteScene( m_scene );
+}
+
+TEST_F( ObjTestCases, MetaXRayTracingTurntableNoRef )
+{
+	const std::filesystem::path outputDir = getRootDir() / "docs/images/showcase_turntable";
+	std::filesystem::create_directories( outputDir );
+
+	Camera camera;
+	camera.m_translation = { 0.0f, 0.15f, 18.5f };
+	camera.m_rotation	 = { 0.0f, 1.0f, 0.0f, 0.0f };
+	camera.m_fov		 = 48.0f * hiprt::Pi / 180.0f;
+
+	setupScene( camera, getRootDir() / "test/common/meshes/metax_showcase/metax_ray_tracing_stacked.obj" );
+
+	constexpr uint32_t frameCount = 12;
+	constexpr float	targetZ	   = 1.4f;
+	constexpr float	radius	   = 17.5f;
+	constexpr float	height	   = 0.15f;
+	constexpr float	startAngle = -0.55f;
+	constexpr float	endAngle   = 0.55f;
+
+	for ( uint32_t frameIndex = 0; frameIndex < frameCount; ++frameIndex )
+	{
+		const float t	 = frameCount > 1 ? static_cast<float>( frameIndex ) / static_cast<float>( frameCount - 1 ) : 0.0f;
+		const float angle = startAngle + ( endAngle - startAngle ) * t;
+		char		frameName[32];
+		snprintf( frameName, sizeof( frameName ), "frame_%04u.png", frameIndex );
+
+		m_camera.m_translation = { radius * sinf( angle ), height, targetZ + radius * cosf( angle ) };
+		m_camera.m_rotation	 = { 0.0f, 1.0f, 0.0f, angle };
+		render(
+			outputDir / frameName,
+			getRootDir() / "test/kernels/ShowcaseKeyLightKernel.h",
+			"ShowcaseKeyLightKernel",
+			std::nullopt,
+			false,
+			-startAngle + angle );
+	}
+
+	deleteScene( m_scene );
+}
+
+TEST_F( ObjTestCases, MetaXRayTracingPathTraceNoRef )
+{
+	const std::filesystem::path outputDir = getRootDir() / "docs/images/showcase";
+	std::filesystem::create_directories( outputDir );
+
+	Camera camera;
+	camera.m_translation = { 8.8f, 0.15f, 17.8f };
+	camera.m_rotation	 = { 0.0f, 1.0f, 0.0f, 0.46f };
+	camera.m_fov		 = 48.0f * hiprt::Pi / 180.0f;
+
+	setupScene( camera, getRootDir() / "test/common/meshes/metax_showcase/metax_ray_tracing_stacked.obj" );
+	render(
+		outputDir / "metax_ray_tracing_pathtrace.png",
+		getRootDir() / "test/kernels/ShowcasePathTraceKernel.h",
+		"ShowcasePathTraceKernel",
+		std::nullopt,
+		false,
+		0.15f );
+	deleteScene( m_scene );
+}
+
+TEST_F( ObjTestCases, MetaXRayTracingPathTraceTurntableNoRef )
+{
+	const std::filesystem::path outputDir = getRootDir() / "docs/images/showcase_turntable_pathtrace";
+	std::filesystem::create_directories( outputDir );
+
+	Camera camera;
+	camera.m_translation = { 0.0f, 0.15f, 18.5f };
+	camera.m_rotation	 = { 0.0f, 1.0f, 0.0f, 0.0f };
+	camera.m_fov		 = 48.0f * hiprt::Pi / 180.0f;
+
+	setupScene( camera, getRootDir() / "test/common/meshes/metax_showcase/metax_ray_tracing_stacked.obj" );
+
+	constexpr uint32_t frameCount = 8;
+	constexpr float	targetZ	   = 1.4f;
+	constexpr float	radius	   = 17.5f;
+	constexpr float	height	   = 0.15f;
+	constexpr float	startAngle = -0.42f;
+	constexpr float	endAngle   = 0.42f;
+
+	for ( uint32_t frameIndex = 0; frameIndex < frameCount; ++frameIndex )
+	{
+		const float t	 = frameCount > 1 ? static_cast<float>( frameIndex ) / static_cast<float>( frameCount - 1 ) : 0.0f;
+		const float angle = startAngle + ( endAngle - startAngle ) * t;
+		char		frameName[32];
+		snprintf( frameName, sizeof( frameName ), "frame_%04u.png", frameIndex );
+
+		m_camera.m_translation = { radius * sinf( angle ), height, targetZ + radius * cosf( angle ) };
+		m_camera.m_rotation	 = { 0.0f, 1.0f, 0.0f, angle };
+		render(
+			outputDir / frameName,
+			getRootDir() / "test/kernels/ShowcasePathTraceKernel.h",
+			"ShowcasePathTraceKernel",
+			std::nullopt,
+			false,
+			angle );
+	}
+
+	deleteScene( m_scene );
+}
+
+TEST_F( ObjTestCases, MetaXRayTracingBeautyNoRef )
+{
+	const std::filesystem::path outputDir = getRootDir() / "docs/images/showcase";
+	std::filesystem::create_directories( outputDir );
+
+	Camera camera;
+	camera.m_translation = { 7.6f, 0.05f, 16.2f };
+	camera.m_rotation	 = { 0.0f, 1.0f, 0.0f, 0.50f };
+	camera.m_fov		 = 44.0f * hiprt::Pi / 180.0f;
+
+	setupScene( camera, getRootDir() / "test/common/meshes/metax_showcase/metax_ray_tracing_stacked.obj" );
+	render(
+		outputDir / "metax_ray_tracing_beauty.png",
+		getRootDir() / "test/kernels/ShowcaseBeautyPathTraceKernel.h",
+		"ShowcaseBeautyPathTraceKernel",
+		std::nullopt,
+		false,
+		0.22f );
+	deleteScene( m_scene );
+}
+
+TEST_F( ObjTestCases, MetaXRayTracingBeautyTurntableNoRef )
+{
+	const std::filesystem::path outputDir = getRootDir() / "docs/images/showcase_turntable_beauty";
+	std::filesystem::create_directories( outputDir );
+
+	Camera camera;
+	camera.m_translation = { 0.0f, 0.05f, 16.8f };
+	camera.m_rotation	 = { 0.0f, 1.0f, 0.0f, 0.0f };
+	camera.m_fov		 = 44.0f * hiprt::Pi / 180.0f;
+
+	setupScene( camera, getRootDir() / "test/common/meshes/metax_showcase/metax_ray_tracing_stacked.obj" );
+
+	constexpr uint32_t frameCount = 8;
+	constexpr float	targetZ	   = 1.1f;
+	constexpr float	radius	   = 15.8f;
+	constexpr float	height	   = 0.05f;
+	constexpr float	startAngle = -0.36f;
+	constexpr float	endAngle   = 0.36f;
+
+	for ( uint32_t frameIndex = 0; frameIndex < frameCount; ++frameIndex )
+	{
+		const float t	 = frameCount > 1 ? static_cast<float>( frameIndex ) / static_cast<float>( frameCount - 1 ) : 0.0f;
+		const float angle = startAngle + ( endAngle - startAngle ) * t;
+		char		frameName[32];
+		snprintf( frameName, sizeof( frameName ), "frame_%04u.png", frameIndex );
+
+		m_camera.m_translation = { radius * sinf( angle ), height, targetZ + radius * cosf( angle ) };
+		m_camera.m_rotation	 = { 0.0f, 1.0f, 0.0f, angle };
+		render(
+			outputDir / frameName,
+			getRootDir() / "test/kernels/ShowcaseBeautyPathTraceKernel.h",
+			"ShowcaseBeautyPathTraceKernel",
+			std::nullopt,
+			false,
+			0.22f + angle );
+	}
+
+	deleteScene( m_scene );
+}
+
+TEST_F( ObjTestCases, MetaXRayTracingPosterNoRef )
+{
+	const std::filesystem::path outputDir = getRootDir() / "docs/images/showcase";
+	std::filesystem::create_directories( outputDir );
+
+	Camera camera;
+	camera.m_translation = { 6.1f, -0.35f, 13.6f };
+	camera.m_rotation	 = { 0.0f, 1.0f, 0.0f, 0.57f };
+	camera.m_fov		 = 36.0f * hiprt::Pi / 180.0f;
+
+	setupScene( camera, getRootDir() / "test/common/meshes/metax_showcase/metax_ray_tracing_stacked.obj" );
+	render(
+		outputDir / "metax_ray_tracing_poster.png",
+		getRootDir() / "test/kernels/ShowcaseBeautyPathTraceKernel.h",
+		"ShowcaseBeautyPathTraceKernel",
+		std::nullopt,
+		false,
+		0.28f );
+	deleteScene( m_scene );
+}
+
+TEST_F( ObjTestCases, MetaXRayTracingFinalPosterNoRef )
+{
+	const std::filesystem::path outputDir = getRootDir() / "docs/images/showcase";
+	std::filesystem::create_directories( outputDir );
+
+	Camera camera;
+	camera.m_translation = { 5.4f, -0.42f, 12.2f };
+	camera.m_rotation	 = { 0.0f, 1.0f, 0.0f, 0.61f };
+	camera.m_fov		 = 32.0f * hiprt::Pi / 180.0f;
+
+	setupScene( camera, getRootDir() / "test/common/meshes/metax_showcase/metax_ray_tracing_stacked.obj" );
+	render(
+		outputDir / "metax_ray_tracing_final_poster.png",
+		getRootDir() / "test/kernels/ShowcaseBeautyPathTraceKernel.h",
+		"ShowcaseBeautyPathTraceKernel",
+		std::nullopt,
+		false,
+		0.32f );
+	deleteScene( m_scene );
+}
+
+TEST_F( ObjTestCases, MetaXRayTracingPosterTurntableNoRef )
+{
+	const std::filesystem::path outputDir = getRootDir() / "docs/images/showcase_turntable_poster";
+	std::filesystem::create_directories( outputDir );
+
+	Camera camera;
+	camera.m_translation = { 0.0f, -0.20f, 13.2f };
+	camera.m_rotation	 = { 0.0f, 1.0f, 0.0f, 0.0f };
+	camera.m_fov		 = 34.0f * hiprt::Pi / 180.0f;
+
+	setupScene( camera, getRootDir() / "test/common/meshes/metax_showcase/metax_ray_tracing_stacked.obj" );
+
+	constexpr uint32_t frameCount = 10;
+	constexpr float	targetZ	   = 0.95f;
+	constexpr float	radius	   = 12.5f;
+	constexpr float	height	   = -0.20f;
+	constexpr float	startAngle = -0.28f;
+	constexpr float	endAngle   = 0.28f;
+
+	for ( uint32_t frameIndex = 0; frameIndex < frameCount; ++frameIndex )
+	{
+		const float t	 = frameCount > 1 ? static_cast<float>( frameIndex ) / static_cast<float>( frameCount - 1 ) : 0.0f;
+		const float angle = startAngle + ( endAngle - startAngle ) * t;
+		char		frameName[32];
+		snprintf( frameName, sizeof( frameName ), "frame_%04u.png", frameIndex );
+
+		m_camera.m_translation = { radius * sinf( angle ), height, targetZ + radius * cosf( angle ) };
+		m_camera.m_rotation	 = { 0.0f, 1.0f, 0.0f, angle };
+		render(
+			outputDir / frameName,
+			getRootDir() / "test/kernels/ShowcaseBeautyPathTraceKernel.h",
+			"ShowcaseBeautyPathTraceKernel",
+			std::nullopt,
+			false,
+			0.30f + angle );
+	}
+
+	deleteScene( m_scene );
+}
+
+TEST_F( ObjTestCases, MetaXRayTracingGlassSceneNoRef )
+{
+	const std::filesystem::path outputDir = getRootDir() / "docs/images/showcase";
+	std::filesystem::create_directories( outputDir );
+
+	Camera camera;
+	camera.m_translation = { 6.8f, -0.22f, 13.8f };
+	camera.m_rotation	 = { 0.0f, 1.0f, 0.0f, 0.52f };
+	camera.m_fov		 = 34.0f * hiprt::Pi / 180.0f;
+
+	setupScene( camera, getRootDir() / "test/common/meshes/metax_showcase/metax_reflect_refract.obj" );
+	render(
+		outputDir / "metax_ray_tracing_glass.png",
+		getRootDir() / "test/kernels/ShowcaseBeautyPathTraceKernel.h",
+		"ShowcaseBeautyPathTraceKernel",
+		std::nullopt,
+		false,
+		0.34f );
+	deleteScene( m_scene );
+}
+
+TEST_F( ObjTestCases, MetaXRayTracingGlassTurntableNoRef )
+{
+	const std::filesystem::path outputDir = getRootDir() / "docs/images/showcase_turntable_glass";
+	std::filesystem::create_directories( outputDir );
+
+	Camera camera;
+	camera.m_translation = { 0.0f, -0.18f, 13.4f };
+	camera.m_rotation	 = { 0.0f, 1.0f, 0.0f, 0.0f };
+	camera.m_fov		 = 34.0f * hiprt::Pi / 180.0f;
+
+	setupScene( camera, getRootDir() / "test/common/meshes/metax_showcase/metax_reflect_refract.obj" );
+
+	constexpr uint32_t frameCount = 10;
+	constexpr float	targetZ	   = 1.0f;
+	constexpr float	radius	   = 12.6f;
+	constexpr float	height	   = -0.18f;
+	constexpr float	startAngle = -0.30f;
+	constexpr float	endAngle   = 0.30f;
+
+	for ( uint32_t frameIndex = 0; frameIndex < frameCount; ++frameIndex )
+	{
+		const float t	 = frameCount > 1 ? static_cast<float>( frameIndex ) / static_cast<float>( frameCount - 1 ) : 0.0f;
+		const float angle = startAngle + ( endAngle - startAngle ) * t;
+		char		frameName[32];
+		snprintf( frameName, sizeof( frameName ), "frame_%04u.png", frameIndex );
+
+		m_camera.m_translation = { radius * sinf( angle ), height, targetZ + radius * cosf( angle ) };
+		m_camera.m_rotation	 = { 0.0f, 1.0f, 0.0f, angle };
+		render(
+			outputDir / frameName,
+			getRootDir() / "test/kernels/ShowcaseBeautyPathTraceKernel.h",
+			"ShowcaseBeautyPathTraceKernel",
+			std::nullopt,
+			false,
+			0.34f + angle );
+	}
+
+	deleteScene( m_scene );
+}
+
+TEST_F( ObjTestCases, MetaXRayTracingGlassLongAnimationNoRef )
+{
+	const std::filesystem::path outputDir = getRootDir() / "docs/images/showcase_turntable_glass_long";
+	std::filesystem::create_directories( outputDir );
+
+	Camera camera;
+	camera.m_translation = { 0.0f, -0.12f, 13.2f };
+	camera.m_rotation	 = { 0.0f, 1.0f, 0.0f, 0.0f };
+	camera.m_fov		 = 34.0f * hiprt::Pi / 180.0f;
+
+	setupScene( camera, getRootDir() / "test/common/meshes/metax_showcase/metax_reflect_refract.obj" );
+
+	constexpr uint32_t frameCount = 120;
+	constexpr float	targetZ	   = 1.0f;
+	constexpr float	baseRadius  = 12.4f;
+	constexpr float	baseHeight  = -0.12f;
+	constexpr float	startAngle = -0.42f;
+	constexpr float	endAngle   = 0.42f;
+
+	for ( uint32_t frameIndex = 0; frameIndex < frameCount; ++frameIndex )
+	{
+		const float t	 = frameCount > 1 ? static_cast<float>( frameIndex ) / static_cast<float>( frameCount - 1 ) : 0.0f;
+		const float phase = t * hiprt::TwoPi;
+		const float angle = startAngle + ( endAngle - startAngle ) * t;
+		const float radius = baseRadius + 0.35f * sinf( phase * 0.5f );
+		const float height = baseHeight + 0.10f * sinf( phase * 0.75f );
+		const float lightAngle = 0.34f + 0.32f * sinf( phase + 0.35f ) + 0.10f * cosf( phase * 2.0f );
+		char		frameName[32];
+		snprintf( frameName, sizeof( frameName ), "frame_%04u.png", frameIndex );
+
+		m_camera.m_translation = { radius * sinf( angle ), height, targetZ + radius * cosf( angle ) };
+		m_camera.m_rotation	 = { 0.0f, 1.0f, 0.0f, angle };
+		render(
+			outputDir / frameName,
+			getRootDir() / "test/kernels/ShowcaseBeautyPathTraceKernel.h",
+			"ShowcaseBeautyPathTraceKernel",
+			std::nullopt,
+			false,
+			lightAngle );
+	}
+
+	deleteScene( m_scene );
+}
+
+TEST_F( ObjTestCases, MetaXCornellBeautyNoRef )
+{
+	const std::filesystem::path outputDir = getRootDir() / "docs/images/showcase";
+	std::filesystem::create_directories( outputDir );
+
+	Camera camera;
+	camera.m_translation = { 0.15f, 1.85f, 3.95f };
+	camera.m_rotation	 = { 0.0f, 1.0f, 0.0f, 0.02f };
+	camera.m_fov		 = 34.0f * hiprt::Pi / 180.0f;
+	setupScene( camera, getRootDir() / "test/common/meshes/metax_showcase/cornell_metax.obj" );
+	render(
+		outputDir / "metax_cornell_beauty.png",
+		getRootDir() / "test/kernels/ShowcaseBeautyPathTraceKernel.h",
+		"ShowcaseBeautyPathTraceKernel",
+		std::nullopt,
+		false,
+		0.0f );
+	deleteScene( m_scene );
+}
+
 TEST_F( ObjTestCases, RecreateCornellBoxTwiceNoRef )
 {
 	constexpr uint32_t Option	  = VisualizeColor;
