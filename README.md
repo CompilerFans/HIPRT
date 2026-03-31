@@ -1,10 +1,8 @@
 # HIPRT
 
-## 项目说明
+## 项目概览
 
-当前仓库保留 `HIPRT` 项目名称以及 `hiprt*` 对外 API 命名，但主实现已经围绕 **CUDA-only + MACA/cu-bridge** 路径完成重构与验证。
-
-当前状态：
+当前仓库保留 `HIPRT` 项目名称以及 `hiprt*` 对外 API 命名，但主实现已经收敛到 **CUDA-only** 后端。
 
 - 保留：
   - `hiprt.h`
@@ -12,186 +10,153 @@
   - `hiprtCreateContext`
   - `hiprtBuildTraceKernels`
   - `hiprtBuildTraceKernelsFromLinkedBundle`
-- 去除：
+- 已移出当前主构建链：
   - AMD HIP runtime 主路径
   - ROCm toolchain 依赖
+  - `hipcc`
   - 历史 HIP loader 主路径
-- 当前主推荐构建：
-  - 原生 CUDA：`CMake + CUDA Toolkit`
-  - MACA：`cmake_maca + make_maca`
+- 当前迁移阶段要求：
+  - 先确保纯 CUDA 基线可编译、可运行、可复现
+  - 再进入后续 `MACA + cu-bridge` 适配与扩展
 
-## 快速构建
+`hiprt/hiprtew.h` 仍保留为兼容入口头，但当前实现已不再承担运行时动态加载器角色。
 
-原生 CUDA：
+## 快速开始
 
-```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release -j
-```
-
-MACA/cu-bridge：
+### 1. 拉取代码
 
 ```bash
-./scripts/build_maca_cucc.sh
+git clone https://github.com/GPUOpen-LibrariesAndSDKs/HIPRT.git
+cd HIPRT
+git submodule update --init --recursive
 ```
 
-常用一键脚本：
+说明：
+
+- 当前默认优先使用 `CMake + Ninja`。
+
+### 2. 推荐构建方式
+
+优先直接使用仓库脚本：
 
 ```bash
 ./scripts/build.sh
-./scripts/build_and_test.sh
-./scripts/unittest_maca_cucc_precompiled.sh
 ```
 
-更完整的中文说明：
+脚本会在环境可用时自动接入：
 
-- `docs/cuda-only-build-zh.md`
-- `docs/bitcode-status-zh.md`
-- `docs/main-maca-fix-notes-zh.md`
-- `docs/main-vs-upstream-classification-zh.md`
-- `docs/mxcc-offline-progress-zh.md`
-- `docs/mxcc-offline-plan-zh.md`
+- `ccache`
+- `mold`
+- `Ninja`
 
-## 当前能力概览
+如果需要手动指定常见选项，可直接设置环境变量：
 
-- `MACA + cu-bridge` 主路径已完成基础功能验证
-- `bitcode / precompile / bake_kernel` 已恢复
-- source-based 官方 API 在 `mxcc` 路径下，默认已切到当前已验证的 `maca-link bundle` 行为
-- `linked bundle` 也提供了显式 public API：
-  - `hiprtBuildTraceKernelsFromLinkedBundle(...)`
+```bash
+CUDA_ARCHITECTURES=89 BUILD_TYPE=Release ./scripts/build.sh
+```
 
-## 关键示例效果
+等价的原生 CMake 调用为：
+
+```bash
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release -j
+```
+
+### 3. 推荐功能回归
+
+根据当前仓库约定，功能正确性验证不要依赖历史 JIT cache 结果。回归前建议先清理测试过程中生成的 `scripts/cache/`：
+
+```bash
+cd scripts
+rm -rf cache
+./unittest.sh
+```
+
+默认先跑非性能功能测试；性能测试单独执行。
+
+## 主要 API 中文指南
+
+`README` 首页只保留入口信息。主要 public API 的主机侧用法、对象生命周期和 trace-kernel 三条构建路径，已经整理到单独中文指南：
+
+- [主要 API 使用指南（中文）](docs/api-guide-zh.md)
+
+这份指南重点覆盖：
+
+- `hiprtCreateContext` / `hiprtDestroyContext`
+- `hiprtCreateGeometry` / `hiprtBuildGeometry`
+- `hiprtCreateScene` / `hiprtBuildScene`
+- `hiprtCreateFuncTable` / `hiprtSetFuncTable`
+- `hiprtBuildTraceKernels`
+- `hiprtBuildTraceKernelsFromBitcode`
+- `hiprtBuildTraceKernelsFromLinkedBundle`
+
+## 当前推荐使用路径
+
+- 纯 CUDA 基线：
+  - 优先保证 `./scripts/build.sh` + `cd scripts && ./unittest.sh` 可稳定通过
+  - source-based trace kernel 走 `hiprtBuildTraceKernels(...)`
+  - 已有可重定位 PTX/CUBIN 时可走 `hiprtBuildTraceKernelsFromBitcode(...)`
+- `MACA + cu-bridge`：
+  - 当前更适合走 precompiled / linked-bundle 路径
+  - 显式 public API 为 `hiprtBuildTraceKernelsFromLinkedBundle(...)`
+  - 详细限制与状态见下方文档
+
+如果在验证 trace kernel / runtime JIT 行为，优先避免复用旧缓存；必要时请显式关闭 cache，或者切换到新的临时 cache 目录。
+
+## 文档导航
+
+- [主要 API 使用指南（中文）](docs/api-guide-zh.md)
+- [CUDA-only 编译与改造说明](docs/cuda-only-build-zh.md)
+- [bitcode / precompile / bake_kernel 当前状态](docs/bitcode-status-zh.md)
+- [当前 main 分支 MACA 修复说明](docs/main-maca-fix-notes-zh.md)
+- [main 与 upstream 差异分类](docs/main-vs-upstream-classification-zh.md)
+- [mxcc offline 进展](docs/mxcc-offline-progress-zh.md)
+- [mxcc offline 计划](docs/mxcc-offline-plan-zh.md)
+
+## 示例效果
 
 以下图片来自当前仓库联动 `HIPRTSDK` 跑通后的真实结果：
 
-### 1. Geometry Intersection
+### Geometry Intersection
 
 ![Geometry Intersection](docs/images/sdk_showcase/01_geom_intersection.png)
 
-### 2. Custom Intersection
-
-![Custom Intersection](docs/images/sdk_showcase/03_custom_intersection.png)
-
-### 3. Custom BVH Import
+### Custom BVH Import
 
 ![Custom BVH Import](docs/images/sdk_showcase/07_custom_bvh_import.png)
 
-### 4. Cutout / Filter
-
-![Cutout](docs/images/sdk_showcase/12_cutout.png)
-
-### 5. Shadow Ray
-
-![Shadow Ray](docs/images/sdk_showcase/18_shadow_ray.png)
-
-### 6. Primary Ray
+### Primary Ray
 
 ![Primary Ray Normal](docs/images/sdk_showcase/19_primary_ray_normal.png)
 
-## About 
-HIP RT is a low-level ray tracing library. This repository now targets a CUDA/NVRTC runtime path and no longer depends on HIP toolchains, HIP runtime loaders, or compatibility layers.
+## 构建补充说明
 
-Although there are other ray tracing APIs which introduce many new things, we designed HIP RT in a slightly different way so you do not need to learn many new kernel types.
+- `CUDAToolkit` 是当前主构建前提。
+- `CMAKE_CUDA_ARCHITECTURES` 可通过 cache 或脚本环境变量指定。
+- 单测默认参与构建；如需关闭可使用 `BUILD_TESTS=OFF ./scripts/build.sh` 或 `-DNO_UNITTEST=ON`。
+- 构建产物默认输出到 `dist/bin/<Config>/`。
+- 可选 bitcode / precompile 开关：
+  - `HIPRT_ENABLE_BAKE_KERNEL=ON`
+  - `HIPRT_ENABLE_BITCODE=ON`
+  - `HIPRT_ENABLE_PRECOMPILED_TRACE_KERNEL=ON`
 
-Released binaries can be found at [HIP RT page under GPUOpen](https://gpuopen.com/hiprt/).
-HIP RT library is developed and maintained by ARR, [Advanced Rendering Research Group](https://gpuopen.com/advanced-rendering-research/). 
+## 单元测试
 
-## Development
+当前测试主要分为三类：
 
-This is the main repository for the source code for HIPRT.
+1. `HiprtTests`：基础功能覆盖
+2. `ObjTestCases`：网格与场景相关功能
+3. `PerformanceTestCases`：性能相关测试
 
-## Current Status
+常用入口：
 
-- The public project name remains `HIPRT`, and public API names such as `hiprtCreateContext` are intentionally preserved.
-- The backend is now CUDA-only. AMD HIP runtime, ROCm toolchains, `hipcc`, and historical HIP loader paths are not part of the build anymore.
-- `hiprtew.h` is kept as a compatibility header, but it now calls linked HIPRT APIs directly instead of resolving symbols at runtime.
-- The vendored `contrib/Orochi` subtree has been trimmed to the pieces still needed by the current build. Historical HIP loader code, Orochi tests, and Orochi helper scripts are no longer kept in the repository.
-
-For a concise Chinese description of the current build and migration boundaries, see `docs/cuda-only-build-zh.md`.
-
-## Current Main MACA Status
-
-For the current `main` branch on `MACA + cu-bridge`:
-
-- The local non-performance test suite currently visible on `main` passes `62 / 62`.
-- This result has been verified both with runtime kernel disk cache disabled and with runtime kernel disk cache enabled.
-- The cache-enabled verification used:
-  - `cmake_maca`
-  - `make_maca`
-  - `HIPRT_ENABLE_RUNTIME_KERNEL_CACHE=ON`
-  - `HIPRT_DISABLE_RUNTIME_KERNEL_CACHE=0`
-
-This `62 / 62` suite includes the additional diagnostics and regression tests previously kept on `maca_dev`, such as:
-
-- scene transform / traversal diagnostics
-- recreate / lifecycle diagnostics
-- batch geometry diagnostics
-- focused no-reference regressions used as red/green guards
-
-For the detailed Chinese notes of the current `main`-branch MACA fixes and validation scope, see `docs/main-maca-fix-notes-zh.md`.
-
-## Cloning and Building 
-
-1. `git clone https://github.com/GPUOpen-LibrariesAndSDKs/HIPRT.git`
-2. `cd HIPRT`
-3. `git submodule update --init --recursive`
-4. `git lfs fetch` (To get resources for running performance tests)
-
-Build with CMake only.
-
-&nbsp;&nbsp;&nbsp;Example on Windows:
-&nbsp;&nbsp;&nbsp;5. `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release`
-&nbsp;&nbsp;&nbsp;6. `cmake --build build --config Release`
-
-&nbsp;&nbsp;&nbsp;Example on Linux:
-&nbsp;&nbsp;&nbsp;5. `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release`
-&nbsp;&nbsp;&nbsp;6. `cmake --build build --config Release -j`
-
-### Build Notes
-
-- `CUDAToolkit` is required. CMake configures the project in CUDA mode only.
-- `CMAKE_CUDA_ARCHITECTURES` is cache-configurable. Example: `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_ARCHITECTURES=89`.
-- Unit tests are built by default. Disable them with `-DNO_UNITTEST=ON`.
-- Generated binaries are written to `dist/bin/<Config>/`.
-- Optional bitcode / precompile switches:
-  - `-DHIPRT_ENABLE_BAKE_KERNEL=ON`: generate `hiprt/cache/Kernels.h` and `hiprt/cache/KernelArgs.h`
-  - `-DHIPRT_ENABLE_BITCODE=ON`: generate `hiprt<ver>_nv_lib.fatbin` and `hiprt<ver>_nv.fatbin`
-  - `-DHIPRT_ENABLE_PRECOMPILED_TRACE_KERNEL=ON`: generate `hiprt<ver>_nv_precompiled_bitcode.fatbin`
-
-## Current Bitcode / Precompile Status
-
-- `bake_kernel` has been restored through `HIPRT_ENABLE_BAKE_KERNEL`.
-- The CUDA/cu-bridge build can now generate the HIPRT precompiled fatbin artifacts and a precompiled trace-kernel fatbin through `scripts/bitcodes/compile.py` and `scripts/bitcodes/precompile_bitcode.py`.
-- `hiprtBuildTraceKernelsFromBitcode(...)` has been re-enabled for CUDA-side PTX/CUBIN linking against the generated `hiprt*_nv_lib.fatbin`.
-- On `MACA + cu-bridge`, the recommended path is still the precompiled workflow. Runtime `nvrtc --device-c` emission for user trace kernels is not yet stable enough to use as the primary validation path, so the related UTs are skipped on cu-bridge and the precompiled artifacts are the supported validation route there.
-- The precompiled validation route is covered by UTs that directly load the generated `hiprt*_nv_precompiled_bitcode.fatbin`, resolve both `TraceKernel` and `CutoutKernel`, and launch both the plain trace path and the custom-func-table path on minimal test scenes.
-- On the current machine, native CUDA runtime-bitcode validation is still pending because there is no native `nvcc` / standalone CUDA toolkit installed; the validated completed path here is the MACA precompiled workflow.
-- For the current experimental `mxcc --maca-link` route, see:
-  - `scripts/bitcodes/build_mxcc_trace_bundle.py`
-  - `scripts/bitcodes/mxcc_maca_link_probe.sh`
-  - `scripts/bitcodes/mxcc_maca_link_trace_probe.sh`
-  - `docs/mxcc-offline-progress-zh.md`
-- For source-based usage on the current `mxcc` path, the default behavior now prefers the validated `mxcc -c + --maca-link -fatbin + cuModuleLoadData` route rather than the older `cuLinkAddData` path.
-- If users want an explicit route instead of the default source path, `hiprtBuildTraceKernelsFromLinkedBundle(...)` is available as the direct public entry for already linked bundles.
-
-For the detailed Chinese status and current MACA constraints, see `docs/bitcode-status-zh.md`.
-
-## Running Unit Tests
-
-There are three types of tests. 
-1. HiprtTests           - tests covering all basic features.
-2. ObjTestCases         - tests with loading meshes and testing advanced features like shadow/ AO.
-3. PerformanceTestCases - tests with complex mesh to test performance features.
-
-Example: `..\dist\bin\Release\unittest64.exe --width=512 --height=512 --referencePath=.\references\ --gtest_filter=hiprt*:Obj*" `
-
-Linux helper scripts:
 - `cd scripts && ./unittest.sh`
 - `cd scripts && ./unittest_perf.sh`
 
-## Developing HIPRT
+## 开发约定
 
 ### Coding Guidelines
+
 - Resolve compiler warnings.
 - Use lower camel case for variable names (e.g., `nodeCount`) and upper camel case for constants (e.g., `LogSize`).
 - Separate functions by one line.
@@ -206,31 +171,31 @@ Linux helper scripts:
 - Use C++-style casts (e.g., `static_cast`) instead of C-style cast.
 - Add `const` for references and pointers if they are not being changed.
 - Add `constexpr` for variables and functions if they can be constant in compile time (do not use `#define` if possible).
-- Use `if constsexpr` instead of `#ifdef` if possible.
+- Use `if constexpr` instead of `#ifdef` if possible.
 - Throw `std::runtime_error` with an appropriate message in case of failure in the core and catch it in `hiprt.cpp`.
 
 #### String
+
 - Use `std::string` instead of C strings (i.e., `char*`) and avoid C string functions as much as possible.
 - Use `std::cout` and `std::cerr` instead of `printf`.
 - Do not assign `char8_t` (or `std::u8string`) to `char` (or `std::string`). They will not be compatible in C++20.
 
 #### File
+
 - Use `std::ifstream` and `std::ofstream` instead of `FILE`.
 - Use `std::filesystem::path` for files and paths instead of `std::string`.
 
 #### Class
+
 - Use the in-class initializer instead of the default constructor.
 - Use the keyword `override` instead of `virtual` (or nothing) when overriding a virtual function from the base class.
-  - Reason: The `override` keyword can help prevent bugs by producing compilation errors when the intended override is not actually implemented as an override. For example, when the function type is not exactly identical to the base class function. This can be caused by mistakes or if the virtual functions in the base class are changed due to refactor.
 - Use `std::optional` instead of pointers for optional parameters.
-  - Reason: `std::optional` guarantees that no auxiliary memory allocation is needed. Meaning, it does not involve dynamic memory allocation & deallocation on the heap, which results in better performance and less memory overhead.
-- A base class destructor should be either public and virtual, or protected and non-virtual
-  - Reason: This is to prevent undefined behavior. If the destructor is public, then the calling code can attempt to destroy a derived class object/instance through a base class pointer, and the result is undefined if the base class’s destructor is non-virtual.
-- Implement the customized {copy/move} {constructor/assignment operator} if an user-defined destructor of a class is needed, or remove them using `= delete`
-  - Reason: [Rule of five](https://en.cppreference.com/w/cpp/language/rule_of_three)
+- A base class destructor should be either public and virtual, or protected and non-virtual.
+- Implement the customized {copy/move} {constructor/assignment operator} if an user-defined destructor of a class is needed, or remove them using `= delete`.
 
 ### Versioning
+
 - When we update the master branch, we need to update the version number of hiprt in `version.txt`.
-- If there is a change in the API, you need to update minor version. 
-- If the major and minor versions matches, the binaries are compatible. 
-- Each commit in the master should have a unique patch version. 
+- If there is a change in the API, you need to update minor version.
+- If the major and minor versions matches, the binaries are compatible.
+- Each commit in the master should have a unique patch version.
