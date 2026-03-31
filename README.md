@@ -2,7 +2,7 @@
 
 ## 项目概览
 
-当前仓库保留 `HIPRT` 项目名称以及 `hiprt*` 对外 API 命名，但主实现已经收敛到 **CUDA-only** 后端。
+本仓库保留 `HIPRT` 项目名称以及 `hiprt*` 对外 API 命名，当前主实现已收敛到 **CUDA-only** 后端。
 
 - 保留：
   - `hiprt.h`
@@ -15,11 +15,11 @@
   - ROCm toolchain 依赖
   - `hipcc`
   - 历史 HIP loader 主路径
-- 当前迁移阶段要求：
-  - 先确保纯 CUDA 基线可编译、可运行、可复现
-  - 再进入后续 `MACA + cu-bridge` 适配与扩展
+- 当前阶段目标：
+  - 优先确保纯 CUDA 基线具备可编译、可运行、可复现的稳定状态
+  - 在此基础上再推进 `MACA + cu-bridge` 适配与扩展
 
-`hiprt/hiprtew.h` 仍保留为兼容入口头，但当前实现已不再承担运行时动态加载器角色。
+`hiprt/hiprtew.h` 仍保留为兼容入口头，但当前实现已不再承担运行时动态加载器的职责。
 
 ## 快速开始
 
@@ -33,23 +33,23 @@ git submodule update --init --recursive
 
 说明：
 
-- 当前默认优先使用 `CMake + Ninja`。
+- 默认推荐使用 `CMake + Ninja`。
 
 ### 2. 推荐构建方式
 
-优先直接使用仓库脚本：
+建议优先直接使用仓库脚本：
 
 ```bash
 ./scripts/build.sh
 ```
 
-脚本会在环境可用时自动接入：
+在环境满足时，脚本会自动接入：
 
 - `ccache`
 - `mold`
 - `Ninja`
 
-如果需要手动指定常见选项，可直接设置环境变量：
+如需手动指定常用构建参数，可直接设置环境变量：
 
 ```bash
 CUDA_ARCHITECTURES=89 BUILD_TYPE=Release ./scripts/build.sh
@@ -64,7 +64,7 @@ cmake --build build --config Release -j
 
 ### 3. 推荐功能回归
 
-根据当前仓库约定，功能正确性验证不要依赖历史 JIT cache 结果。回归前建议先清理测试过程中生成的 `scripts/cache/`：
+按照当前仓库约定，功能正确性验证不应依赖历史 JIT cache 结果。回归前建议先清理测试过程中生成的 `scripts/cache/`：
 
 ```bash
 cd scripts
@@ -72,15 +72,15 @@ rm -rf cache
 ./unittest.sh
 ```
 
-默认先跑非性能功能测试；性能测试单独执行。
+建议先执行非性能功能测试，性能测试另行执行。
 
 ## 主要 API 中文指南
 
-`README` 首页只保留入口信息。主要 public API 的主机侧用法、对象生命周期和 trace-kernel 三条构建路径，已经整理到单独中文指南：
+为保持首页聚焦，主要 public API 的主机侧用法、对象生命周期，以及 trace-kernel 三条构建路径，已整理到单独的中文指南：
 
 - [主要 API 使用指南（中文）](docs/api-guide-zh.md)
 
-这份指南重点覆盖：
+指南重点覆盖：
 
 - `hiprtCreateContext` / `hiprtDestroyContext`
 - `hiprtCreateGeometry` / `hiprtBuildGeometry`
@@ -94,14 +94,14 @@ rm -rf cache
 
 - 纯 CUDA 基线：
   - 优先保证 `./scripts/build.sh` + `cd scripts && ./unittest.sh` 可稳定通过
-  - source-based trace kernel 走 `hiprtBuildTraceKernels(...)`
-  - 已有可重定位 PTX/CUBIN 时可走 `hiprtBuildTraceKernelsFromBitcode(...)`
+  - source-based trace kernel 使用 `hiprtBuildTraceKernels(...)`
+  - 已有可重定位 PTX/CUBIN 时，可使用 `hiprtBuildTraceKernelsFromBitcode(...)`
 - `MACA + cu-bridge`：
-  - 当前更适合走 precompiled / linked-bundle 路径
+  - 当前推荐使用 precompiled / linked-bundle 路径
   - 显式 public API 为 `hiprtBuildTraceKernelsFromLinkedBundle(...)`
-  - 详细限制与状态见下方文档
+  - 相关限制与状态说明见下列文档
 
-如果在验证 trace kernel / runtime JIT 行为，优先避免复用旧缓存；必要时请显式关闭 cache，或者切换到新的临时 cache 目录。
+在验证 trace kernel / runtime JIT 行为时，应优先避免复用旧缓存；必要时请显式关闭 cache，或切换到新的临时 cache 目录。
 
 ## 文档导航
 
@@ -115,7 +115,7 @@ rm -rf cache
 
 ## 示例效果
 
-以下图片来自当前仓库联动 `HIPRTSDK` 跑通后的真实结果：
+以下图片展示了当前仓库与 `HIPRTSDK` 联调后的实际结果：
 
 ### Geometry Intersection
 
@@ -131,7 +131,7 @@ rm -rf cache
 
 ## 构建补充说明
 
-- `CUDAToolkit` 是当前主构建前提。
+- `CUDAToolkit` 是主构建前提。
 - `CMAKE_CUDA_ARCHITECTURES` 可通过 cache 或脚本环境变量指定。
 - 单测默认参与构建；如需关闭可使用 `BUILD_TESTS=OFF ./scripts/build.sh` 或 `-DNO_UNITTEST=ON`。
 - 构建产物默认输出到 `dist/bin/<Config>/`。
@@ -148,7 +148,7 @@ rm -rf cache
 2. `ObjTestCases`：网格与场景相关功能
 3. `PerformanceTestCases`：性能相关测试
 
-常用入口：
+常用入口如下：
 
 - `cd scripts && ./unittest.sh`
 - `cd scripts && ./unittest_perf.sh`
